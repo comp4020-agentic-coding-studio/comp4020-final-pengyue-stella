@@ -26,28 +26,25 @@ That loop — explore, discover, leave, watch it reach someone else live, find
 it again later — is the whole app right now. Four scenes, one shared log of
 traces, no accounts, no feed.
 
-## What "good" means here (first version)
+## What "good" means here
 
-A good version makes campus feel **socially lived-in**: you learn about a
-place by bumping into what someone else left there, while still feeling like
-you're walking through it, not scrolling past it. Three ideas shaped that.
-Clay Shirky's **["Situated Software"](http://shirky.com/essays/situated-software/)**
-(2004) argues for software built for a known, small group and a particular
-place rather than for everyone — sized for a cohort wandering one campus, not
-a platform. Kleppmann et al.'s
-**["Local-first software"](https://www.inkandswitch.com/essay/local-first/)**
-(2019) argues persistence is a promise to the person who left something, not
-an implementation detail — why "it's still there tomorrow" is tested
-automatically (`spec/traces.test.ts`), not just hoped for. Robin Sloan's
-**["An App Can Be a Home-Cooked Meal"](https://www.robinsloan.com/notes/home-cooked-app/)**
-(2020) is why this stays four places and one kind of thing (a trace), rather
-than a feature for every idea that would also be nice.
+Traces of ANU is good when it feels less like a website about ANU and more like another layer of student life already happening on campus.
 
-What's enforced: the scene graph stays connected, a trace round-trips and
-survives bad input, two visitors get different identities, a trace reaches
-another open session within ~1s. What's judged, by a person: whether panning a
-place feels spatial rather than like a map with extra steps, and whether
-discovering a trace feels like finding something rather than reading a post.
+Students pass the same paths, lawns, libraries and buildings every day, but most of the small moments attached to those places disappear. A good version gives those moments somewhere to stay. A first lunch with a friend, a quiet study corner, something strange noticed on the walk home, or a small tip for the next person can become part of how that place is experienced by someone else.
+
+The project should also feel collective. One trace on its own is small. The value comes from different people leaving different pieces over time, seeing new traces appear while they are there, and returning later to find that the place has accumulated a history beyond their own visit.
+
+This is why the core interaction stays spatial. A trace should be discovered where someone left it, not delivered through a feed. Looking around, moving between places and noticing marks in the environment are part of the experience. If using the site starts to feel like scrolling through posts, the project has lost the thing that makes it different.
+
+So, for this project, "good" currently means:
+
+- the campus still feels like the main character, rather than a background for a social app;
+- traces feel connected to particular places and moments;
+- several people can contribute to the same shared campus layer;
+- what people leave survives, so small moments can accumulate into a collective memory;
+- discovering a trace feels a little like finding something left behind for you.
+
+The references below helped sharpen that direction rather than define it for us. Clay Shirky's *Situated Software* supports keeping the app specific to a real community and place. *Local-first Software* strengthened the idea that something a person leaves should still be there when they return. Robin Sloan's *An App Can Be a Home-Cooked Meal* reinforced keeping the project small and intentional rather than turning it into a general-purpose social platform.
 
 ## What this deliberately isn't
 

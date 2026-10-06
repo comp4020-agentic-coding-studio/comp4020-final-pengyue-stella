@@ -11,3 +11,6 @@ dist
 mise.local.toml
 *.pem
 .claude
+# raw scene-photo sources: not copied into the image (Dockerfile only COPYs
+# server/, public/, README.md) and large — pointless to upload to the builder
+tools/sources
