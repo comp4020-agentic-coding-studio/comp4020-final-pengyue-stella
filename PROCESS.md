@@ -99,11 +99,12 @@ window. `pnpm check` runs these alongside the course's own `invariants.test.ts`
 
 Manually observed, not just assumed: the full loop end-to-end across two
 browser sessions (explore → discover → leave → the *other* session receives it
-live, no reload); and persistence specifically, by killing the running dev
-server and starting it again against the same data file, then confirming both
-earlier traces were still there before any client re-rendered anything. A true
-restart-under-Fly (a redeploy, not a kill) is the next thing to confirm once
-the deploy itself runs, since CI only ever runs one container per check.
+live, no reload); persistence across a killed-and-restarted dev server; and,
+once deployed, persistence across a **real Fly redeploy** — a trace posted to
+the live `comp4020-final-pengyue-stella.fly.dev` before a second
+`flyctl deploy` was still there after it, over the actual volume, not a
+scratch directory. `pnpm check` also ran directly against that live URL, not
+only against a dev server.
 
 ## Open for the next crit
 
