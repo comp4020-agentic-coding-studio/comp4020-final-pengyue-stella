@@ -104,9 +104,8 @@ up and time allows — not before.
 7. README / PROCESS / reflection; manual end-to-end pass; deploy if the Fly
    token is available by then.
 
-## Known risk / blocker
+## Status
 
-No `mise.local.toml` / `FLY_API_TOKEN` in this repo yet (not copied from
-another crit's repo — it's per-app). Everything through step 6 is verifiable
-locally against `http://localhost:8080`; the live deploy is blocked until the
-token arrives.
+All seven build-order steps above are done and deployed at
+`comp4020-final-pengyue-stella.fly.dev`; see `PROCESS.md` for what was checked
+and how. Next up is crit 9's "several people in it" decision.
