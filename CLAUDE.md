@@ -40,6 +40,17 @@ future crit genuinely needs a dependency, add it deliberately and say why in
   (palette, landmark shape) so "which place am I in" never relies on reading
   the title text.
 
+## A correction worth keeping
+
+Manual cross-session testing (see `PROCESS.md`) found a real bug: the client
+used one `Set` of trace ids both to stop a pin rendering twice **and** to stop
+a toast firing twice. An off-screen trace got added to it when its toast
+showed, so navigating to that scene later silently dropped its pin forever.
+Fixed in `b22c513` by giving the render-dedupe set exactly one job. The
+general rule: **a dedupe/seen-set is scoped to one concern.** If two code
+paths both want "have I handled this id before", that's two sets, not one —
+reusing one almost always means one path's bookkeeping corrupts the other's.
+
 ## Checks
 
 `pnpm check` (typecheck + `spec/`) targets the **running app** at `APP_URL`
