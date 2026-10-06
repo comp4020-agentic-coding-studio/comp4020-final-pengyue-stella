@@ -1,21 +1,24 @@
 # Crit 8 — It's alive!
 
-**The breakthrough.** It wasn't an architecture choice — it was switching from
-`curl` to two genuinely independent browser sessions (different cookies,
-different "visitors") before calling the real-time loop done. Posting a trace
-in one and watching it arrive, unprompted, in the other is what actually
-exercises "multi-user" and "real-time" as lived behaviour rather than as two
-separate API responses. That pass found a real bug ([`b22c513`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/b22c513)):
-a trace from a scene you weren't looking at got marked "handled" by the toast
-that announced it, so navigating there later silently dropped its pin forever.
-No amount of single-session testing, or reading the code, would have surfaced
-that — it only exists in the gap between two people's views of the same state.
+**The breakthrough.** The first working version passed every check — the
+scene graph connected, traces round-tripped, two browser sessions saw each
+other live — and was still wrong, because the four scenes were hand-illustrated
+SVGs that read as a generic campus-shaped prototype, not as ANU. Nothing in
+`spec/` can catch that; it only shows up when someone actually looks. The fix
+wasn't cleverness, it was going and getting real photographs (Wikimedia
+Commons has ample CC-licensed ANU campus imagery) and building a "blurred
+letterbox" pseudo-panorama from them — the real photo sharp and centred, a
+softly blurred extension of the *same* image either side for pan room. The
+anchoring architecture underneath didn't change at all, which only worked
+because scene content was already decoupled from the interaction model. Two
+more real bugs turned up the moment real people clicked through the real
+result instead of trusting the design on paper: the pan buttons silently
+opened a compose form instead of panning, and a scene could load with its
+real photo entirely out of frame on a narrow screen.
 
-**What this changed.** Choosing the plainest possible stack (no framework, no
-database, no WebSocket library) wasn't just about fitting 256MB — it bought
-back the time and attention to actually run two sessions side by side instead
-of trusting that the design was obviously correct. I want to be the kind of
-developer who treats "two people use this at once" as something to watch
-happen, not something to reason about from one browser tab. Keeping the
-infrastructure boring is partly what makes that kind of checking affordable
-instead of a thing there's never quite time for.
+**What this changed.** A green `pnpm check` answers "does it work", not "is it
+good" — the brief's actual question. I'd treated passing specs as evidence of
+being done; now I check what a stranger would see in the first second, before
+checking what the code does. The two-session, both-viewports habit from
+earlier in the week is what caught all three bugs here too: watching the real
+thing, not reasoning about it, keeps finding what reading code alone doesn't.

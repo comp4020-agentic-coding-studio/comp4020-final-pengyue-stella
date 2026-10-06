@@ -51,6 +51,11 @@ future crit genuinely needs a dependency, add it deliberately and say why in
 - A mark (trace or exit) must read clearly against a busy photo, not just a
   flat colour: the white-ring treatment on `.pin-dot` is load-bearing, not
   decorative — don't simplify it away.
+- `setPan(…, {smooth:false})` toggles `.viewport.dragging` as a side effect
+  (it's how a real drag kills the transform transition mid-gesture). Any
+  non-drag caller of it — `centerPan()` on scene load is the one so far — must
+  remove that class itself afterward, or the cursor and the next transition
+  stay stuck in "drag" state until the visitor happens to drag once.
 
 ## A correction worth keeping
 

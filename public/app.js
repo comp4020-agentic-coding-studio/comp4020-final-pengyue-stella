@@ -53,6 +53,11 @@ function setPan(next, { smooth = true } = {}) {
 function centerPan() {
   const maxPan = Math.max(0, renderedWidth - viewportWidth);
   setPan(maxPan / 2, { smooth: false });
+  // setPan(…, {smooth:false}) is also what a real drag uses to kill the
+  // transform transition mid-gesture, so it marks the viewport ".dragging".
+  // This isn't a drag — clear it, or the cursor and the next transition
+  // stay stuck in drag state until the visitor happens to drag once.
+  els.viewport.classList.remove("dragging");
 }
 
 function measure() {
@@ -239,6 +244,9 @@ function clientPointToNormalized(clientX, clientY) {
 async function goToScene(id, { resetScroll = true } = {}) {
   const next = byId(id);
   if (!next) return;
+  // A brief fade through black reads as walking from one place to the next,
+  // not as a tab swapping its content.
+  els.panorama.style.opacity = "0";
   scene = next;
   closeBubble();
   localStorage.setItem?.(LAST_SCENE_KEY, id);
@@ -247,7 +255,7 @@ async function goToScene(id, { resetScroll = true } = {}) {
   els.blurb.textContent = scene.blurb;
   els.pins.innerHTML = "";
   els.image.src = scene.image;
-  els.image.alt = `${scene.title}, illustrated campus scene`;
+  els.image.alt = `${scene.title}, a real ANU campus photograph`;
 
   scene.exits.forEach(renderExitPin);
 
@@ -261,6 +269,9 @@ async function goToScene(id, { resetScroll = true } = {}) {
   });
   measure();
   if (resetScroll) centerPan();
+  requestAnimationFrame(() => {
+    els.panorama.style.opacity = "1";
+  });
 
   try {
     const res = await fetch(`/api/scenes/${id}/traces`);

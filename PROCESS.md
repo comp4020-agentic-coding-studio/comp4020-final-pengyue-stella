@@ -6,10 +6,9 @@ of how it was built and why.
 
 ## From brief to harness
 
-The brief fixes three things (multi-user, real-time, persists) and leaves
-everything else, including the app itself, open. Before writing any code we
-turned the student's concept — an immersive, connected-scene layer over campus
-where traces are anchored to places — into
+The brief fixes three things (multi-user, real-time, persists) and leaves the
+app itself open. Before writing code, the student's concept — an immersive,
+connected-scene layer over campus where traces are anchored to places — became
 [`e3e1934`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/e3e1934),
 which is `PLAN.md`: the data model, the API, which four scenes, and explicitly
 what was staying out (accounts, drawing, uploads, more than four scenes).
@@ -26,42 +25,48 @@ redeploys.
 **Options considered.**
 
 - *Astro/React + a managed Postgres-like store.* The course default for the
-  static half of the term, but a separate database app is explicitly outside
-  the course's Fly setup, and a framework's dev server and build step buy
-  nothing for an app this small — most of a React app's weight goes toward
-  problems (routing, client state libraries) this app doesn't have.
-- *Node + Express + `ws` + SQLite.* A conventional, reasonable choice. Rejected
-  for being more than the scale needs: a handful of campus scenes and a
-  classroom of visitors fit in memory, so a query engine is solving a problem
-  that doesn't exist yet, and a routing framework is solving a problem
-  (a dozen routes) `node:http` solves in a page of code.
+  static half, but a separate database app is outside the course's Fly setup,
+  and a framework buys nothing an app this small needs (routing, client state)
+  — it has neither problem.
+- *Node + Express + `ws` + SQLite.* Conventional, reasonable, and still more
+  than the scale needs: a handful of scenes and a classroom of visitors fit in
+  memory, so a query engine and a routing framework both solve problems that
+  don't exist here.
 - **Node, `node:http`, zero runtime dependencies, an append-only JSONL file,
-  Server-Sent Events.** What's actually here. Chosen because the honest
-  requirement is small: ~10 routes, one-directional server→browser push, a
-  dataset that fits comfortably in memory. Every dependency not taken is a
-  Docker layer that can't fail to install on a remote builder, and a thing
-  `CLAUDE.md` doesn't have to tell a future session not to add a second way
-  to do.
+  Server-Sent Events.** What's actually here: ~10 routes, one-directional
+  server→browser push, a dataset that fits comfortably in memory. Every
+  dependency not taken is a Docker layer that can't fail to install on a
+  remote builder.
 
-**Consequences.** Real cost: no framework conveniences, no SQL for whatever
-richer queries later crits might want, and a flat file that would need
-revisiting (an index, or a real embedded DB) well past classroom scale — a
-trade-off worth revisiting once a specific feature actually needs it, not
+**Consequences.** Real cost: no framework conveniences, no SQL, and a flat
+file that would need revisiting (an index, or a real embedded DB) well past
+classroom scale — worth revisiting once a feature actually needs it, not
 before. Real benefit: the Docker image has no install step at all (`COPY` then
-`node server.js`), which matters more than it sounds on a 256MB machine with a
-remote builder and a deadline. SSE over WebSockets was the same logic in
-miniature: the app never needs to hear from a browser outside a normal HTTP
-request, so a full-duplex protocol buys nothing a one-way `EventSource` cannot
-already deliver inside the brief's ~1s window — verified directly in
-`spec/traces.test.ts`, not assumed.
+`node server.js`), which matters on a 256MB machine with a remote builder and
+a deadline. SSE over WebSockets was the same logic in miniature: the app never
+needs to hear from a browser outside a normal HTTP request, so a full-duplex
+protocol buys nothing a one-way `EventSource` cannot already deliver inside
+the brief's ~1s window — verified directly in `spec/traces.test.ts`.
 
-The four scene panoramas are hand-authored SVGs, not photographs — no real
-360 campus photography was available this week, and the brief is explicit that
-this isn't worth blocking on. The interaction model (pan a wide image, anchor
-pins at a normalised `{x, y}`) doesn't know or care that the image is an SVG;
-swapping in real equirectangular photos later touches only
-`server/src/scenes.js` and the files in `public/scenes/`, not the client logic
-that makes them feel spatial.
+The four scenes are real ANU photographs (Wikimedia Commons, CC BY-SA — credits
+in README.md), not illustration: Sullivans Creek at Kambri, Chifley Library's
+footbridge, Union Court, the sign on University Avenue. Each is built by
+`tools/build-scenes.py` into a pseudo-panorama — shown sharp at its own
+aspect, centred on a wider canvas whose edges are a softly blurred, darkened
+extension of the *same* photo, giving real pan room without a 360 shoot this
+week. The interaction model (pan a wide image, anchor pins at normalised
+`{x, y}`) doesn't know or care what format the image is; real equirectangular
+photos later touch only `scenes.js` and `public/scenes/`, nothing client-side.
+
+**This replaced a first attempt at hand-authored SVG illustrations** (still in
+earlier commits). Those satisfied every mechanical spec line — a connected
+graph, a pannable wide image, anchored pins — but failed what the spec can't
+check: on sight, the app read as a generic prototype, not specifically ANU.
+Illustration was chosen first to avoid blocking on asset sourcing; the
+correction was to go find real sourcing instead (Commons has ample CC-licensed
+campus photography) rather than defend placeholder art. The anchoring
+architecture didn't change — only `scenes.js`'s data and `public/scenes/`'s
+files did, the payoff of keeping those decoupled from day one.
 
 ## Agent workflow
 
@@ -74,17 +79,25 @@ genuinely separate "visitors") for everything that only shows up with two
 people actually in the app at once
 ([`b22c513`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/b22c513)).
 
-That two-session pass is what caught the one real bug so far: a trace posted
-in a scene session A wasn't viewing correctly produced a toast, but silently
-never rendered as a pin if session A navigated there afterwards. The client was
-using one id-set to mean both "don't double-render this pin" and "don't
-double-toast this event" — the toast path's bookkeeping was quietly deleting
-the render path's chance to ever draw that pin. Not a guess: found by actually
-watching a second session, confirmed by reading the store's file directly to
-see the trace existed server-side while the client showed only one of two.
-Fixed in the same commit, and written up as a standing rule in `CLAUDE.md`
-("a dedupe/seen-set is scoped to one concern") so the next session doesn't
-reintroduce it under a different name.
+That two-session pass is what caught the first real bug: a trace posted in a
+scene session A wasn't viewing produced a toast, but silently never rendered
+as a pin if session A navigated there afterwards — one id-set was doing both
+"don't double-render" and "don't double-toast" duty, so the toast path's
+bookkeeping deleted the render path's chance to ever draw that pin. Fixed in
+the same commit and written up in `CLAUDE.md` ("a dedupe/seen-set is scoped to
+one concern") so it isn't reintroduced under a different name.
+
+Switching to real photos surfaced two more, both only visible by actually
+clicking through the running app rather than reading the code: clicking the
+look-left/-right chevrons opened a compose bubble instead of panning, because
+their click bubbled up to the viewport's own "click empty ground" handler,
+which didn't exclude `.pan-btn` the way it already excluded `.pin`/`.bubble`;
+and on a narrow (mobile) viewport, a scene loaded panned all the way to its
+left edge, which for a photo built sharp-centred-on-a-wider-canvas meant the
+real photo could be entirely out of frame — only its blurred margin showing on
+first paint. Both fixed directly (the click guard gained `.pan-btn`; scene
+load now centres on the pan range's midpoint, which is always where the sharp
+photo sits, by construction).
 
 ## What was checked, and how
 
@@ -100,16 +113,15 @@ window. `pnpm check` runs these alongside the course's own `invariants.test.ts`
 Manually observed, not just assumed: the full loop end-to-end across two
 browser sessions (explore → discover → leave → the *other* session receives it
 live, no reload); persistence across a killed-and-restarted dev server; and,
-once deployed, persistence across a **real Fly redeploy** — a trace posted to
-the live `comp4020-final-pengyue-stella.fly.dev` before a second
-`flyctl deploy` was still there after it, over the actual volume, not a
-scratch directory. `pnpm check` also ran directly against that live URL, not
-only against a dev server.
+once deployed, persistence across a **real Fly redeploy** — a trace posted
+live before a second `flyctl deploy` was still there after it, over the actual
+volume. `pnpm check` also ran directly against the live URL, not only a dev
+server. The visual correction above was re-verified the same way (both
+viewports, both sessions) before redeploying again.
 
 ## Open for the next crit
 
 Crit 9 asks for one written decision about several-people-in-it behaviour; the
-cooldown and the ambient toast are the first candidates, not yet the final
-answer. The flat-file store is sized for this week's scale deliberately —
-worth a note here, not a surprise, if a later crit's traffic actually outgrows
-it.
+cooldown and the ambient toast are the first candidates, not the final answer.
+The flat-file store is sized for this week's scale on purpose — worth a note
+here, not a surprise, if traffic later outgrows it.

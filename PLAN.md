@@ -40,18 +40,24 @@ without forcing a scene switch.
 that id (e.g. "Quiet Wombat", a hue) so two browsers are visibly different
 people and the same browser stays the same person across reloads.
 
-**Scenes:** four hand-authored wide SVG illustrations (not real photography —
-none was available, and the brief says don't block on perfect assets) standing
-in for a pseudo-360 look-around: each scene is a `<img>` much wider than its
-viewport, panned by drag / swipe / arrow keys, exactly like a one-axis Street
-View. Exits between scenes are rendered as pins anchored to a normalised
-`(x, y)` on the image — the **same anchoring mechanism user traces use** —
-positioned where you'd have to pan to find them, so moving between scenes is a
-spatial discovery, not a menu. Swapping these SVGs for real equirectangular
-photos later only touches the scene background, not the interaction model.
+**Scenes:** four real ANU photographs (CC-licensed, via Wikimedia Commons —
+credits in README.md), each built by `tools/build-scenes.py` into a
+pseudo-360 look-around: the real photo shown sharp at its own size, centred on
+a wider canvas whose edges are a softly blurred extension of the *same* photo
+for pan room. (A first version used hand-authored SVG illustrations instead;
+replaced after the crit feedback that it read as a generic prototype rather
+than specifically ANU — see `PROCESS.md`.) Each scene is an `<img>` much wider
+than its viewport, panned by drag / swipe / arrow keys, exactly like a
+one-axis Street View, starting centred on the real photo so it's in frame on
+any viewport width. Exits between scenes are rendered as pins anchored to a
+normalised `(x, y)` on the image — the **same anchoring mechanism user traces
+use** — positioned where you'd have to pan to find them, so moving between
+scenes is a spatial discovery, not a menu. Swapping these for real
+equirectangular photos later only touches the scene background, not the
+interaction model.
 
-Scene graph (a loop, so there's always somewhere new to walk to):
-Kambri Lawn ↔ Chifley Steps ↔ Union Court ↔ Science Walk ↔ (back to Kambri).
+Scene graph (a loop, so there's always somewhere new to walk to): Kambri Lawn
+↔ Chifley Library ↔ Union Court ↔ University Avenue ↔ (back to Kambri).
 
 ## Data model
 
