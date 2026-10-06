@@ -43,7 +43,7 @@ describe("the scene graph", () => {
     for (const scene of scenes) {
       const res = await fetch(url(scene.image));
       expect(res.status, `${scene.image} should be served`).toBe(200);
-      expect(res.headers.get("content-type")).toMatch(/svg/);
+      expect(res.headers.get("content-type")).toMatch(/^image\//);
     }
   });
 });
@@ -128,7 +128,7 @@ describe("real-time: another open session receives it", () => {
     const reader = stream.body!.getReader();
 
     const postedBody = `live push ${Date.now()}`;
-    const posted = fetch(url("/api/scenes/science/traces"), {
+    const posted = fetch(url("/api/scenes/uniave/traces"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ x: 0.3, y: 0.3, body: postedBody, type: "story" }),

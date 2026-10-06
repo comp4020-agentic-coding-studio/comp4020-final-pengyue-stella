@@ -46,6 +46,15 @@ function setPan(next, { smooth = true } = {}) {
   els.panorama.style.transform = `translateX(${-pan}px)`;
 }
 
+// Every scene image is built sharp-centred on a wider canvas (see
+// tools/build-scenes.py), so the midpoint of the whole pan range is always
+// where the real photo sits — on a narrow viewport the photo can otherwise
+// be entirely out of frame at pan=0, showing only its blurred periphery.
+function centerPan() {
+  const maxPan = Math.max(0, renderedWidth - viewportWidth);
+  setPan(maxPan / 2, { smooth: false });
+}
+
 function measure() {
   viewportWidth = els.viewport.clientWidth;
   renderedWidth = els.image.clientWidth;
@@ -251,7 +260,7 @@ async function goToScene(id, { resetScroll = true } = {}) {
     else els.image.onload = resolve;
   });
   measure();
-  if (resetScroll) setPan(0, { smooth: true });
+  if (resetScroll) centerPan();
 
   try {
     const res = await fetch(`/api/scenes/${id}/traces`);
@@ -281,7 +290,7 @@ function wireViewport() {
   let dragDistance = 0;
 
   els.viewport.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".pin, .bubble")) return;
+    if (e.target.closest(".pin, .bubble, .pan-btn")) return;
     dragging = true;
     dragDistance = 0;
     startX = e.clientX;
@@ -305,7 +314,7 @@ function wireViewport() {
 
   els.viewport.addEventListener("click", (e) => {
     if (dragDistance > 6) return; // a drag, not a click
-    if (e.target.closest(".pin, .bubble")) return;
+    if (e.target.closest(".pin, .bubble, .pan-btn")) return;
     const { x, y } = clientPointToNormalized(e.clientX, e.clientY);
     openComposeBubble(x, y);
   });

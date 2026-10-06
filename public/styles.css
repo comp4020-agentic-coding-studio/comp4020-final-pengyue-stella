@@ -33,34 +33,34 @@ a {
 }
 
 .topbar {
-  padding: 1rem 1.25rem 0.5rem;
+  padding: 0.75rem 1.25rem 0.6rem;
   border-bottom: 1px solid var(--line);
   position: relative;
 }
 
 .topbar h1 {
-  margin: 0 0 0.15rem;
-  font-size: clamp(1.3rem, 2.2vw, 1.8rem);
+  margin: 0 0 0.1rem;
+  font-size: clamp(1.15rem, 1.8vw, 1.5rem);
   letter-spacing: -0.01em;
 }
 
 .tagline {
-  margin: 0 0 0.4rem;
+  margin: 0 0 0.3rem;
   color: var(--ink-soft);
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   max-width: 48ch;
 }
 
 .presence {
-  margin: 0 0 0.1rem;
-  font-size: 0.8rem;
+  margin: 0;
+  font-size: 0.76rem;
   color: var(--ink-soft);
   min-height: 1.1em;
 }
 
 .whoami {
-  margin: 0 0 0.5rem;
-  font-size: 0.78rem;
+  margin: 0;
+  font-size: 0.74rem;
   color: var(--ink-soft);
   font-style: italic;
 }
@@ -89,21 +89,10 @@ main {
   gap: 0.6rem;
 }
 
-.scene-info h2 {
-  margin: 0;
-  font-size: clamp(1.1rem, 2vw, 1.4rem);
-}
-
-.scene-info p {
-  margin: 0.1rem 0 0;
-  color: var(--ink-soft);
-  font-size: 0.9rem;
-}
-
 .viewport {
   position: relative;
   width: 100%;
-  height: clamp(230px, 48vh, 620px);
+  height: clamp(240px, 50vh, 680px);
   overflow: hidden;
   border-radius: 14px;
   background: #11141a;
@@ -111,6 +100,34 @@ main {
   cursor: grab;
   touch-action: pan-y;
   outline-offset: 3px;
+}
+
+/* The scene's name and blurb read as a caption on the photo itself — like a
+   location label in a street-view app — not as a separate article heading
+   above it, so the photo stays the visual centre of gravity. */
+.scene-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 2.2rem 1.1rem 0.9rem;
+  background: linear-gradient(to top, rgba(10, 12, 16, 0.78), rgba(10, 12, 16, 0) 100%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.scene-caption h2 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.15rem, 2.2vw, 1.5rem);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.scene-caption p {
+  margin: 0.15rem 0 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.85rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .viewport.dragging {
@@ -159,7 +176,12 @@ main {
   cursor: pointer;
   font-size: 1.6rem;
   line-height: 1;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.55));
+  transition: transform 0.15s ease;
+}
+
+.pin:hover {
+  transform: translate(-50%, -100%) scale(1.08);
 }
 
 .pin:focus-visible {
@@ -169,21 +191,27 @@ main {
 }
 
 .pin .pin-dot {
-  display: block;
-  width: 1.4rem;
-  height: 1.4rem;
-  border-radius: 50% 50% 50% 4px;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 50% 50% 50% 4px;
   color: #fff;
-  font-size: 0.95rem;
+  font-size: 1rem;
+  /* A white ring so a mark reads clearly against a busy photo, whatever its
+     own colour — a sticker pressed onto the place, not a flat UI chip. */
+  box-shadow:
+    0 0 0 2.5px rgba(255, 255, 255, 0.95),
+    0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
 .pin.exit .pin-dot {
-  background: rgba(255, 255, 255, 0.92);
-  color: #1a1a1a;
-  border: 2px solid var(--accent);
+  background: rgba(20, 20, 24, 0.8);
+  color: #fff;
+  box-shadow:
+    0 0 0 2.5px var(--accent),
+    0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
 .pin.exit {
@@ -230,13 +258,16 @@ main {
   position: absolute;
   transform: translate(-50%, calc(-100% - 1.6rem));
   width: min(260px, 70vw);
-  background: var(--bubble);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  background: rgba(27, 26, 23, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
   padding: 0.65rem 0.7rem;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   pointer-events: auto;
   font-size: 0.88rem;
+  color: #fff;
   z-index: 5;
 }
 
@@ -247,7 +278,7 @@ main {
   bottom: -8px;
   transform: translateX(-50%);
   border: 8px solid transparent;
-  border-top-color: var(--bubble);
+  border-top-color: rgba(27, 26, 23, 0.72);
 }
 
 .bubble .bubble-author {
@@ -256,6 +287,7 @@ main {
   gap: 0.35rem;
   font-weight: 600;
   margin-bottom: 0.25rem;
+  color: #fff;
 }
 
 .bubble .bubble-dot {
@@ -271,9 +303,11 @@ main {
   resize: vertical;
   font: inherit;
   padding: 0.35rem;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 8px;
   margin-bottom: 0.4rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
 }
 
 .bubble .type-row {
@@ -284,7 +318,7 @@ main {
 
 .bubble .type-row label {
   cursor: pointer;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 8px;
   padding: 0.2rem 0.4rem;
   font-size: 1rem;
@@ -298,7 +332,7 @@ main {
 
 .bubble .type-row input:checked + span,
 .bubble .type-row label:has(input:checked) {
-  background: var(--paper);
+  background: rgba(255, 255, 255, 0.2);
   border-color: var(--accent);
 }
 
@@ -319,14 +353,15 @@ main {
 
 .bubble button[type="button"] {
   background: none;
-  border: 1px solid var(--line);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 8px;
   padding: 0.3rem 0.6rem;
   cursor: pointer;
 }
 
 .bubble .error {
-  color: #a33;
+  color: #ff8a80;
   font-size: 0.8rem;
   margin: -0.15rem 0 0.4rem;
 }

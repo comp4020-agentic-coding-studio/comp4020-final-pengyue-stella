@@ -18,10 +18,18 @@ future crit genuinely needs a dependency, add it deliberately and say why in
   broadcasting to every connected browser. Don't add WebSockets alongside it;
   the traffic is one-directional (server → browser) and SSE already covers
   that within the ~1s the brief asks for.
-- Scene backgrounds are hand-authored SVGs standing in for real 360 photos.
-  The interaction model (pan a wide image, anchor pins at normalised `x, y`)
-  must keep working unchanged if a real equirectangular photo replaces an SVG
-  later — don't let scene code assume "it's an SVG".
+- Scene backgrounds are **real ANU photographs** (Wikimedia Commons, CC BY-SA —
+  credits in README.md), built into a pseudo-panorama by
+  `tools/build-scenes.py`: the real photo shown sharp at its own aspect,
+  centred on a wider canvas whose sides are a softly blurred, darkened
+  extension of the *same* photo for pan room — not invented content. The
+  interaction model (pan a wide image, anchor pins at normalised `x, y`)
+  doesn't know or care that the image is a JPEG; it kept working unchanged
+  when this replaced the earlier hand-illustrated SVG version (see
+  `PROCESS.md`), and must keep working if real 360/equirectangular photography
+  replaces these later. Raw source photos live in `tools/sources/`
+  (gitignored, large, fully reproducible — see the script's header for exact
+  source URLs); only the built output in `public/scenes/` is tracked.
 
 ## Conventions that matter here
 
@@ -36,9 +44,13 @@ future crit genuinely needs a dependency, add it deliberately and say why in
   Panning supports drag, swipe and arrow keys; the compose bubble and pins are
   reachable by Tab/Enter. This is checked live at crits — don't let it regress
   silently behind a mouse-only feature.
-- Keep the four scenes flat-illustrated and visually distinct from each other
-  (palette, landmark shape) so "which place am I in" never relies on reading
-  the title text.
+- Keep the four scenes visually distinct, recognisable ANU places (a real
+  landmark, not a generic "plaza" or "walk") so "which place am I in" never
+  relies on reading the title text — and so the app reads as ANU specifically
+  within the first screen, not as a generic campus-shaped prototype.
+- A mark (trace or exit) must read clearly against a busy photo, not just a
+  flat colour: the white-ring treatment on `.pin-dot` is load-bearing, not
+  decorative — don't simplify it away.
 
 ## A correction worth keeping
 

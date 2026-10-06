@@ -20,3 +20,7 @@ mise.local.toml
 # your course API key, and this repo goes public when you ship. Your tracked
 # harness is CLAUDE.md (and any AGENTS.md), not this directory.
 .claude/
+
+# raw source photos: large and fully reproducible from tools/build-scenes.py's
+# documented URLs — only the processed output in public/scenes/ is tracked
+tools/sources/
