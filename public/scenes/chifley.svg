@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3600 900" width="3600" height="900">
+<defs>
+    <linearGradient id="skyChifley" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd9a0" />
+      <stop offset="1" stop-color="#ffb37a" />
+    </linearGradient>
+    <linearGradient id="groundChifley" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d7b98a" />
+      <stop offset="1" stop-color="#b9955f" />
+    </linearGradient></defs>
+<rect x="0" y="0" width="3600" height="650" fill="url(#skyChifley)" />
+<rect x="0" y="650" width="3600" height="250" fill="url(#groundChifley)" />
+<circle cx="3300" cy="180" r="90" fill="#fff0cf" />
+<rect x="1150" y="230" width="1500" height="420" fill="#c7a877" />
+<polygon points="1110,230 1900,90 2690,230" fill="#b6966a" />
+<rect x="1196" y="250" width="28" height="400" fill="#9c7e52" />
+<rect x="1349.3333333333333" y="250" width="28" height="400" fill="#9c7e52" />
+<rect x="1502.6666666666667" y="250" width="28" height="400" fill="#9c7e52" />
+<rect x="1656" y="250" width="28" height="400" fill="#9c7e52" />
+<rect x="1809.3333333333335" y="250" width="28" height="400" fill="#9c7e52" />
+<rect x="1962.6666666666665" y="250" width="28" height="400" fill="#9c7e52" />
+<rect x="2116" y="250" width="28" height="400" fill="#9c7e52" />
+<rect x="2269.333333333333" y="250" width="28" height="400" fill="#9c7e52" />
+<rect x="2422.666666666667" y="250" width="28" height="400" fill="#9c7e52" />
+<rect x="2576" y="250" width="28" height="400" fill="#9c7e52" />
+<rect x="1050" y="506" width="1700" height="30" fill="#e7d3ac" />
+<rect x="1130" y="530" width="1540" height="30" fill="#e7d3ac" />
+<rect x="1210" y="554" width="1380" height="30" fill="#e7d3ac" />
+<rect x="1290" y="578" width="1220" height="30" fill="#e7d3ac" />
+<rect x="1370" y="602" width="1060" height="30" fill="#e7d3ac" />
+<rect x="1450" y="626" width="900" height="30" fill="#e7d3ac" />
+<rect x="244.0314981113188" y="612.6908951736987" width="11.937003777362406" height="83.55902644153684" fill="#5b3d26" />
+<circle cx="250" cy="579.267284597084" r="50.13541586492211" fill="#8a6a2e" opacity="0.95" />
+<circle cx="216.57638942338525" cy="600.7538913963363" r="35.81101133208722" fill="#8a6a2e" opacity="0.9" />
+<circle cx="285.8110113320872" cy="595.9790898853913" r="38.1984120875597" fill="#8a6a2e" opacity="0.9" />
+<polygon points="230,710 270,710 410,750 370,750" fill="#6b3f1f" opacity="0.25" />
+<rect x="644.9294078894891" y="635.9094683257863" width="10.141184221021831" height="70.98828954715282" fill="#5b3d26" />
+<circle cx="650" cy="607.5141525069251" r="42.59297372829169" fill="#8a6a2e" opacity="0.95" />
+<circle cx="621.6046841811389" cy="625.7682841047645" r="30.423552663065493" fill="#8a6a2e" opacity="0.9" />
+<circle cx="680.4235526630655" cy="621.7118104163558" r="32.45178950726986" fill="#8a6a2e" opacity="0.9" />
+<polygon points="630,710 670,710 810,750 770,750" fill="#6b3f1f" opacity="0.25" />
+<rect x="2943.749424105976" y="624.033604582306" width="12.501151788048448" height="87.50806251633914" fill="#5b3d26" />
+<circle cx="2950" cy="589.0303795757703" r="52.50483750980348" fill="#8a6a2e" opacity="0.95" />
+<circle cx="2914.9967749934644" cy="611.5324527942576" r="37.503455364145346" fill="#8a6a2e" opacity="0.9" />
+<circle cx="2987.5034553641453" cy="606.5319920790382" r="40.00368572175503" fill="#8a6a2e" opacity="0.9" />
+<polygon points="2930,710 2970,710 3110,750 3070,750" fill="#6b3f1f" opacity="0.25" />
+<rect x="3344.5015968526714" y="620.8845887235366" width="10.99680629465729" height="76.97764406260103" fill="#5b3d26" />
+<circle cx="3350" cy="590.0935310984962" r="46.18658643756062" fill="#8a6a2e" opacity="0.95" />
+<circle cx="3319.2089423749594" cy="609.8877824288793" r="32.99041888397187" fill="#8a6a2e" opacity="0.9" />
+<circle cx="3382.990418883972" cy="605.4890599110164" r="35.18978014290333" fill="#8a6a2e" opacity="0.9" />
+<polygon points="3330,710 3370,710 3510,750 3470,750" fill="#6b3f1f" opacity="0.25" />
+</svg>

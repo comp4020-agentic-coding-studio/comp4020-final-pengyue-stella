@@ -1,0 +1,6 @@
+{
+  "name": "traces-of-anu-server",
+  "private": true,
+  "type": "module",
+  "description": "Zero runtime dependencies on purpose — see /CLAUDE.md."
+}

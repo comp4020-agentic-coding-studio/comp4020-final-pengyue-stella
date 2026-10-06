@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Traces of ANU</title>
+    <meta
+      name="description"
+      content="An immersive shared layer over ANU campus — explore connected scenes, leave a trace, find what others left."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Traces of ANU</h1>
+      <p class="tagline">
+        Walk through campus. Leave something behind. Find what someone else did.
+      </p>
+      <p class="presence" id="presence" aria-live="polite"></p>
+      <p class="whoami" id="whoami"></p>
+      <a class="about-link" href="/readme/">What is this?</a>
+    </header>
+
+    <main>
+      <div class="scene-info">
+        <h2 id="scene-title">&nbsp;</h2>
+        <p id="scene-blurb">&nbsp;</p>
+      </div>
+
+      <div
+        id="viewport"
+        class="viewport"
+        tabindex="0"
+        role="application"
+        aria-label="Campus scene. Drag, swipe, or use the left and right arrow keys to look around. Press Enter on empty ground to leave a trace."
+      >
+        <div id="panorama" class="panorama">
+          <img id="scene-image" alt="" draggable="false" />
+          <div id="pins" class="pins"></div>
+        </div>
+        <button class="pan-btn pan-left" type="button" aria-label="Look left">&#8592;</button>
+        <button class="pan-btn pan-right" type="button" aria-label="Look right">&#8594;</button>
+      </div>
+
+      <p class="hint">
+        Drag to look around &middot; click empty ground to leave a trace &middot; click a mark to
+        read it
+      </p>
+
+      <nav class="jump-nav" aria-label="Jump to a scene">
+        <span class="jump-label">Scenes:</span>
+        <div id="jump-buttons"></div>
+      </nav>
+    </main>
+
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
