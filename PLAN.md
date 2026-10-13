@@ -114,4 +114,5 @@ up and time allows — not before.
 
 All seven build-order steps above are done and deployed at
 `comp4020-final-pengyue-stella.fly.dev`; see `PROCESS.md` for what was checked
-and how. Next up is crit 9's "several people in it" decision.
+and how. Crit 9's "several people in it" decision is scene-scoped presence —
+see `docs/adr/0001-scene-scoped-presence.md`; in progress.
