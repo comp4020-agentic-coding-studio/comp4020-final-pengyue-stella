@@ -29,6 +29,17 @@
         role="application"
         aria-label="Campus scene. Drag, swipe, or use the left and right arrow keys to look around. Press Enter on empty ground to leave a trace."
       >
+        <!-- Depth-parallax rendering (currently only Kambri Lawn — see
+             docs/adr/0002-kambri-depth-parallax.md) draws into #depth-host
+             instead of the flat #scene-image, with its own pins host
+             (#depth-pins) positioned in plain viewport pixels rather than
+             riding #panorama's translateX — a depth scene's "panning" is
+             the virtual camera moving, not the image sliding, so pins for
+             it must not inherit that transform. Both default hidden;
+             goToScene shows exactly one of the two pin hosts depending on
+             whether a depth scene is active for the current scene. -->
+        <div id="depth-host" class="depth-host" hidden></div>
+        <div id="depth-pins" class="pins" hidden></div>
         <div id="panorama" class="panorama">
           <img id="scene-image" alt="" draggable="false" />
           <div id="pins" class="pins"></div>
@@ -54,6 +65,13 @@
 
     <div id="toasts" class="toasts" aria-live="polite"></div>
 
+    <!-- three.js is vendored as a static file, not an npm dependency — see
+         public/vendor/README.md and docs/adr/0002-kambri-depth-parallax.md.
+         Only fetched when depth-scene.js is dynamically imported, which
+         only happens on a scene whose config carries a `depth` field. -->
+    <script type="importmap">
+      { "imports": { "three": "/vendor/three.module.min.js" } }
+    </script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

@@ -2,6 +2,15 @@
 // a handful of DOM operations and one SSE connection, nothing a bundler would
 // earn its keep over. See CLAUDE.md for the conventions this file has to
 // hold to (textContent only for user text; shared x/y anchoring for pins).
+//
+// depth-scene.js adds real depth-parallax rendering for scenes whose config
+// carries a `depth` field (currently only Kambri Lawn — see
+// docs/adr/0002-kambri-depth-parallax.md). This file stays unaware of
+// three.js entirely; it only calls the small interface createDepthScene()
+// returns, and falls back to exactly today's flat <img> + CSS-transform
+// panning for every other scene, or for Kambri itself if depth rendering
+// isn't supported (no WebGL, a failed fetch, anything thrown).
+import { createDepthScene } from "./depth-scene.js";
 
 const LAST_SCENE_KEY = "tracesOfAnu.lastScene";
 
@@ -17,6 +26,8 @@ const els = {
   panorama: document.getElementById("panorama"),
   image: document.getElementById("scene-image"),
   pins: document.getElementById("pins"),
+  depthHost: document.getElementById("depth-host"),
+  depthPins: document.getElementById("depth-pins"),
   title: document.getElementById("scene-title"),
   blurb: document.getElementById("scene-blurb"),
   presence: document.getElementById("presence"),
@@ -34,16 +45,32 @@ let renderedWidth = 0;
 let viewportWidth = 0;
 let seenTraceIds = new Set();
 let openBubble = null;
+let depthScene = null; // the active createDepthScene() instance, or null in flat mode
+let depthRaf = null; // drives re-placing pins/bubbles every frame while depthScene is active
 
 function byId(id) {
   return scenes.find((s) => s.id === id);
+}
+
+// Pins/bubbles render into whichever host matches the current rendering
+// mode: #pins (a child of the sliding #panorama, percentage-positioned) in
+// flat mode, or #depth-pins (a plain viewport-pixel-positioned sibling,
+// since a depth scene's "panning" is a camera moving, not an image
+// sliding) when a depth scene is active for the current scene.
+function activePins() {
+  return depthScene ? els.depthPins : els.pins;
 }
 
 function setPan(next, { smooth = true } = {}) {
   const maxPan = Math.max(0, renderedWidth - viewportWidth);
   pan = Math.min(maxPan, Math.max(0, next));
   els.viewport.classList.toggle("dragging", !smooth);
-  els.panorama.style.transform = `translateX(${-pan}px)`;
+  if (depthScene) {
+    // Same ratio either way — only which element the ratio drives differs.
+    depthScene.setPanFraction(maxPan > 0 ? pan / maxPan : 0.5);
+  } else {
+    els.panorama.style.transform = `translateX(${-pan}px)`;
+  }
 }
 
 // Every scene image is built sharp-centred on a wider canvas (see
@@ -81,9 +108,40 @@ function showToast(text) {
   setTimeout(() => t.remove(), 4200);
 }
 
+// Every pin/bubble keeps its normalised (x, y) on its own dataset, not just
+// baked into a CSS percentage — depth mode needs to re-read it every frame
+// to reproject against the moving virtual camera (see updatePinPositions).
 function placeAt(el, x, y) {
-  el.style.left = `${x * 100}%`;
-  el.style.top = `${y * 100}%`;
+  el.dataset.nx = x;
+  el.dataset.ny = y;
+  if (depthScene) {
+    const p = depthScene.projectPoint(x, y);
+    el.style.left = `${p.x}px`;
+    el.style.top = `${p.y}px`;
+    el.style.visibility = p.visible ? "visible" : "hidden";
+  } else {
+    el.style.left = `${x * 100}%`;
+    el.style.top = `${y * 100}%`;
+    el.style.visibility = "visible";
+  }
+}
+
+// Called every rendered frame while a depth scene is active (see
+// goToScene's depth branch) so pins and open bubbles visually track the
+// same spot on the depth-displaced photo as the parallax camera moves —
+// without this, a pin would stay wherever it was first drawn while the
+// photo underneath it shifts, breaking the "a mark rests on the ground at
+// {x,y}" illusion CLAUDE.md's anchoring convention depends on.
+function updatePinPositions() {
+  if (!depthScene) return;
+  for (const el of activePins().children) {
+    const { nx, ny } = el.dataset;
+    if (nx === undefined || ny === undefined) continue;
+    const p = depthScene.projectPoint(Number(nx), Number(ny));
+    el.style.left = `${p.x}px`;
+    el.style.top = `${p.y}px`;
+    el.style.visibility = p.visible ? "visible" : "hidden";
+  }
 }
 
 function renderExitPin(exit) {
@@ -93,12 +151,12 @@ function renderExitPin(exit) {
   btn.title = exit.label;
   btn.innerHTML = `<span class="pin-dot">&#8594;</span>`; // decorative glyph only
   btn.setAttribute("aria-label", exit.label);
+  activePins().appendChild(btn);
   placeAt(btn, exit.x, exit.y);
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
     goToScene(exit.to);
   });
-  els.pins.appendChild(btn);
 }
 
 function renderTracePin(trace) {
@@ -115,19 +173,18 @@ function renderTracePin(trace) {
   dot.textContent = trace.emoji;
   btn.appendChild(dot);
   btn.setAttribute("aria-label", `${trace.authorName} left a ${trace.type}`);
+  activePins().appendChild(btn);
   placeAt(btn, trace.x, trace.y);
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
     openReadBubble(trace, btn);
   });
-  els.pins.appendChild(btn);
 }
 
 function openReadBubble(trace, anchorEl) {
   closeBubble();
   const bubble = document.createElement("div");
   bubble.className = "bubble read";
-  placeAt(bubble, trace.x, trace.y);
 
   const author = document.createElement("div");
   author.className = "bubble-author";
@@ -150,7 +207,8 @@ function openReadBubble(trace, anchorEl) {
   closeBtn.addEventListener("click", closeBubble);
   bubble.appendChild(closeBtn);
 
-  els.pins.appendChild(bubble);
+  activePins().appendChild(bubble);
+  placeAt(bubble, trace.x, trace.y);
   openBubble = bubble;
   closeBtn.focus();
 }
@@ -159,7 +217,6 @@ function openComposeBubble(x, y) {
   closeBubble();
   const bubble = document.createElement("form");
   bubble.className = "bubble compose";
-  placeAt(bubble, x, y);
 
   const typeRow = document.createElement("div");
   typeRow.className = "type-row";
@@ -229,12 +286,20 @@ function openComposeBubble(x, y) {
     }
   });
 
-  els.pins.appendChild(bubble);
+  activePins().appendChild(bubble);
+  placeAt(bubble, x, y);
   openBubble = bubble;
   textarea.focus();
 }
 
+// In flat mode, a click's position on the photo is a linear fraction of its
+// own bounding box. In depth mode it isn't — the visible surface under the
+// pointer has moved with the parallax camera — so this instead raycasts
+// against the real mesh (depthScene.pickPoint). Returns null only in depth
+// mode when the raycast misses (e.g. a gap left by the edge-coherence
+// cull); the flat-mode path always returns a point, as it always has.
 function clientPointToNormalized(clientX, clientY) {
+  if (depthScene) return depthScene.pickPoint(clientX, clientY);
   const rect = els.image.getBoundingClientRect();
   const x = (clientX - rect.left) / rect.width;
   const y = (clientY - rect.top) / rect.height;
@@ -245,15 +310,26 @@ async function goToScene(id, { resetScroll = true } = {}) {
   const next = byId(id);
   if (!next) return;
   // A brief fade through black reads as walking from one place to the next,
-  // not as a tab swapping its content.
+  // not as a tab swapping its content. Fades whichever host was visible
+  // before this navigation; the host that ends up visible after it (flat
+  // or depth) fades back in below, once we know which one that is.
   els.panorama.style.opacity = "0";
+  els.depthHost.style.opacity = "0";
   scene = next;
   closeBubble();
   localStorage.setItem?.(LAST_SCENE_KEY, id);
 
+  stopDepthScene();
+
   els.title.textContent = scene.title;
   els.blurb.textContent = scene.blurb;
   els.pins.innerHTML = "";
+  els.depthPins.innerHTML = "";
+  // The flat <img> always loads, even for a scene that ends up rendering in
+  // depth mode: its natural dimensions are what measure() uses to compute
+  // renderedWidth/maxPan, so drag sensitivity, arrow-key increments, and
+  // centerPan() all keep working completely unchanged across both modes —
+  // only which element is actually shown, and how pan drives it, differs.
   els.image.src = scene.image;
   els.image.alt = `${scene.title}, a real ANU campus photograph`;
 
@@ -265,8 +341,6 @@ async function goToScene(id, { resetScroll = true } = {}) {
     body: JSON.stringify({ sceneId: id }),
   }).catch(() => {});
 
-  scene.exits.forEach(renderExitPin);
-
   for (const btn of els.jump.children) {
     btn.setAttribute("aria-current", String(btn.dataset.id === id));
   }
@@ -276,9 +350,17 @@ async function goToScene(id, { resetScroll = true } = {}) {
     else els.image.onload = resolve;
   });
   measure();
+
+  if (scene.depth) {
+    await startDepthScene(scene);
+  }
+  // renderExitPin/placeAt need depthScene already resolved (or confirmed
+  // absent) so exits land in the right host from their very first paint.
+  scene.exits.forEach(renderExitPin);
+
   if (resetScroll) centerPan();
   requestAnimationFrame(() => {
-    els.panorama.style.opacity = "1";
+    (depthScene ? els.depthHost : els.panorama).style.opacity = "1";
   });
 
   try {
@@ -287,6 +369,59 @@ async function goToScene(id, { resetScroll = true } = {}) {
     data.traces.forEach(renderTracePin);
   } catch {
     showToast("Couldn't load traces for this scene — check your connection");
+  }
+}
+
+// Tears down any active depth scene and restores exactly today's flat
+// presentation. Always safe to call, including when no depth scene is
+// active (goToScene calls it unconditionally on every navigation).
+function stopDepthScene() {
+  if (depthRaf) {
+    cancelAnimationFrame(depthRaf);
+    depthRaf = null;
+  }
+  if (depthScene) {
+    depthScene.destroy();
+    depthScene = null;
+  }
+  els.depthHost.hidden = true;
+  els.depthPins.hidden = true;
+  els.panorama.hidden = false;
+}
+
+// Attempts depth-parallax rendering for a scene whose config carries a
+// `depth` field. Resolves either way (never throws) — any failure (no
+// WebGL, a failed fetch, anything thrown inside createDepthScene) leaves
+// depthScene null and the flat <img>/#panorama path fully intact, exactly
+// as if `scene.depth` weren't set at all. This is the one fallback path
+// CLAUDE.md's "every interaction works" rule requires stay silent: a
+// visitor on an unsupported browser must see a normal scene, not an error.
+async function startDepthScene(targetScene) {
+  try {
+    const created = await createDepthScene({
+      host: els.depthHost,
+      meshUrl: targetScene.depth.mesh,
+      textureUrl: targetScene.image,
+    });
+    // The visitor may have navigated again while this was in flight.
+    if (scene !== targetScene || !created.supported) {
+      if (created.supported) created.destroy?.();
+      return;
+    }
+    depthScene = created;
+    els.panorama.hidden = true;
+    els.depthHost.hidden = false;
+    els.depthPins.hidden = false;
+    depthScene.setPanFraction(pan / Math.max(1, renderedWidth - viewportWidth) || 0.5);
+
+    function tick() {
+      if (!depthScene) return;
+      updatePinPositions();
+      depthRaf = requestAnimationFrame(tick);
+    }
+    tick();
+  } catch {
+    stopDepthScene();
   }
 }
 
@@ -334,8 +469,12 @@ function wireViewport() {
   els.viewport.addEventListener("click", (e) => {
     if (dragDistance > 6) return; // a drag, not a click
     if (e.target.closest(".pin, .bubble, .pan-btn")) return;
-    const { x, y } = clientPointToNormalized(e.clientX, e.clientY);
-    openComposeBubble(x, y);
+    const point = clientPointToNormalized(e.clientX, e.clientY);
+    // depth mode's raycast can miss (a gap left by the edge-coherence cull,
+    // or empty sky past the mesh's edge) — silently do nothing rather than
+    // open a bubble anchored nowhere; flat mode's clientPointToNormalized
+    // never returns null, so this never skips a click there.
+    if (point) openComposeBubble(point.x, point.y);
   });
 
   els.viewport.addEventListener("keydown", (e) => {
@@ -345,8 +484,18 @@ function wireViewport() {
       setPan(pan + 220, { smooth: true });
     } else if ((e.key === "Enter" || e.key === " ") && e.target === els.viewport) {
       e.preventDefault();
-      const centerX = (pan + viewportWidth / 2) / renderedWidth;
-      openComposeBubble(Math.min(1, Math.max(0, centerX)), 0.82);
+      if (depthScene) {
+        // Same idea as the flat branch below (open a bubble at the centre
+        // of the current view) but via a raycast through the viewport's
+        // own centre, since depth mode has no single fixed "centre of the
+        // photo" fraction — the camera moves, the photo doesn't.
+        const rect = els.viewport.getBoundingClientRect();
+        const point = depthScene.pickPoint(rect.left + rect.width / 2, rect.top + rect.height * 0.55);
+        if (point) openComposeBubble(point.x, point.y);
+      } else {
+        const centerX = (pan + viewportWidth / 2) / renderedWidth;
+        openComposeBubble(Math.min(1, Math.max(0, centerX)), 0.82);
+      }
     } else if (e.key === "Escape") {
       closeBubble();
     }

@@ -31,6 +31,7 @@ Setup (once):
 Run (from the repo root, with that venv active):
     python3 tools/build-depth.py
 """
+import math
 import struct
 from pathlib import Path
 
@@ -48,8 +49,6 @@ OUT = ROOT / "public" / "scenes" / "kambri.depth.bin"
 # geometry, which means fewer / smaller gaps from the edge-coherence cull
 # depth-scene.js applies).
 GRID_W, GRID_H = 360, 160
-
-DEPTH_TOLERANCE = 0.04  # must match depth-scene.js's own culling tolerance
 
 # tools/build-scenes.py's own placement math for Kambri: the sharp photo
 # occupies this normalised x-range of the built canvas; outside it is the
@@ -80,6 +79,19 @@ def main() -> None:
     mask = output["mask"].cpu().numpy()
     H, W = mask.shape
     print(f"inference done: {W}x{H}, {mask.sum()}/{mask.size} valid pixels")
+
+    # MoGe's own reconstructed intrinsics give the exact vertical FOV this
+    # panorama was reconstructed at — using that instead of a guessed/fixed
+    # FOV in the client matters a lot for a wide, short panorama like this
+    # one: its true vertical angular extent (~31°, measured) is far
+    # narrower than a generic "normal lens" 50° guess, and rendering with
+    # too wide a FOV leaves visible empty canvas above/below the actual
+    # mesh content (caught by screenshotting the first integration attempt,
+    # not predicted up front).
+    intrinsics = output["intrinsics"].cpu().numpy()
+    fy = float(intrinsics[1, 1])
+    vertical_fov_deg = 2 * math.degrees(math.atan(1 / (2 * fy)))
+    print(f"reconstructed vertical FOV: {vertical_fov_deg:.2f} deg (fy={fy:.4f})")
 
     xs = np.linspace(0, W - 1, GRID_W).astype(int)
     ys = np.linspace(0, H - 1, GRID_H).astype(int)
@@ -128,10 +140,13 @@ def main() -> None:
 
     buf = grid_points.astype(np.float32).tobytes()
     with open(OUT, "wb") as f:
-        f.write(struct.pack("<II", GRID_W, GRID_H))
+        # header: grid width, grid height, vertical FOV in degrees (float32)
+        f.write(struct.pack("<IIf", GRID_W, GRID_H, vertical_fov_deg))
         f.write(buf)
     final_bad = (~grid_mask).sum()
-    print(f"wrote {OUT.relative_to(ROOT)}: {GRID_W}x{GRID_H} grid, {len(buf) + 8} bytes, "
+    total_bytes = len(buf) + 12
+    print(f"wrote {OUT.relative_to(ROOT)}: {GRID_W}x{GRID_H} grid, {total_bytes} bytes, "
+          f"vfov={vertical_fov_deg:.2f}deg, "
           f"{final_bad}/{grid_mask.size} vertices used fallback/margin-continuation geometry")
 
 

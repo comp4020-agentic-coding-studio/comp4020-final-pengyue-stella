@@ -160,6 +160,21 @@ main {
   -webkit-user-drag: none;
 }
 
+/* Depth-parallax rendering (currently only Kambri Lawn — see
+   docs/adr/0002-kambri-depth-parallax.md). Fills #viewport exactly, same
+   fade transition as .panorama, so switching between the two in goToScene
+   reads as one consistent "walking in" moment regardless of which a scene
+   ends up using. */
+.depth-host {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.3s ease;
+}
+
+.depth-host canvas {
+  touch-action: none; /* depth-scene.js reads pointer/touch drag itself via #viewport's own handlers */
+}
+
 .pins {
   position: absolute;
   inset: 0;
