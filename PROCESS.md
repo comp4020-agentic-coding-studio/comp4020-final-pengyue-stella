@@ -131,3 +131,12 @@ locations. Verified with two independent browser sessions; the count updates
 within about a second of the other session navigating or disconnecting, no
 reload. The flat-file store is sized for this week's scale on purpose — worth
 a note here, not a surprise, if traffic later outgrows it.
+
+Built across four commits, each checked before the next:
+[`425e17d`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/425e17d)
+(the ADR itself), [`7a9c44a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/7a9c44a)
+(server-side connection tagging and the new `POST /api/presence`),
+[`8b378f7`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/8b378f7)
+(client posts on navigate, filters the presence listener by scene), and
+[`6d4e372`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/6d4e372)
+(this pointer, once the decision was implemented and verified).
