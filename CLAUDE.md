@@ -68,6 +68,46 @@ general rule: **a dedupe/seen-set is scoped to one concern.** If two code
 paths both want "have I handled this id before", that's two sets, not one —
 reusing one almost always means one path's bookkeeping corrupts the other's.
 
+## Process discipline
+
+- Run `pnpm check` before every commit. Never commit or push a failing state.
+- One meaningful commit per logical checkpoint, with a message that names the
+  decision or fix it completes — not one combined dump at the end.
+- Keep changes focused on the task at hand; don't expand scope beyond what was
+  asked.
+- Never push, deploy, or change repository visibility without being explicitly
+  told to.
+- Machine-checkable and human-judged are different things: `pnpm check` proves
+  the contract holds, not that the design is good. A green run is not the bar
+  for "done" — it's the floor.
+- Verify actual behaviour (open the running app, exercise the feature) before
+  calling something fixed or finished — a passing test suite can still miss a
+  broken experience it wasn't written to catch. For this app specifically,
+  "verified" means two real sessions (different cookies/browser contexts, e.g.
+  separate `agent-browser --session` names) and an actual reload or redeploy —
+  a single fetch assertion exercises neither the multi-user claim nor the
+  persistence claim.
+
+## This repo across crits 8–10
+
+One repo and one Fly app carry crit 8, 9, 10 and the Final Project submission —
+there's no new clone or new stack choice each week.
+
+- Add each new crit's spec tests alongside the previous crits' in `spec/`;
+  don't delete or replace an earlier crit's tests when a new one lands.
+- `PROCESS.md` is **rewritten at each crit** to describe the project as it
+  currently stands (its own header says this) — not appended to indefinitely.
+  Fold a past moment forward as a line or two if it's still relevant context;
+  don't let it grow into a diary of every session.
+- One reflection per crit — `reflections/crit-8.md`, `crit-9.md`, `crit-10.md`
+  — each in place by its own cutoff. The sweep reads the exact filename for
+  that week; the others staying in the repo doesn't satisfy a missing current
+  one.
+- Shipping (`/comp4020:ship`) tags the deployed commit `crit-<n>`. That tag can
+  move if you reship before the same crit's cutoff (force-push that one tag
+  ref, the sole permitted force in this course) but must never move after —
+  past the cutoff it records what the tutor marked.
+
 ## Checks
 
 `pnpm check` (typecheck + `spec/`) targets the **running app** at `APP_URL`
@@ -75,4 +115,14 @@ reusing one almost always means one path's bookkeeping corrupts the other's.
 check:evidence` is separate and needs no running app. Both chain in CI exactly
 as the course's `checks.yml` runs them; see `spec/README.md` for the split
 between what the course's own `invariants.test.ts` covers and what's ours to
-add.
+add. In CI, `check` runs against the same Docker image `deploy` ships, built
+fresh with a throwaway `/data` standing in for the Fly volume; `deploy` only
+runs once `check` is green and the repo is public.
+
+**Secrets.** `.githooks/pre-commit` (installed by `pnpm install`) blocks any
+staged content shaped like the course API key before it's committed — that's
+the sensor that matters, since CI's secret scan only ever sees a push that's
+already happened. The local `FLY_API_TOKEN` used for manual
+`flyctl deploy --remote-only --ha=false -a comp4020-final-pengyue-stella` lives
+in `mise.local.toml` (gitignored); CI deploys use a separate copy of the same
+name installed as a repo secret. Never put either in a tracked file.
