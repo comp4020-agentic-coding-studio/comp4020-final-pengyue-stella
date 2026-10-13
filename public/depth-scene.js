@@ -33,7 +33,7 @@ const BIN_HEADER_BYTES = 12; // u32 gridWidth, u32 gridHeight, f32 verticalFovDe
 // uncut mesh this ships) would have silently kept the worse value.
 const DEPTH_TOLERANCE = 0.08;
 
-function buildCulledIndices(gw, gh, positions) {
+function buildCulledIndices(gw, gh, positions, tolerance) {
   const indices = [];
   const zAt = (x, y) => positions[(y * gw + x) * 3 + 2];
   for (let y = 0; y < gh - 1; y++) {
@@ -42,7 +42,7 @@ function buildCulledIndices(gw, gh, positions) {
       const z00 = zAt(x, y), z10 = zAt(x + 1, y), z01 = zAt(x, y + 1), z11 = zAt(x + 1, y + 1);
       const coherent = (a, b, c) => {
         const zs = [a, b, c];
-        return Math.max(...zs) - Math.min(...zs) < DEPTH_TOLERANCE * Math.max(...zs);
+        return Math.max(...zs) - Math.min(...zs) < tolerance * Math.max(...zs);
       };
       if (coherent(z00, z10, z11)) indices.push(i00, i10, i11);
       if (coherent(z00, z11, z01)) indices.push(i00, i11, i01);
@@ -95,6 +95,35 @@ function sampleGridPosition(gw, gh, positions, nx, ny) {
   return lerp3(top, bot, fy);
 }
 
+// Samples the average colour of the image's own top strip (the sky, in
+// every one of these outdoor campus photos) via an offscreen canvas, so a
+// gap in the mesh reads as plausible atmosphere rather than a flat colour
+// picked without reference to the actual photo. Falls back to a generic
+// overcast grey-blue if canvas 2D access ever fails (a sandboxed iframe,
+// for instance) — cosmetic only, never allowed to throw and break the
+// scene over it.
+function sampleSkyColor(THREE, image) {
+  try {
+    const w = 32, h = 8; // a coarse average is all this needs
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(image, 0, 0, image.width, Math.max(1, Math.round(image.height * 0.12)), 0, 0, w, h);
+    const { data } = ctx.getImageData(0, 0, w, h);
+    let r = 0, g = 0, b = 0;
+    const n = data.length / 4;
+    for (let i = 0; i < data.length; i += 4) {
+      r += data[i];
+      g += data[i + 1];
+      b += data[i + 2];
+    }
+    return new THREE.Color(r / n / 255, g / n / 255, b / n / 255);
+  } catch {
+    return new THREE.Color(0.55, 0.6, 0.65);
+  }
+}
+
 // Window-model parallax: translate the camera laterally without rotating it.
 // MoGe reconstructs points in the original photographing camera's own
 // frame, which sits at (0,0,0) looking down +Z — the physically correct
@@ -103,7 +132,19 @@ function sampleGridPosition(gw, gh, positions, nx, ny) {
 // almost inside the nearest geometry). No re-aiming at a scene centre as
 // the pan fraction changes: that would rotate the camera, bending straight
 // lines in the photo, unlike real head-tracked motion parallax.
-const PARALLAX_STRENGTH = 2.2; // metres of lateral camera travel at full pan range
+// Metres of lateral camera travel at full pan range. 2.2 (the prototype's
+// own value, tuned against the raw source photo's narrower field of view)
+// read as excessive here: at this panorama's full pan range it swings the
+// camera far enough to expose large areas the single photo never captured
+// (no real geometry behind a leaf, around a trunk, etc.), which read as
+// grey sky-coloured gap patches precisely where the "camera" has moved
+// past what the photo actually shows — not a rendering bug, but a
+// motion-amount problem; the single-photo source simply doesn't support
+// that much lateral travel. 0.6 keeps the parallax clearly perceptible
+// (foreground visibly shifts against background on a drag) while keeping
+// the exposed-gap area small enough to read as a natural depth cue rather
+// than a view into missing geometry, confirmed by panning screenshots.
+const PARALLAX_STRENGTH = 0.6;
 
 export async function createDepthScene({ host, meshUrl, textureUrl }) {
   let THREE;
@@ -133,12 +174,17 @@ export async function createDepthScene({ host, meshUrl, textureUrl }) {
     const texLoader = new THREE.TextureLoader();
     colorTex = await texLoader.loadAsync(textureUrl);
     colorTex.colorSpace = THREE.SRGBColorSpace;
+    // The source photo is far higher resolution than the 360x160 mesh grid
+    // — anisotropic filtering keeps it reading sharp at the shallow viewing
+    // angles the parallax camera creates toward the ground/water, instead of
+    // the default filtering's blur at those angles.
+    colorTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   } catch {
     return { supported: false, reason: "scene texture unavailable" };
   }
 
   const { gw, gh, positions, verticalFovDeg } = meshData;
-  const culledIndices = buildCulledIndices(gw, gh, positions);
+  const culledIndices = buildCulledIndices(gw, gh, positions, DEPTH_TOLERANCE);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(verticalFovDeg, 1, 0.05, 500);
@@ -154,7 +200,20 @@ export async function createDepthScene({ host, meshUrl, textureUrl }) {
   const mesh = new THREE.Mesh(geometry, material);
   scene.add(mesh);
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // A gap the edge-coherence cull leaves (a deliberate trade-off against
+  // the stretched-silhouette alternative — see DEPTH_TOLERANCE's comment)
+  // shows the renderer's own clear colour through it. A tried alternative —
+  // a second, loosely-culled "backdrop" copy of the mesh pushed behind the
+  // real one — made this worse, not better: any tolerance loose enough to
+  // fill a meaningful fraction of the gaps reintroduced visible stretching
+  // at genuine depth discontinuities (confirmed by screenshot: streaking
+  // into the sky at BACKDROP_TOLERANCE=0.3, the same artefact the cull
+  // exists to prevent, just smaller). Sampling the photo's own sky tone and
+  // using it as the clear colour instead means a gap reads as "a hazy
+  // patch of actual sky colour", not a geometric glitch or a black hole —
+  // cheap, and never wrong in a way that draws the eye.
+  scene.background = sampleSkyColor(THREE, colorTex.image);
+
   canvas.style.cssText = "display:block;width:100%;height:100%;";
   host.appendChild(canvas);
 
@@ -176,13 +235,34 @@ export async function createDepthScene({ host, meshUrl, textureUrl }) {
   }
   render();
 
-  function resize() {
-    const w = host.clientWidth, h = host.clientHeight;
+  // host (#depth-host) starts the `hidden` attribute set (app.js only
+  // unhides it once createDepthScene resolves as supported), so its
+  // clientWidth/clientHeight read 0 at the moment this function runs — a
+  // one-shot resize() call here would permanently lock the WebGL render
+  // buffer at whatever tiny default the renderer falls back to (observed:
+  // 300x150, stretched by CSS to the real box, which is exactly what made
+  // the first integration attempt look severely blurred/pixelated). A
+  // ResizeObserver instead reacts to the real size host settles into right
+  // after app.js unhides it, and again on every later resize (window
+  // resize, orientation change, devtools panel toggling) — self-contained
+  // here rather than relying on app.js to remember to call resize() at the
+  // right moment.
+  function applySize(w, h) {
     if (w === 0 || h === 0) return;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
+  function resize() {
+    applySize(host.clientWidth, host.clientHeight);
+  }
+  const resizeObserver = new ResizeObserver((entries) => {
+    const box = entries[0]?.contentBoxSize?.[0];
+    if (box) applySize(box.inlineSize, box.blockSize);
+    else resize();
+  });
+  resizeObserver.observe(host);
   resize();
 
   return {
@@ -235,6 +315,7 @@ export async function createDepthScene({ host, meshUrl, textureUrl }) {
     destroy() {
       destroyed = true;
       if (raf) cancelAnimationFrame(raf);
+      resizeObserver.disconnect();
       geometry.dispose();
       material.dispose();
       colorTex.dispose();

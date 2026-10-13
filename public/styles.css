@@ -22,98 +22,114 @@ body {
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-body {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
+/* The scene is the whole page on the main app view — nothing scrolls behind
+   it. Scoped to body.app-page, not html/body generally, so /readme/ (a plain
+   scrolling document, server/src/readme-page.js) is unaffected. */
+body.app-page {
+  height: 100dvh;
+  overflow: hidden;
 }
 
 a {
   color: var(--accent);
 }
 
-.topbar {
-  padding: 0.75rem 1.25rem 0.6rem;
-  border-bottom: 1px solid var(--line);
+/* The scene IS the page now, not content a header/footer frame — 100dvh
+   (not 100vh) because a mobile browser's address bar changing height must
+   not leave a dead strip of background below the scene. Everything else in
+   this file under .viewport is an absolutely-positioned overlay floating
+   above it, each opting back in to pointer-events only where it's actually
+   interactive, so dragging/panning the scene still works everywhere an
+   overlay's own background sits. */
+.viewport {
   position: relative;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: #11141a;
+  cursor: grab;
+  touch-action: pan-y;
+  outline-offset: -3px;
+}
+
+.viewport.dragging {
+  cursor: grabbing;
+}
+
+.viewport:focus-visible {
+  outline: 3px solid var(--accent);
+}
+
+.topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  padding: calc(0.75rem + env(safe-area-inset-top, 0px)) 1.1rem 2.2rem 1.1rem;
+  background: linear-gradient(to bottom, rgba(10, 12, 16, 0.75), rgba(10, 12, 16, 0) 100%);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  pointer-events: none; /* only its children (the about link) need clicks */
 }
 
 .topbar h1 {
-  margin: 0 0 0.1rem;
-  font-size: clamp(1.15rem, 1.8vw, 1.5rem);
+  margin: 0 0 0.15rem;
+  color: #fff;
+  font-size: clamp(1.05rem, 1.8vw, 1.4rem);
   letter-spacing: -0.01em;
-}
-
-.tagline {
-  margin: 0 0 0.3rem;
-  color: var(--ink-soft);
-  font-size: 0.88rem;
-  max-width: 48ch;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
 .presence {
   margin: 0;
   font-size: 0.76rem;
-  color: var(--ink-soft);
+  color: rgba(255, 255, 255, 0.85);
   min-height: 1.1em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .whoami {
   margin: 0;
   font-size: 0.74rem;
-  color: var(--ink-soft);
+  color: rgba(255, 255, 255, 0.75);
   font-style: italic;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .about-link {
-  position: absolute;
-  top: 1rem;
-  right: 1.25rem;
-  font-size: 0.85rem;
+  pointer-events: auto;
+  flex-shrink: 0;
+  font-size: 0.82rem;
   text-decoration: none;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
-  background: var(--bubble);
+  background: rgba(20, 20, 24, 0.45);
+  color: #fff;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .about-link:hover {
-  background: var(--paper);
-}
-
-main {
-  flex: 1;
-  padding: 0.75rem 1.25rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.viewport {
-  position: relative;
-  width: 100%;
-  height: clamp(240px, 50vh, 680px);
-  overflow: hidden;
-  border-radius: 14px;
-  background: #11141a;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  cursor: grab;
-  touch-action: pan-y;
-  outline-offset: 3px;
+  background: rgba(20, 20, 24, 0.7);
 }
 
 /* The scene's name and blurb read as a caption on the photo itself — like a
    location label in a street-view app — not as a separate article heading
-   above it, so the photo stays the visual centre of gravity. */
+   above it, so the photo stays the visual centre of gravity. A plain flex
+   child of .bottom-bar now (not independently absolutely-positioned at a
+   fixed offset guessed to clear a single-line jump-nav) — that guess broke
+   at phone width, where the jump-nav wraps across two lines and the title
+   sat on top of it. Left-aligned against the bar's own centred siblings,
+   matching how a map app's place name sits flush left over a centred
+   action row beneath it. */
 .scene-caption {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 2.2rem 1.1rem 0.9rem;
-  background: linear-gradient(to top, rgba(10, 12, 16, 0.78), rgba(10, 12, 16, 0) 100%);
+  align-self: stretch;
+  padding: 0 0 0.1rem;
   pointer-events: none;
-  z-index: 2;
 }
 
 .scene-caption h2 {
@@ -130,12 +146,19 @@ main {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
-.viewport.dragging {
-  cursor: grabbing;
-}
-
-.viewport:focus-visible {
-  outline: 3px solid var(--accent);
+.bottom-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  padding: 1.8rem 1.1rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, rgba(10, 12, 16, 0.82), rgba(10, 12, 16, 0.55) 55%, rgba(10, 12, 16, 0) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  pointer-events: none; /* only the jump buttons and scene-caption's own text selection need clicks */
 }
 
 .panorama {
@@ -397,36 +420,49 @@ main {
   margin: -0.15rem 0 0.4rem;
 }
 
+/* .hint and .jump-nav now float over the photo as part of .bottom-bar
+   (overlay, not page content) — colours flip from the paper-page palette to
+   white-on-photo, same treatment as .scene-caption above. */
 .hint {
   margin: 0;
   font-size: 0.8rem;
-  color: var(--ink-soft);
+  color: rgba(255, 255, 255, 0.85);
   text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .jump-nav {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.4rem;
   font-size: 0.82rem;
-  color: var(--ink-soft);
-  margin-top: 0.2rem;
+  color: rgba(255, 255, 255, 0.85);
+  pointer-events: auto;
 }
 
 #jump-buttons {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.35rem;
 }
 
 #jump-buttons button {
-  border: 1px solid var(--line);
-  background: var(--bubble);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(20, 20, 24, 0.45);
+  color: #fff;
   border-radius: 999px;
   padding: 0.25rem 0.65rem;
   font-size: 0.82rem;
   cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+#jump-buttons button:hover {
+  background: rgba(20, 20, 24, 0.7);
 }
 
 #jump-buttons button[aria-current="true"] {
@@ -503,10 +539,16 @@ main {
   color: var(--ink-soft);
 }
 
+/* Narrow/phone-width: the title + about-link row can crowd the top overlay
+   next to a scene-scoped presence line and the whoami line beneath it —
+   shrink the title and tighten the about-link so both still fit one row
+   without wrapping onto the photo awkwardly. */
 @media (max-width: 480px) {
+  .topbar h1 {
+    font-size: 1rem;
+  }
   .about-link {
-    position: static;
-    display: inline-block;
-    margin-top: 0.4rem;
+    font-size: 0.76rem;
+    padding: 0.25rem 0.55rem;
   }
 }

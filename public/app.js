@@ -443,8 +443,19 @@ function wireViewport() {
   let startPan = 0;
   let dragDistance = 0;
 
+  // The overlay chrome (topbar, bottom-bar — jump-nav, about-link, hint —
+  // and open bubbles/pins) all live inside #viewport now that the scene
+  // fills the whole page rather than sitting inside a <main> the chrome was
+  // previously a sibling of. Without excluding them here, setPointerCapture
+  // on pointerdown hijacks their subsequent click (the pointerup/click
+  // sequence resolves against the capturing #viewport, not the button
+  // actually under the pointer) — confirmed by a jump-nav click silently
+  // doing nothing while the same button's own click handler fired fine when
+  // invoked directly, isolating it to pointer capture, not the handler.
+  const isOverlayChrome = (e) => e.target.closest(".pin, .bubble, .pan-btn, .topbar, .bottom-bar");
+
   els.viewport.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".pin, .bubble, .pan-btn")) return;
+    if (isOverlayChrome(e)) return;
     dragging = true;
     dragDistance = 0;
     startX = e.clientX;
@@ -468,7 +479,7 @@ function wireViewport() {
 
   els.viewport.addEventListener("click", (e) => {
     if (dragDistance > 6) return; // a drag, not a click
-    if (e.target.closest(".pin, .bubble, .pan-btn")) return;
+    if (isOverlayChrome(e)) return;
     const point = clientPointToNormalized(e.clientX, e.clientY);
     // depth mode's raycast can miss (a gap left by the edge-coherence cull,
     // or empty sky past the mesh's edge) — silently do nothing rather than
