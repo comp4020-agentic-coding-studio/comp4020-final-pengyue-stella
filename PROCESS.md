@@ -119,9 +119,15 @@ volume. `pnpm check` also ran directly against the live URL, not only a dev
 server. The visual correction above was re-verified the same way (both
 viewports, both sessions) before redeploying again.
 
-## Open for the next crit
+## Crit 9: several-people-in-it
 
-Crit 9 asks for one written decision about several-people-in-it behaviour; the
-cooldown and the ambient toast are the first candidates, not the final answer.
-The flat-file store is sized for this week's scale on purpose — worth a note
-here, not a surprise, if traffic later outgrows it.
+The written decision crit 9 asks for is scene-scoped presence — see
+[`docs/adr/0001-scene-scoped-presence.md`](docs/adr/0001-scene-scoped-presence.md)
+for the full record (context, options considered, consequences,
+verification). In short: each SSE connection is tagged with the visitor's
+current scene, and the presence count shown is scoped to that scene rather
+than campus-wide, without exposing names, colours, cursor positions, or exact
+locations. Verified with two independent browser sessions; the count updates
+within about a second of the other session navigating or disconnecting, no
+reload. The flat-file store is sized for this week's scale on purpose — worth
+a note here, not a surprise, if traffic later outgrows it.
