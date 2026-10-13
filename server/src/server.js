@@ -141,6 +141,10 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && pathname === "/api/events") {
+      const identity = identify(req);
+      const initialScene = url.searchParams.get("scene");
+      const sceneId = SCENE_IDS.has(initialScene) ? initialScene : null;
+
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -150,12 +154,31 @@ const server = createServer(async (req, res) => {
         "X-Accel-Buffering": "no",
       });
       res.write(`retry: 2000\n\n`);
-      sse.addClient(res);
-      sse.broadcastPresence();
+      sse.addClient(res, identity.id, sceneId);
+      sse.broadcastPresenceFor(sceneId);
       req.on("close", () => {
-        sse.removeClient(res);
-        sse.broadcastPresence();
+        const lastScene = sse.removeClient(res, identity.id);
+        sse.broadcastPresenceFor(lastScene);
       });
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/presence") {
+      const identity = identify(req);
+      let payload;
+      try {
+        payload = await readJsonBody(req, 256);
+      } catch {
+        json(res, 400, { error: "bad request body" }, withCookie({}, identity));
+        return;
+      }
+      if (!SCENE_IDS.has(payload.sceneId)) {
+        json(res, 400, { error: "invalid scene" }, withCookie({}, identity));
+        return;
+      }
+      const changed = sse.setVisitorScene(identity.id, payload.sceneId);
+      for (const id of changed) sse.broadcastPresenceFor(id);
+      json(res, 200, { ok: true }, withCookie({}, identity));
       return;
     }
 
