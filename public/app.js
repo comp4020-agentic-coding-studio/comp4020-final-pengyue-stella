@@ -257,6 +257,14 @@ async function goToScene(id, { resetScroll = true } = {}) {
   els.image.src = scene.image;
   els.image.alt = `${scene.title}, a real ANU campus photograph`;
 
+  // Presence is cosmetic: if this fails (offline, first load before the SSE
+  // stream exists yet), the scene itself still works fine without it.
+  fetch("/api/presence", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sceneId: id }),
+  }).catch(() => {});
+
   scene.exits.forEach(renderExitPin);
 
   for (const btn of els.jump.children) {
@@ -351,7 +359,7 @@ function wireViewport() {
 }
 
 function connectEvents() {
-  const es = new EventSource("/api/events");
+  const es = new EventSource(`/api/events?scene=${encodeURIComponent(scene.id)}`);
   es.addEventListener("trace", (e) => {
     const trace = JSON.parse(e.data);
     if (scene && trace.sceneId === scene.id) {
@@ -366,9 +374,11 @@ function connectEvents() {
     }
   });
   es.addEventListener("presence", (e) => {
-    const { count } = JSON.parse(e.data);
-    els.presence.textContent =
-      count <= 1 ? "Just you wandering campus right now" : `${count} people wandering campus right now`;
+    const { sceneId, count } = JSON.parse(e.data);
+    // Scoped to one scene at a time (see docs/adr/0001-scene-scoped-presence.md):
+    // ignore counts for scenes we're not currently looking at.
+    if (!scene || sceneId !== scene.id) return;
+    els.presence.textContent = count <= 1 ? "Just you here right now" : `${count} people here right now`;
   });
 }
 
