@@ -37,8 +37,8 @@ async function readJsonBody(req, limit = 4096) {
 
 function publicScenes() {
   // Same shape the client needs, nothing server-only.
-  return SCENES.map(({ id, title, blurb, image, width, height, exits }) => ({
-    id, title, blurb, image, width, height, exits,
+  return SCENES.map(({ id, title, blurb, image, width, height, exits, depth }) => ({
+    id, title, blurb, image, width, height, exits, depth,
   }));
 }
 

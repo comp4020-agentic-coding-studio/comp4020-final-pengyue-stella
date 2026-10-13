@@ -21,6 +21,12 @@ export const SCENES = [
       { to: "chifley", x: 0.93, y: 0.86, label: "Walk to Chifley Library" },
       { to: "uniave", x: 0.05, y: 0.86, label: "Walk to University Avenue" },
     ],
+    // Real depth-parallax rendering, Kambri only for now — see
+    // docs/adr/0002-kambri-depth-parallax.md. `mesh` is a precomputed static
+    // asset (tools/build-depth.py, run by hand, never in CI or the Docker
+    // image); the client falls back to the flat `image` above if WebGL or
+    // this asset is unavailable.
+    depth: { mesh: "/scenes/kambri.depth.bin" },
   },
   {
     id: "chifley",
