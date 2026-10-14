@@ -131,8 +131,16 @@ export function buildClutterObject(accent, variant) {
 
 // An ornate gilt-framed portrait, hung flush on a wall. `rotationY` should
 // match the wall it's mounted against (0 facing +Z, etc. — same convention
-// as display slots).
-export function buildPortraitFrame({ width = 0.9, height = 1.2, accent = "#663D43" } = {}) {
+// as display slots). `watching`, used only in The Portraits That Watch
+// gallery (see scene.js's furnishPortraitGallery), adds two small dark
+// pupils over the canvas texture's own painted eye-sockets — their position
+// is nudged each frame by scene.js's updateWatchingEyes to lean toward
+// wherever the visitor currently stands, the gallery's one literal
+// realisation of its own name and of the "ambiguous presence, almost
+// believable haunting" reference board. The motion is a few millimetres of
+// lateral shift, never a full eye swivel — restrained per the blueprint's
+// "subtle unease," not a jump-scare.
+export function buildPortraitFrame({ width = 0.9, height = 1.2, accent = "#663D43", watching = false } = {}) {
   const group = new THREE.Group();
   const frameMat = new THREE.MeshStandardMaterial({ color: "#1c1109", roughness: 0.5, metalness: 0.3 });
   const trimMat = brassMaterial();
@@ -140,8 +148,10 @@ export function buildPortraitFrame({ width = 0.9, height = 1.2, accent = "#663D4
   const frame = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.06), frameMat);
   group.add(frame);
 
+  const insetWidth = width * 0.82;
+  const insetHeight = height * 0.82;
   const inset = new THREE.Mesh(
-    new THREE.PlaneGeometry(width * 0.82, height * 0.82),
+    new THREE.PlaneGeometry(insetWidth, insetHeight),
     new THREE.MeshStandardMaterial({ map: buildPortraitTexture(accent), roughness: 0.9 }),
   );
   inset.position.z = 0.031;
@@ -152,6 +162,25 @@ export function buildPortraitFrame({ width = 0.9, height = 1.2, accent = "#663D4
     const corner = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), trimMat);
     corner.position.set((sx * width) / 2, (sy * height) / 2, 0.03);
     group.add(corner);
+  }
+
+  if (watching) {
+    // Eye-socket positions in local space, matching buildPortraitTexture's
+    // own canvas coordinates (two faint sockets at roughly (119,86) and
+    // (137,86) on a 256x256 canvas) mapped onto this frame's actual inset
+    // size, so the literal pupil mesh sits exactly over its painted socket
+    // regardless of this particular frame's width/height.
+    const pupilMat = new THREE.MeshBasicMaterial({ color: "#14100c" });
+    const eyes = [-1, 1].map((side) => {
+      const restX = side * ((137 - 128) / 256) * insetWidth;
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), pupilMat);
+      pupil.scale.set(1, 0.72, 0.4);
+      pupil.position.set(restX, (0.5 - 86 / 256) * insetHeight, 0.033);
+      pupil.userData.restX = restX;
+      group.add(pupil);
+      return pupil;
+    });
+    group.userData.eyes = eyes;
   }
 
   return group;

@@ -383,7 +383,7 @@ const FURNISH_BY_CATEGORY = {
   toy: furnishChildhoodGallery,
 };
 
-function furnishPortraitGallery(group, gallery, breathingLights) {
+function furnishPortraitGallery(group, gallery, breathingLights, watchingPortraits) {
   const { bounds, accent } = gallery;
   const cx = (bounds.minX + bounds.maxX) / 2;
   const cz = (bounds.minZ + bounds.maxZ) / 2;
@@ -392,7 +392,10 @@ function furnishPortraitGallery(group, gallery, breathingLights) {
   rug.position.set(cx, 0, cz);
   group.add(rug);
 
-  // A row of portrait frames along each side wall that isn't the doorway.
+  // A row of portrait frames along each side wall that isn't the doorway —
+  // every frame in this one gallery gets watching eyes (see
+  // buildPortraitFrame's `watching` option), the literal realisation of
+  // "The Portraits That Watch."
   const frameCount = 3;
   const positions = [
     { x: bounds.minX + 0.2, side: "west" },
@@ -401,10 +404,11 @@ function furnishPortraitGallery(group, gallery, breathingLights) {
   for (const { x, side } of positions) {
     for (let i = 0; i < frameCount; i++) {
       const z = bounds.minZ + ((bounds.maxZ - bounds.minZ) * (i + 1)) / (frameCount + 1);
-      const frame = buildPortraitFrame({ accent });
+      const frame = buildPortraitFrame({ accent, watching: true });
       frame.position.set(x, 1.5, z);
       frame.rotation.y = side === "west" ? Math.PI / 2 : -Math.PI / 2;
       group.add(frame);
+      if (frame.userData.eyes) watchingPortraits.push(frame);
     }
   }
 
@@ -571,12 +575,43 @@ function furnishChildhoodGallery(group, gallery, breathingLights) {
   group.add(trunk);
 }
 
-function addGalleryFurniture(scene, world, breathingLights) {
+function addGalleryFurniture(scene, world, breathingLights, watchingPortraits) {
   for (const gallery of world.galleries) {
     const group = new THREE.Group();
     const furnish = FURNISH_BY_CATEGORY[gallery.category];
-    if (furnish) furnish(group, gallery, breathingLights);
+    if (furnish) furnish(group, gallery, breathingLights, watchingPortraits);
     scene.add(group);
+  }
+}
+
+// Each frame's pupils lean a few millimetres toward wherever the visitor
+// currently stands, projected into the frame's own local X axis (so a
+// visitor approaching dead-on gets centred pupils, one walking past gets
+// them tracking sideways) — restrained per the blueprint's "subtle unease,"
+// never a full cartoon eye-swivel. Frames far from the visitor settle back
+// toward centre at the same easing rate, so nothing all-eyes snaps the
+// instant someone steps into the room.
+const EYE_SHIFT_RANGE = 4.5; // world units at which tracking saturates
+const EYE_MAX_OFFSET = 0.028; // local-space pupil travel, in world units
+
+function updateWatchingEyes(frames, visitorX, visitorZ, dt) {
+  const worldPos = new THREE.Vector3();
+  const localDir = new THREE.Vector3();
+  for (const frame of frames) {
+    frame.getWorldPosition(worldPos);
+    const dx = visitorX - worldPos.x;
+    const dz = visitorZ - worldPos.z;
+    const dist = Math.hypot(dx, dz);
+    // Project the direction to the visitor into the frame's own local
+    // right-axis so "left/right" always means left/right as painted on the
+    // canvas, regardless of which wall this particular frame is mounted on.
+    localDir.set(dx, 0, dz).applyQuaternion(frame.getWorldQuaternion(new THREE.Quaternion()).invert());
+    const lean = Math.max(-1, Math.min(1, localDir.x / 0.6)) * Math.max(0, 1 - dist / EYE_SHIFT_RANGE);
+    const k = Math.min(1, dt * 3);
+    for (const pupil of frame.userData.eyes) {
+      const target = pupil.userData.restX + lean * EYE_MAX_OFFSET;
+      pupil.position.x += (target - pupil.position.x) * k;
+    }
   }
 }
 
@@ -589,7 +624,8 @@ export function buildWorldScene(world) {
   addWalls(scene, world);
   const breathingLights = addLighting(scene, world);
   addSigns(scene, world);
-  addGalleryFurniture(scene, world, breathingLights);
+  const watchingPortraits = [];
+  addGalleryFurniture(scene, world, breathingLights, watchingPortraits);
   const { group: donorCounter, flickerLight: donorFlicker } = addDonorCounter(scene, world);
   if (donorFlicker) breathingLights.push({ light: donorFlicker, base: 0.9 });
   const dust = addDust(scene);
@@ -603,6 +639,15 @@ export function buildWorldScene(world) {
       light.intensity = base + Math.sin(elapsed * 0.6 + i) * base * 0.08;
     }
     dust.rotation.y = elapsed * 0.01;
+  }
+
+  // Kept separate from tickAmbient (which only takes elapsed time) since
+  // this needs the visitor's actual position and a per-frame dt for its own
+  // easing — called once per frame from app.js's render loop, a no-op when
+  // reduced motion is requested (the eyes simply hold their rest position).
+  function tickWatchingEyes(visitorX, visitorZ, dt) {
+    if (prefersReducedMotion || watchingPortraits.length === 0) return;
+    updateWatchingEyes(watchingPortraits, visitorX, visitorZ, dt);
   }
 
   const exhibitGroup = new THREE.Group();
@@ -663,6 +708,7 @@ export function buildWorldScene(world) {
     removeHighlight,
     donorCounter,
     tickAmbient,
+    tickWatchingEyes,
   };
 }
 

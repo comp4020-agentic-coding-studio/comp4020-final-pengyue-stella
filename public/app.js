@@ -922,6 +922,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   sceneApi.tickAmbient((now - bootTime) / 1000);
+  sceneApi.tickWatchingEyes(movement.state.x, movement.state.z, dt);
 
   const forwardYaw = cameraRig.mode === "first-person" ? cameraRig.lookYaw : 0;
   const result = movement.tick(dt, {

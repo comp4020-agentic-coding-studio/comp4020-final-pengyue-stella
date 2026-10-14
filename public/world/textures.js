@@ -127,6 +127,19 @@ export function buildPortraitTexture(accent = "#663D43") {
   ctx.closePath();
   ctx.fill();
 
+  // Two faint painted eye-sockets on the silhouette's face, at the exact
+  // spot buildWatchingPortrait (furniture.js) positions its literal 3D
+  // pupil meshes — the painted socket gives the floating pupil somewhere to
+  // visually sit, rather than looking like a dot pasted on top of a blank
+  // silhouette.
+  ctx.fillStyle = "rgba(220,210,195,0.35)";
+  ctx.beginPath();
+  ctx.ellipse(119, 86, 5, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(137, 86, 5, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.strokeStyle = accent;
   ctx.globalAlpha = 0.25;
   ctx.lineWidth = 3;
