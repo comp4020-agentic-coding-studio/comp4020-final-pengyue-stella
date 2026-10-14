@@ -1,62 +1,84 @@
-# Traces of ANU
+# The Cursed Museum
 
-Traces of ANU is a shared, spatial layer over campus. You walk through a small
-loop of real campus places — the creek at Kambri Lawn, Chifley Library's
-footbridge, Union Court, the sign on University Avenue — and at any point you
-can leave a short trace: a tip, a memory,
-a story, a spark of something odd. Other traces left by other people are
-already sitting there, anchored to the exact spot someone left them, waiting
-to be found. It's for anyone passing through ANU who'd rather stumble on what
-someone else noticed about a place than read it off a noticeboard.
+Every object has a story. None of them can be trusted.
 
-## The core experience
+The Cursed Museum is a shared, explorable gothic museum. You walk in under a
+display name, pick a route through four haunted galleries — The Portraits
+That Watch, Objects That Remember, The Cabinet of Impossible Life, The
+Forgotten Childhood — and find relics other visitors have already donated:
+a spoon that remembers dinner-table secrets, a portrait whose hallway keeps
+changing. Other visitors are there with you, moving through the same rooms
+in real time. Press **V** to drop from a diagonal overhead view into a
+freely-navigable first-person view and back, in place, mid-stride.
 
-You don't pick a destination from a menu — you pan around a place (drag,
-swipe, arrow keys) the way you'd glance around a street-view photo, and walk
-to the next place by finding the path out of this one, rendered right on the
-ground where it would actually be. A trace from someone else appears as a
-small mark where they left it; clicking it reads what they wrote, in their own
-whimsical, cookie-assigned name and colour — nobody has an account, but nobody
-is anonymous either. Leave your own by clicking an empty spot: pick a vibe
-(tip, memory, story, spark), write a line, and it's there — for you
-immediately, and for anyone else looking at that scene within about a second,
-no reload. Come back tomorrow, or after a redeploy, and it's still there.
-
-That loop — explore, discover, leave, watch it reach someone else live, find
-it again later — is the whole app right now. Four scenes, one shared log of
-traces, no accounts, no feed.
+Every relic has a dossier: who donated it, what they claimed, and everyone
+since who has disputed it. Publishing a new account never erases the old
+one — a "rewrite" is a competing claim sitting alongside the one it
+contradicts, each permanently attributed and timestamped. Visitors vote each
+account **Believable**, **Suspicious**, or **Definitely Cursed**; the
+museum's current, provisional "accepted" account can change as votes shift,
+but every earlier version stays in the record. The archive only grows.
 
 ## What "good" means here
 
-Traces of ANU is good when it feels less like a website about ANU and more like another layer of student life already happening on campus.
-
-Students pass the same paths, lawns, libraries and buildings every day, but most of the small moments attached to those places disappear. A good version gives those moments somewhere to stay. A first lunch with a friend, a quiet study corner, something strange noticed on the walk home, or a small tip for the next person can become part of how that place is experienced by someone else.
-
-The project should also feel collective. One trace on its own is small. The value comes from different people leaving different pieces over time, seeing new traces appear while they are there, and returning later to find that the place has accumulated a history beyond their own visit.
-
-This is why the core interaction stays spatial. A trace should be discovered where someone left it, not delivered through a feed. Looking around, moving between places and noticing marks in the environment are part of the experience. If using the site starts to feel like scrolling through posts, the project has lost the thing that makes it different.
+A stranger should be able to walk in, explore a room, notice a glinting
+object, inspect it, and donate or dispute something — without being told how.
+Exploration should feel like entering a crowded, specific museum, not
+browsing a card grid: the room is the interface. Two visitors in two browsers
+must see each other move, must see what the other donates or disputes appear
+without a reload, and must still find it all there the next day, after a
+restart, after a redeploy. Contradictions are the point, not a bug: nothing
+written is ever silently destroyed, and the museum does not pretend crowd
+votes are settled fact — a tie is shown as **Disputed**, not resolved in
+either direction.
 
 So, for this project, "good" currently means:
 
-- the campus still feels like the main character, rather than a background for a social app;
-- traces feel connected to particular places and moments;
-- several people can contribute to the same shared campus layer;
-- what people leave survives, so small moments can accumulate into a collective memory;
-- discovering a trace feels a little like finding something left behind for you.
-
-The references below helped sharpen that direction rather than define it for us. Clay Shirky's *Situated Software* supports keeping the app specific to a real community and place. *Local-first Software* strengthened the idea that something a person leaves should still be there when they return. Robin Sloan's *An App Can Be a Home-Cooked Meal* reinforced keeping the project small and intentional rather than turning it into a general-purpose social platform.
+- the museum reads as Gothic-Victorian and specifically itself within the
+  first screen — amber light, dark wood, crowded cabinets — never a generic
+  grey 3D box;
+- a visitor can move, look around freely, and inspect an object using
+  nothing but WASD/arrows, the mouse, E, V and Esc;
+- other visitors' presence and movement are visibly, immediately real —
+  no simulated placeholder players;
+- donating a relic, writing a competing account, and casting a vote are all
+  one honest shared write, seen by everyone else within about a second;
+- the record survives a refresh, a server restart, and a real redeploy.
 
 ## What this deliberately isn't
 
-Not a message board or a feed with the nouns swapped — there's no timeline, no
-likes, no profile page. Not a 3D world — each scene is a real photograph (four
-ANU landmarks, credited below, from Wikimedia Commons), built into a
-pseudo-panorama: shown sharp at its own size, with a softly blurred extension
-of the *same* photo either side for pan room, so there's something to look
-around without inventing a 360 shoot this week. Freehand drawing, image
-uploads, accounts, more than four scenes and long easter-egg trails are all
-left out of this first slice on purpose, not forgotten.
+Not a 2D painted scene cropped to fake movement — a genuine freely-navigable
+first-person camera needs real 3D world geometry, so the museum is one
+coherent Three.js world with two camera rigs over the same coordinates, not
+two different experiences bolted together. Not a moderated social network —
+there are no accounts, no profile pages, no likes; a visitor is a
+cookie-backed identity with a chosen display name, and reports/abuse handling
+is limited to input validation, length caps and per-visitor rate limits, not
+a moderation queue. Not AI-generated art — exhibit imagery is simple,
+original, procedurally-styled iconography keyed to each gallery's category,
+not a generated or scraped image per donation.
 
-**Photo credits** (CC BY-SA via Wikimedia Commons): Kambri Lawn, Alvinz;
-Chifley Library & Union Court, Nick-D; University Avenue, Bidgee — exact
-files and licences in `tools/build-scenes.py`.
+## Controls
+
+| Key | Action |
+| --- | --- |
+| `W A S D` / arrows | Move (diagonal speed normalised) |
+| Mouse (first-person) | Look around |
+| `V` | Toggle overhead ⇄ first-person, in place |
+| `E` / click | Inspect the nearest or clicked exhibit |
+| `Esc` | Close the dossier or donation form |
+| `Enter` | Submit a form without moving the avatar |
+| `Tab` | Move focus through the overlay's own controls |
+
+## Stack
+
+Node.js, ESM, **zero runtime npm dependencies** beyond what Node ships —
+`node:http`, `node:sqlite`, Server-Sent Events, and Three.js vendored as a
+static file (the one prior exception, unchanged). See `PROCESS.md` for the
+full decision record on why this stack serves a one-machine, one-volume Fly
+deployment better than a framework would.
+
+Photo credits for the project this one replaced (Traces of ANU) remain in
+Git history; this build uses original procedural geometry and iconography
+throughout, referencing (not reproducing) the mood boards in
+`design/references/`.
