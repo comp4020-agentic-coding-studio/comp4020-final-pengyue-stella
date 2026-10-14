@@ -339,6 +339,30 @@ a {
 
 .dossier-card {
   width: min(560px, 100%);
+  position: relative;
+}
+
+/* Brass corner accents — a small archival-record touch beyond the shared
+   gate-card border every overlay already has. Drawn as four pseudo-element
+   triangles rather than a background-image so they sit visibly inset from
+   the card's own rounded border instead of fighting it at the very edge. */
+.dossier-card::before,
+.dossier-card::after {
+  content: "";
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  pointer-events: none;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold) 38%, transparent 40%);
+}
+.dossier-card::before {
+  top: 8px;
+  left: 8px;
+}
+.dossier-card::after {
+  bottom: 8px;
+  right: 8px;
+  transform: rotate(180deg);
 }
 
 .dossier-close {
@@ -354,6 +378,14 @@ a {
   font-size: 1.3rem;
   line-height: 1;
   cursor: pointer;
+  /* The × glyph's own font metrics don't sit on the exact vertical centre
+     of its line box, so a plain centred-text button reads as visibly off
+     from the circle it sits in — flex centering the glyph itself (not just
+     the text) fixes this regardless of font/glyph quirks. */
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dossier-kicker {
@@ -382,6 +414,14 @@ a {
 .account-block {
   border-left: 3px solid var(--brass);
   padding-left: 0.65rem;
+}
+
+/* A disputed account (a tied verdict) reads differently at a glance, not
+   just via its text badge — a dashed rose border instead of the settled
+   solid brass one. */
+.account-block.disputed {
+  border-left: 3px dashed var(--rose);
+  background: rgba(102, 61, 67, 0.06);
 }
 
 .account-kind {

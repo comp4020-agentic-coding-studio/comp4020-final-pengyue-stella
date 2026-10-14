@@ -336,6 +336,11 @@ const KIND_LABEL = {
 function renderAccountBlock(account, exhibit) {
   const block = document.createElement("div");
   block.className = "account-block";
+  // Disputed records are visually distinct, not just labelled — a tied
+  // verdict (on the account itself, or because this is the exhibit's
+  // current leading account and the exhibit-level verdict is tied) reads
+  // differently from a settled one at a glance.
+  if (account.verdict === "Disputed") block.classList.add("disputed");
 
   const kindBadge = document.createElement("span");
   kindBadge.className = `account-kind ${account.kind}`;
@@ -381,6 +386,12 @@ function renderAccountBlock(account, exhibit) {
       if (res.ok) {
         const { account: updated } = await res.json();
         applyAccountUpdate(exhibit.id, updated);
+        // Immediate confirmation that this specific vote landed — the
+        // dossier re-render already reflects the new tally/verdict, but a
+        // visitor acting fast benefits from an explicit "yes, that worked"
+        // right where they clicked, not just the surrounding numbers
+        // changing.
+        toast(`Vote recorded: ${verdict}.`);
       }
     });
     voteButtons.appendChild(btn);
@@ -476,9 +487,19 @@ function applyAccountUpdate(exhibitId, account, { isNew = false } = {}) {
   const idx = exhibit.accounts.findIndex((a) => a.id === account.id);
   if (idx >= 0) exhibit.accounts[idx] = account;
   else exhibit.accounts.push(account);
+
+  const previousClassification = exhibit.classification;
   if (account.exhibitClassification) exhibit.classification = account.exhibitClassification;
   if (openDossierExhibitId === exhibitId) renderDossier(exhibit);
-  if (isNew) toast(`New ${KIND_LABEL[account.kind] ?? account.kind} published on "${exhibit.title}".`);
+
+  if (isNew) {
+    toast(`New ${KIND_LABEL[account.kind] ?? account.kind} published on "${exhibit.title}".`);
+  } else if (exhibit.classification !== previousClassification) {
+    // Restrained per the brief ("avoid excessive... notifications"): a vote
+    // only surfaces a toast when it actually moves the exhibit's overall
+    // classification, not on every single vote cast by anyone.
+    toast(`"${exhibit.title}" is now classified ${exhibit.classification}.`);
+  }
 }
 
 // ---------------------------------------------------------------------------
