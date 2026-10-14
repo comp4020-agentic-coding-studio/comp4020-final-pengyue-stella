@@ -788,7 +788,13 @@ function anyOverlayOpen() {
 // Keyboard: V toggle, E interact, Esc close
 
 window.addEventListener("keydown", (e) => {
-  if (movement?.isTypingTarget(document.activeElement)) return;
+  // Escape always works, even while typing inside a form field — closing an
+  // open dossier/donation form (or releasing pointer lock) must never be
+  // blocked by the same typing-target guard that protects WASD from
+  // leaking into movement, since the "Esc · Cancel" button's own label
+  // promises exactly this. V and E, by contrast, are ordinary letters a
+  // visitor might legitimately type into a textarea, so those stay gated.
+  if (e.code !== "Escape" && movement?.isTypingTarget(document.activeElement)) return;
   if (e.code === "KeyV") {
     cameraRig.toggle();
     updateCrosshair();
