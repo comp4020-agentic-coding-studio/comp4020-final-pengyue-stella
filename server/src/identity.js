@@ -34,10 +34,16 @@ export function nameFor(visitorId) {
   return `${adjective} ${noun}`;
 }
 
+// Comma-separated syntax, not the newer space-separated CSS4 form: browsers'
+// CSS parser accepts either, but THREE.Color.setStyle's own hsl() regex
+// (used to tint the avatar's dressing — see public/world/avatar.js) only
+// matches the comma form, so the space-separated form silently fell back to
+// white there (caught by actually rendering an avatar and comparing against
+// its intended tint, not by reading the regex in isolation).
 export function colorFor(visitorId) {
   const h = hashString(`colour:${visitorId}`);
   const hue = h % 360;
-  return `hsl(${hue} 70% 42%)`;
+  return `hsl(${hue}, 70%, 42%)`;
 }
 
 function parseCookies(header) {

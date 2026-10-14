@@ -1,11 +1,13 @@
-// The visitor avatar: a real rigged humanoid model (Kenney "Mini
-// Characters", CC0 1.0 — see public/vendor/README.md and ASSETS.md for full
-// provenance) with idle/walk animation blending, dressed in a procedural
-// Gothic-Victorian cape/collar/belt tinted to the visitor's own colour. This
-// is the one deliberate exception to the project's otherwise-procedural
-// visual stack (see ASSETS.md's hybrid-asset decision): a jointed walking
-// humanoid is the one asset class genuinely hard to fake convincingly with
-// primitive geometry, so it's downloaded and vendored exactly like
+// The visitor avatar: a small, charming female museum visitor — a real
+// rigged humanoid base model (Kenney "Mini Characters", CC0 1.0 — see
+// public/vendor/README.md and ASSETS.md for full provenance) with idle/walk
+// animation blending, dressed in an original procedural Gothic ensemble (a
+// flared dress, a short cape, a high collar and a waist sash, each tinted to
+// the visitor's own server-assigned colour) layered on top. This is the one
+// deliberate exception to the project's otherwise-procedural visual stack
+// (see ASSETS.md's hybrid-asset decision): a jointed walking humanoid is the
+// one asset class genuinely hard to fake convincingly with primitive
+// geometry, so it's downloaded and vendored exactly like
 // three.module.min.js already was — nothing here touches the server's own
 // dependency graph, and the model is fetched by the browser once and cached.
 //
@@ -16,9 +18,9 @@ import * as THREE from "three";
 import { GLTFLoader } from "../vendor/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "../vendor/addons/utils/SkeletonUtils.js";
 
-const MODEL_URL = "/vendor/assets/avatar/character-male-a.glb";
-const TARGET_HEIGHT = 1.7; // world units, feet to top of head
-const HEAD_HEIGHT = 1.72; // approximate — used only to park the name label
+const MODEL_URL = "/vendor/assets/avatar/character-female-a.glb";
+const TARGET_HEIGHT = 1.62; // world units, feet to top of head — a touch shorter/daintier than the base model
+const HEAD_HEIGHT = 1.64; // approximate — used only to park the name label
 
 let templatePromise = null;
 // Loaded once, reused as the clone source for every avatar instance — the
@@ -35,37 +37,77 @@ function loadAvatarTemplate() {
   return templatePromise;
 }
 
-function limbMaterial(color) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05 });
+function limbMaterial(color, extra = {}) {
+  return new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05, ...extra });
 }
 
-// Gothic-Victorian dressing — a short cape, collar and belt — carried over
-// from the original hand-built rig and now layered onto the downloaded
-// model instead of replacing it. Scaled to `scale` (the same factor the
-// model itself is normalised by) so the dressing always sits correctly
-// regardless of the base model's own raw proportions.
+// Darkens/desaturates a base hex colour toward a deep Gothic shade, keeping
+// the visitor's own hue identifiable (so two visitors still read as visibly
+// different people) without ever landing on a bright, cartoonish tone — "not
+// exaggerated, comedic or overly cartoonish" per the brief.
+function gothicShade(hex) {
+  const c = new THREE.Color(hex);
+  const hsl = { h: 0, s: 0, l: 0 };
+  c.getHSL(hsl);
+  hsl.s = Math.min(0.55, hsl.s * 0.75);
+  hsl.l = Math.max(0.14, Math.min(0.3, hsl.l * 0.55));
+  c.setHSL(hsl.h, hsl.s, hsl.l);
+  return c;
+}
+
+// A small, elegant Gothic ensemble — flared dress skirt, short shoulder
+// cape, high collar, waist sash and a glinting pendant — layered onto the
+// base model's torso/hip area. Built from original primitive geometry,
+// scaled to `scale` (the same factor the model itself is normalised by) so
+// the dressing always sits correctly regardless of the base model's own raw
+// proportions. Deliberately avoids anything exaggerated or comedic: muted
+// tones, modest silhouette, no bright primary colours.
 function buildDressing(color, scale) {
   const group = new THREE.Group();
-  const coatColor = color ?? "#3a2a22";
+  const deepColor = gothicShade(color ?? "#3a2230");
   const trimColor = "#c6a16b";
-  const shoulderY = TARGET_HEIGHT * 0.62;
+  const shoulderY = TARGET_HEIGHT * 0.64;
+  const waistY = TARGET_HEIGHT * 0.42;
   const hipY = TARGET_HEIGHT * 0.32;
 
-  const capeMat = new THREE.MeshStandardMaterial({ color: coatColor, roughness: 0.85, side: THREE.DoubleSide });
-  const cape = new THREE.Mesh(new THREE.PlaneGeometry(0.42 * scale, 0.75 * scale), capeMat);
-  cape.position.set(0, shoulderY - 0.18 * scale, -0.1 * scale);
-  cape.rotation.x = 0.15;
+  // Flared skirt: a cone frustum reading as a long Gothic dress skirt from
+  // the waist down, wide enough to hint at fabric drape without clipping
+  // through the legs' walk-cycle swing.
+  const skirtMat = new THREE.MeshStandardMaterial({ color: deepColor, roughness: 0.82, side: THREE.DoubleSide });
+  const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.22 * scale, 0.5 * scale, 12, 1, true), skirtMat);
+  skirt.position.y = waistY - 0.22 * scale;
+  group.add(skirt);
+
+  // Short shoulder cape, open at the front — the one piece carried over in
+  // spirit from the project's earlier avatar, re-cut as a smaller, more
+  // elegant accent rather than a full-length coat.
+  const capeMat = new THREE.MeshStandardMaterial({ color: deepColor, roughness: 0.85, side: THREE.DoubleSide });
+  const cape = new THREE.Mesh(new THREE.PlaneGeometry(0.4 * scale, 0.42 * scale), capeMat);
+  cape.position.set(0, shoulderY - 0.12 * scale, -0.1 * scale);
+  cape.rotation.x = 0.2;
   group.add(cape);
 
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.16 * scale, 0.025 * scale, 6, 12), limbMaterial(trimColor));
-  collar.position.y = shoulderY + 0.05 * scale;
+  // A high collar — reads as the one Gothic-period detail at the neckline.
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.1 * scale, 0.018 * scale, 6, 12), limbMaterial(trimColor, { metalness: 0.6, roughness: 0.35 }));
+  collar.position.y = shoulderY + 0.1 * scale;
   collar.rotation.x = Math.PI / 2;
   group.add(collar);
 
-  const belt = new THREE.Mesh(new THREE.TorusGeometry(0.2 * scale, 0.02 * scale, 6, 12), limbMaterial(trimColor));
-  belt.position.y = hipY;
-  belt.rotation.x = Math.PI / 2;
-  group.add(belt);
+  // Waist sash, cinching the dress at the natural waistline.
+  const sash = new THREE.Mesh(new THREE.TorusGeometry(0.135 * scale, 0.02 * scale, 6, 12), limbMaterial(trimColor, { metalness: 0.5, roughness: 0.4 }));
+  sash.position.y = waistY;
+  sash.rotation.x = Math.PI / 2;
+  group.add(sash);
+
+  // A small pendant on a fine chain — a glinting point of brass at the
+  // throat, the kind of "small detail that rewards closer inspection" the
+  // brief asks for.
+  const pendant = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.018 * scale, 0),
+    new THREE.MeshStandardMaterial({ color: "#c6a16b", metalness: 0.8, roughness: 0.25 }),
+  );
+  pendant.position.set(0, shoulderY - 0.02 * scale, 0.1 * scale);
+  group.add(pendant);
 
   return group;
 }

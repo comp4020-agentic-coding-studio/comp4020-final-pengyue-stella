@@ -28,11 +28,15 @@ provenance stays traceable.
 
 ## Kenney "Mini Characters" v1.0 (CC0 1.0 Universal)
 
-- `assets/avatar/character-male-a.glb` + `assets/avatar/Textures/
+- `assets/avatar/character-female-a.glb` + `assets/avatar/Textures/
   colormap.png` — one character model and its one shared texture from
   Kenney's CC0 "Mini Characters" pack (`kenney.nl/assets/mini-characters`),
-  used as the visitor avatar's base rigged model (see
-  `public/world/avatar.js` and `ASSETS.md`). The texture's path is kept
+  downloaded directly from the official zip (`kenney.nl`'s own GLB export —
+  no third-party mirror), used as the visitor avatar's base rigged model
+  (see `public/world/avatar.js` and `ASSETS.md`). The texture's path is kept
   exactly as the GLB's own internal relative URI
   (`Textures/colormap.png`) expects it, so `GLTFLoader` resolves it without
-  any remapping.
+  any remapping. An earlier pass used `character-male-a.glb` from the same
+  pack; it was replaced with the female model (and the file removed) once
+  the creative direction called for a specific female visitor character —
+  see `ASSETS.md`.

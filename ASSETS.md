@@ -28,12 +28,15 @@ below.
   server's own dependency graph; all of it is fetched by the browser, never
   installed.
 - **Kenney "Mini Characters"** (v1.0, 2024), CC0 1.0 Universal
-  (public domain) — `kenney.nl/assets/mini-characters`. Only
-  `character-male-a.glb` and its texture (`Textures/colormap.png`) are used,
-  vendored at `public/vendor/assets/avatar/`. This is the visitor avatar's
-  base model: a small rigged humanoid with an `idle` and a `walk` animation
-  clip among its ~30 named clips, used for every visitor (local and remote)
-  with a procedural Gothic-Victorian cape/collar/belt layered on top (see
+  (public domain) — `kenney.nl/assets/mini-characters`, downloaded directly
+  from the official zip (its own GLB export, not a third-party mirror). Only
+  `character-female-a.glb` and its texture (`Textures/colormap.png`) are
+  used, vendored at `public/vendor/assets/avatar/`. This is the visitor
+  avatar's base model: a small rigged humanoid with an `idle` and a `walk`
+  animation clip among its ~30 named clips, used for every visitor (local
+  and remote) with an original Gothic ensemble — a flared dress, a short
+  shoulder cape, a high collar, a waist sash and a small brass pendant,
+  tinted to the visitor's own server-assigned colour — layered on top (see
   `public/world/avatar.js`). CC0 requires no attribution, but it's recorded
   here anyway for provenance — same discipline as crediting Three.js even
   though its license doesn't demand it either.
@@ -66,10 +69,14 @@ sourced from an external file:
   cabinets) without copying their specific arrangement, objects or any
   pixel content from those screenshots.
 - **The visitor avatar's dressing** (`public/world/avatar.js`'s
-  `buildDressing`) — a cape, collar and belt in a Gothic-Victorian
-  silhouette, original primitive geometry layered onto the downloaded Kenney
-  model above (tinted to the visitor's own server-assigned colour), carried
-  over from the project's earlier fully-procedural avatar.
+  `buildDressing`) — a flared Gothic dress skirt, a short shoulder cape, a
+  high collar, a waist sash and a small brass pendant, original primitive
+  geometry layered onto the downloaded Kenney model above (tinted to the
+  visitor's own server-assigned colour, desaturated and darkened toward a
+  muted Gothic shade rather than a bright cartoon tone). Carried over in
+  spirit from the project's earlier fully-procedural avatar, redesigned for
+  the small, charming, slightly Gothic female visitor character the
+  blueprint's creative direction calls for.
 - **Donated-relic artifact library** (`public/world/artifacts.js`) — a
   dedicated model family per subtype (spoon, key, clock, mirror, painting,
   sketch, doll, toy, book, botanical specimen, biological specimen,
