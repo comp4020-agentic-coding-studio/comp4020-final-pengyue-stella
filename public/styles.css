@@ -53,49 +53,141 @@ a {
   touch-action: none;
 }
 
-/* First-person pointer-lock cue: a small fixed reticle, shown only while
-   the camera rig is first-person and the pointer is locked. */
-.crosshair {
+/* Scene-cut transition cover: opacity driven by exploration.js's fade
+   phases. Fixed, full-bleed, above the canvas but below every UI layer, so
+   a scene swap (vantage jump) is never visible mid-motion. */
+.scene-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: var(--obsidian);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Hotspot overlay: real, focusable <button>s positioned every frame over
+   their matching 3D point (see exploration.js's projectToScreen). This is
+   the entire interaction surface now — door/closeup/back/donate/lore
+   hotspots and every exhibit in view — so mouse, touch and Tab/Enter all
+   reach the same thing the same way. */
+/* The layer itself must never intercept clicks over its own empty space —
+   only an actual .hotspot button (which opts back in below) should be
+   clickable. Without this, the layer's full-viewport box (sized to sit
+   above the turn-controls/scene-caption z-index) silently ate every click
+   meant for whatever sits underneath it, hub turn arrows included —
+   caught by actually clicking through the app, not by reading the CSS. */
+.hotspot-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.hotspot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font: inherit;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--brass);
+  background: rgba(53, 37, 28, 0.78);
+  color: var(--gold);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  box-shadow: 0 0 0 0 rgba(198, 161, 107, 0.5);
+  animation: hotspot-glow 2.6s ease-in-out infinite;
+  pointer-events: auto;
+}
+
+.hotspot:hover,
+.hotspot:focus-visible {
+  background: rgba(102, 61, 67, 0.88);
+  color: var(--parchment);
+  outline: none;
+}
+
+@keyframes hotspot-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(198, 161, 107, 0.45); }
+  50% { box-shadow: 0 0 0 6px rgba(198, 161, 107, 0); }
+}
+
+.hotspot-exhibit {
+  border-color: var(--gold);
+  color: var(--parchment);
+}
+
+.hotspot-donate {
+  border-color: var(--rose);
+}
+
+/* Hub-only look-turn controls — the one place scene navigation is a smooth
+   turn rather than a cut (see exploration.js's turnLeft/turnRight). */
+.turn-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.turn-arrow {
   position: absolute;
   top: 50%;
-  left: 50%;
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
+  transform: translateY(-50%);
+  width: 3rem;
+  height: 3rem;
   border-radius: 50%;
-  background: rgba(233, 221, 197, 0.85);
-  box-shadow: 0 0 0 1px rgba(17, 16, 15, 0.6);
-  pointer-events: none;
-  z-index: 2;
-  display: none;
-}
-
-.crosshair.visible {
-  display: block;
-}
-
-/* Shown briefly the first time pointer lock actually engages — tells a
-   visitor who has never used FPS mouse-look before that Esc is the way out,
-   before they go looking for it. */
-.lock-hint {
-  position: absolute;
-  top: calc(4.2rem + env(safe-area-inset-top, 0px));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 4;
-  background: rgba(53, 37, 28, 0.85);
-  color: var(--gold);
   border: 1px solid var(--brass);
-  border-radius: 999px;
-  padding: 0.4rem 0.9rem;
-  font-size: 0.82rem;
-  pointer-events: none;
-  animation: lock-hint-fade 4.5s ease forwards;
+  background: rgba(53, 37, 28, 0.55);
+  color: var(--parchment);
+  font-size: 1.1rem;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
 }
 
-@keyframes lock-hint-fade {
-  0%, 70% { opacity: 1; }
-  100% { opacity: 0; }
+.turn-arrow:hover,
+.turn-arrow:focus-visible {
+  background: rgba(53, 37, 28, 0.85);
+  outline: none;
+}
+
+.turn-left {
+  left: 1rem;
+}
+.turn-right {
+  right: 1rem;
+}
+
+/* Short environmental-lore popover — a hotspot that isn't a full archival
+   exhibit, just a line or two of in-world storytelling. */
+.lore-card {
+  position: absolute;
+  left: 50%;
+  bottom: 6.5rem;
+  transform: translateX(-50%);
+  z-index: 11;
+  width: min(380px, calc(100% - 2rem));
+  background: var(--parchment);
+  color: var(--ink);
+  border: 2px solid var(--brass);
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+.lore-card h3 {
+  margin: 0 0 0.3rem;
+  font-family: Georgia, "Cormorant Garamond", serif;
+  color: var(--mahogany);
+  font-size: 1.05rem;
+}
+
+.lore-card p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .topbar {
@@ -188,28 +280,6 @@ a {
   margin: 0;
   font-size: 0.8rem;
   color: rgba(233, 221, 197, 0.8);
-}
-
-.floating-hint {
-  position: absolute;
-  left: 50%;
-  bottom: 7.5rem;
-  transform: translateX(-50%);
-  z-index: 4;
-  background: rgba(53, 37, 28, 0.85);
-  color: var(--gold);
-  border: 1px solid var(--brass);
-  border-radius: 999px;
-  padding: 0.45rem 1rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-  backdrop-filter: blur(6px);
-  animation: hint-bob 2.2s ease-in-out infinite;
-}
-
-@keyframes hint-bob {
-  0%, 100% { transform: translateX(-50%) translateY(0); }
-  50% { transform: translateX(-50%) translateY(-4px); }
 }
 
 /* --- overlay gates (name entry, donation form, dossier) ------------------ */
@@ -593,74 +663,6 @@ a {
   color: #5b4f3d;
 }
 
-/* --- touch fallback ------------------------------------------------------ */
-
-.touch-controls {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  pointer-events: none;
-}
-
-.dpad {
-  position: absolute;
-  left: 1rem;
-  bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
-  display: grid;
-  grid-template-columns: repeat(3, 2.6rem);
-  grid-template-rows: repeat(3, 2.6rem);
-  gap: 0.2rem;
-  pointer-events: auto;
-}
-
-.dpad button {
-  grid-column: 2;
-  background: rgba(53, 37, 28, 0.6);
-  border: 1px solid var(--brass);
-  color: var(--parchment);
-  border-radius: 8px;
-  font-size: 1rem;
-  touch-action: none;
-}
-
-.dpad button[data-dir="left"] {
-  grid-column: 1;
-  grid-row: 2;
-}
-.dpad button[data-dir="up"] {
-  grid-row: 1;
-}
-.dpad button[data-dir="right"] {
-  grid-column: 3;
-  grid-row: 2;
-}
-.dpad button[data-dir="down"] {
-  grid-row: 3;
-}
-
-.touch-interact,
-.touch-view {
-  position: absolute;
-  bottom: calc(7.2rem + env(safe-area-inset-bottom, 0px));
-  width: 3.2rem;
-  height: 3.2rem;
-  border-radius: 50%;
-  background: rgba(102, 61, 67, 0.75);
-  border: 1px solid var(--rose);
-  color: var(--parchment);
-  font-size: 1.1rem;
-  font-weight: 700;
-  pointer-events: auto;
-  touch-action: none;
-}
-
-.touch-interact {
-  right: 4.6rem;
-}
-.touch-view {
-  right: 1rem;
-}
-
 @media (max-width: 480px) {
   .topbar h1 {
     font-size: 1rem;
@@ -675,7 +677,7 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .floating-hint {
+  .hotspot {
     animation: none;
   }
 }

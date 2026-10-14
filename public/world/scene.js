@@ -3,8 +3,11 @@
 // cabinets, portrait frames, rugs, plants, candles, a chandelier — see
 // furniture.js). Everything here is built once from the server's
 // /api/world payload — the client never invents geometry the server
-// doesn't know about, so collision (computed from the same rects
-// client-side) always matches what's actually drawn.
+// doesn't know about. There is no collision any more (see
+// docs/adr/0003-scene-exploration.md): the camera only ever sits at one of
+// the server's fixed scene vantages, never at an arbitrary walked-to point,
+// so nothing here needs to keep a walkable-rect model in sync with what's
+// drawn the way the old free-roam version did.
 import * as THREE from "three";
 import {
   buildDisplayCabinet,
@@ -29,10 +32,10 @@ import { buildLabelTexture } from "./textures.js";
 import { buildArtifactMesh } from "./artifacts.js";
 
 // Hangs a short run of portrait frames along one wall of a gallery, well
-// inside the walkable rect (see movement.js's RADIUS) so a frame is never
-// behind where a visitor can actually stand to read it. `side` is which
-// wall ("north"/"south"/"east"/"west"), matched to world.js's own wall
-// naming so a gallery's doorway side is simply never passed in here.
+// clear of the floor so a frame reads as mounted rather than floating.
+// `side` is which wall ("north"/"south"/"east"/"west"), matched to
+// world.js's own wall naming so a gallery's doorway side is simply never
+// passed in here.
 function lineWallFrames(group, bounds, side, accent, count = 2) {
   const inset = 0.18;
   const positions = count === 1 ? [0.5] : Array.from({ length: count }, (_, i) => (i + 1) / (count + 1));
@@ -85,11 +88,6 @@ function placeSideTable(group, x, z, accent, variantSeed) {
 
 const WALL_HEIGHT = 3.4;
 const WALL_THICKNESS = 0.25;
-const EYE_HEIGHT = 1.65;
-// Ceiling meshes render only on this layer; the overhead rig stays on
-// layer 0 only (so its downward view is never blocked), first-person
-// enables this layer too (see cameras.js) so the room reads as enclosed.
-const CEILING_LAYER = 1;
 
 function rectGeometry(rect) {
   return new THREE.PlaneGeometry(rect.maxX - rect.minX, rect.maxZ - rect.minZ);
@@ -120,21 +118,15 @@ function addFloorAndCeiling(scene, world) {
   positionRect(hallFloor, world.hall.bounds);
   scene.add(hallFloor);
 
-  // Ceiling meshes exist, but live on render layer 1 (CEILING_LAYER) rather
-  // than the default layer 0 — the overhead camera rig never enables that
-  // layer (see cameras.js), so its straight-down view of the room is
-  // unaffected, while first-person (which looks up, not down) enables it and
-  // gets a properly enclosed room instead of a view straight into the void.
-  // An earlier version had no ceiling mesh at all to avoid blocking the
-  // overhead camera; the layer split gets both rigs what they need from the
-  // same geometry instead of omitting it.
+  // Every fixed scene vantage looks roughly level or up into a room (never
+  // straight down, the way the retired overhead rig once did), so the
+  // ceiling always renders — no render-layer split needed any more.
   const ceilingMat = new THREE.MeshStandardMaterial({ color: "#1a140f", roughness: 0.95, side: THREE.BackSide });
   function addCeiling(rect) {
     const ceiling = new THREE.Mesh(rectGeometry(rect), ceilingMat);
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = WALL_HEIGHT - 0.02;
     positionRect(ceiling, rect);
-    ceiling.layers.set(CEILING_LAYER);
     scene.add(ceiling);
   }
   addCeiling(world.hall.bounds);
@@ -655,9 +647,12 @@ export function buildWorldScene(world) {
   }
 
   // Kept separate from tickAmbient (which only takes elapsed time) since
-  // this needs the visitor's actual position and a per-frame dt for its own
-  // easing — called once per frame from app.js's render loop, a no-op when
-  // reduced motion is requested (the eyes simply hold their rest position).
+  // this needs the current camera vantage's position and a per-frame dt for
+  // its own easing — called once per frame from app.js's render loop (using
+  // the active scene's own camera position, since there is no avatar
+  // position any more — see docs/adr/0003-scene-exploration.md), a no-op
+  // when reduced motion is requested (the eyes simply hold their rest
+  // position).
   function tickWatchingEyes(visitorX, visitorZ, dt) {
     if (prefersReducedMotion || watchingPortraits.length === 0) return;
     updateWatchingEyes(watchingPortraits, visitorX, visitorZ, dt);
@@ -690,26 +685,24 @@ export function buildWorldScene(world) {
     return group;
   }
 
-  function removeHighlight() {
-    for (const mesh of exhibitMeshes.values()) {
+  // Marks every exhibit in `exhibitIds` with a warm emissive glow and clears
+  // it from everything else — there is no more proximity/"nearest exhibit"
+  // concept (see docs/adr/0003-scene-exploration.md): every exhibit visible
+  // in the current scene is directly clickable via its own hotspot button,
+  // so every one of them gets the same "this is interactable" treatment at
+  // once. Per CLAUDE.md, this glow is load-bearing (legible against a
+  // crowded, dimly-lit room), not decorative — the same job the prior
+  // single-exhibit highlight did, just applied to a set instead of one id.
+  function setInteractableExhibits(exhibitIds) {
+    const idSet = new Set(exhibitIds);
+    for (const [id, mesh] of exhibitMeshes.entries()) {
+      const interactable = idSet.has(id);
       mesh.traverse((c) => {
-        if (c.isMesh && c.userData.__origEmissive !== undefined) {
-          c.material.emissive?.setHex(c.userData.__origEmissive);
-        }
+        if (!c.isMesh || !c.material?.emissive) return;
+        if (c.userData.__origEmissive === undefined) c.userData.__origEmissive = c.material.emissive.getHex();
+        c.material.emissive.setHex(interactable ? 0x443311 : c.userData.__origEmissive);
       });
     }
-  }
-
-  function highlightExhibit(exhibitId) {
-    removeHighlight();
-    const mesh = exhibitMeshes.get(exhibitId);
-    if (!mesh) return;
-    mesh.traverse((c) => {
-      if (c.isMesh && c.material?.emissive) {
-        c.userData.__origEmissive = c.material.emissive.getHex();
-        c.material.emissive.setHex(0x443311);
-      }
-    });
   }
 
   return {
@@ -717,8 +710,7 @@ export function buildWorldScene(world) {
     exhibitGroup,
     exhibitMeshes,
     addExhibitMesh,
-    highlightExhibit,
-    removeHighlight,
+    setInteractableExhibits,
     donorCounter,
     tickAmbient,
     tickWatchingEyes,
@@ -762,4 +754,3 @@ export function renderArtifactPreview(canvas, { category, subtype, accent, exhib
   renderer.dispose();
 }
 
-export { EYE_HEIGHT, CEILING_LAYER };

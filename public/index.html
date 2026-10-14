@@ -6,14 +6,29 @@
     <title>The Cursed Museum</title>
     <meta
       name="description"
-      content="A shared, explorable gothic museum of haunted objects and unreliable histories. Move with WASD, press V to switch views, E to inspect."
+      content="A shared, explorable gothic museum of haunted objects and unreliable histories. Click to look closer, follow the glowing signs between rooms."
     />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body class="app-page">
     <div id="viewport" class="viewport" tabindex="0" role="application"
-      aria-label="The Cursed Museum. Move with WASD or arrow keys, press V to switch between overhead and first-person view, E or click to inspect an exhibit.">
+      aria-label="The Cursed Museum. Click a glowing sign or exhibit to move and inspect; Tab and Enter work the same way.">
       <canvas id="scene-canvas"></canvas>
+      <div id="scene-fade" class="scene-fade" aria-hidden="true"></div>
+
+      <!-- Hotspot overlay: real, focusable buttons positioned over their
+           matching 3D point every frame (see exploration.js's
+           projectToScreen) — this is what makes every interaction reachable
+           by mouse, touch AND Tab/Enter, not just a raycast under a cursor. -->
+      <div id="hotspot-layer" class="hotspot-layer" aria-hidden="false"></div>
+
+      <!-- Hub-only turn controls: the one place scene navigation is a look,
+           not a cut — turning to face a different doorway in the Entrance
+           Hall. -->
+      <div id="turn-controls" class="turn-controls" hidden>
+        <button type="button" id="turn-left" class="turn-arrow turn-left" aria-label="Turn left">&#10094;</button>
+        <button type="button" id="turn-right" class="turn-arrow turn-right" aria-label="Turn right">&#10095;</button>
+      </div>
 
       <!-- Everything below floats above the full-bleed 3D canvas. -->
       <header class="topbar">
@@ -25,22 +40,24 @@
         <a class="about-link" href="/readme/">What is this?</a>
       </header>
 
-      <div class="crosshair" id="crosshair" aria-hidden="true"></div>
-
-      <!-- A short-lived callout the first time first-person mouse-look
-           actually engages, so the two-state control model (locked
-           exploration vs. free cursor) is discoverable without a manual. -->
-      <div class="lock-hint" id="lock-hint" hidden>Press Esc anytime to free your cursor</div>
-
       <footer class="bottom-bar">
         <div class="scene-caption">
           <h2 id="gallery-title">Entrance Hall</h2>
           <p id="gallery-hint">&nbsp;</p>
         </div>
         <p class="hint" id="control-hint">
-          WASD/arrows to move &middot; V to switch view &middot; E or click to inspect
+          Click a glowing sign to move &middot; click an exhibit to inspect &middot; Esc to go back
         </p>
       </footer>
+
+      <!-- Short environmental-lore popover (a hotspot that isn't a full
+           archival exhibit) — "important environmental objects can have
+           short lore text even if they are not full archival exhibits." -->
+      <div id="lore-card" class="lore-card" hidden role="dialog" aria-labelledby="lore-title">
+        <button type="button" id="lore-close" class="dossier-close" aria-label="Close">&times;</button>
+        <h3 id="lore-title"></h3>
+        <p id="lore-text"></p>
+      </div>
 
       <!-- Name-entry gate, shown until a display name is chosen. -->
       <div id="name-gate" class="overlay-gate" hidden>
@@ -52,24 +69,6 @@
             placeholder="e.g. The Quiet Curator" />
           <button type="submit">Enter the museum</button>
         </form>
-      </div>
-
-      <!-- Donor counter prompt, shown on approach in the hall. -->
-      <button id="donate-hint" class="floating-hint" type="button" hidden>
-        Press E to donate a relic
-      </button>
-
-      <!-- Touch fallback: on-screen movement + interact, shown only on
-           touch-capable devices (no keyboard to rely on). -->
-      <div id="touch-controls" class="touch-controls" hidden>
-        <div class="dpad" aria-label="Move">
-          <button type="button" data-dir="up" aria-label="Move forward">&#9650;</button>
-          <button type="button" data-dir="left" aria-label="Move left">&#9664;</button>
-          <button type="button" data-dir="down" aria-label="Move back">&#9660;</button>
-          <button type="button" data-dir="right" aria-label="Move right">&#9654;</button>
-        </div>
-        <button type="button" id="touch-interact" class="touch-interact" aria-label="Inspect nearest exhibit">E</button>
-        <button type="button" id="touch-view" class="touch-view" aria-label="Switch view">V</button>
       </div>
 
       <!-- Donation form overlay. -->
