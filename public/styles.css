@@ -74,6 +74,30 @@ a {
   display: block;
 }
 
+/* Shown briefly the first time pointer lock actually engages — tells a
+   visitor who has never used FPS mouse-look before that Esc is the way out,
+   before they go looking for it. */
+.lock-hint {
+  position: absolute;
+  top: calc(4.2rem + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  background: rgba(53, 37, 28, 0.85);
+  color: var(--gold);
+  border: 1px solid var(--brass);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+  pointer-events: none;
+  animation: lock-hint-fade 4.5s ease forwards;
+}
+
+@keyframes lock-hint-fade {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 .topbar {
   position: absolute;
   top: 0;

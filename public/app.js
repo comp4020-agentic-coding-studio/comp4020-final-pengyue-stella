@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { buildWorldScene } from "./world/scene.js";
 import { createMovementController } from "./world/movement.js";
 import { createCameraRig } from "./world/cameras.js";
-import { RemoteAvatar, buildAvatarMesh } from "./world/avatar.js";
+import { RemoteAvatar, buildAvatarMesh, animateWalk } from "./world/avatar.js";
 
 const INTERACT_RANGE = 2.2;
 const DONATE_RANGE = 2.0;
@@ -19,6 +19,8 @@ const galleryTitleEl = el("gallery-title");
 const galleryHintEl = el("gallery-hint");
 const donateHintBtn = el("donate-hint");
 const toastsEl = el("toasts");
+const controlHintEl = el("control-hint");
+const lockHintEl = el("lock-hint");
 
 let myIdentity = null;
 let world = null;
@@ -30,6 +32,8 @@ let cameraRig = null;
 let renderer = null;
 let remoteAvatars = new Map(); // visitorId -> RemoteAvatar
 let localAvatarMesh = null;
+let localAvatarRig = null;
+let localWalkPhase = 0;
 let lastMovePosted = 0;
 let currentGalleryId = null;
 let openDossierExhibitId = null;
@@ -180,10 +184,14 @@ function openDonateGate() {
   populateDonateForm();
   el("donate-error").textContent = "";
   el("donate-gate").hidden = false;
+  cameraRig.releaseLock();
   el("donate-title").focus();
 }
 function closeDonateGate() {
   el("donate-gate").hidden = true;
+  // Closing a form must not automatically recapture the pointer — the
+  // visitor stays in cursor mode until they deliberately click empty scene
+  // space again (or Esc already released it, so there's nothing to undo).
   viewport.focus();
 }
 
@@ -318,7 +326,9 @@ function openDossier(exhibitId) {
   renderDossier(exhibit);
   el("account-error").textContent = "";
   el("dossier").hidden = false;
-  if (document.pointerLockElement) document.exitPointerLock();
+  // Opening any interactive UI always releases pointer lock, regardless of
+  // which camera rig is active — a locked cursor can't click a vote button.
+  cameraRig.releaseLock();
 }
 
 function closeDossier() {
@@ -386,6 +396,8 @@ function hasNamedBefore() {
   }
 }
 
+// The name gate is itself UI — shown, it must behave like the others (no
+// lock to release yet at boot, but kept consistent for the same reason).
 el("name-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = el("name-input").value.trim();
@@ -522,7 +534,21 @@ function updateProximityUI() {
 }
 
 function interact() {
-  if (!el("dossier").hidden || !el("donate-gate").hidden || !el("name-gate").hidden) return;
+  if (anyOverlayOpen()) return;
+
+  // With a visible aim reticle (pointer-locked first-person), E targets
+  // whatever the crosshair is actually over, same resolution click already
+  // uses — not just whichever exhibit happens to be geometrically nearest.
+  // A visitor standing equidistant between two exhibits but looking
+  // straight at one of them gets that one, not an arbitrary pick.
+  if (cameraRig.mode === "first-person" && cameraRig.pointerLocked) {
+    const targeted = raycastExhibitFromCenter();
+    if (targeted) {
+      tryInspect(targeted);
+      return;
+    }
+  }
+
   const nearExhibit = nearestExhibitWithin(INTERACT_RANGE);
   if (nearExhibit) {
     openDossier(nearExhibit);
@@ -560,20 +586,44 @@ function raycastExhibitFromCenter() {
 }
 
 canvas.addEventListener("click", (e) => {
-  if (!el("dossier").hidden || !el("donate-gate").hidden || !el("name-gate").hidden) return;
+  if (anyOverlayOpen()) return;
 
+  // In first-person, cursor mode (unlocked) is the browsing state: a click
+  // first tries to hit an exhibit under the actual cursor position exactly
+  // like overhead mode does. Only a click that hits nothing (empty scene
+  // space) resumes mouse-look — so clicking an exhibit to inspect it never
+  // also re-locks the pointer out from under the dossier that's about to
+  // open.
   if (cameraRig.mode === "first-person" && !cameraRig.pointerLocked) {
-    canvas.requestPointerLock?.();
+    const id = raycastExhibitAt(e.clientX, e.clientY);
+    if (id) {
+      tryInspect(id);
+    } else {
+      cameraRig.requestLock();
+    }
     return;
   }
 
   const id = cameraRig.pointerLocked ? raycastExhibitFromCenter() : raycastExhibitAt(e.clientX, e.clientY);
-  if (!id) return;
-  const mesh = sceneApi.exhibitMeshes.get(id);
+  if (id) tryInspect(id);
+});
+
+// Proper raycasting resolves which exhibit is actually targeted — it does
+// not fall back to "nearest exhibit" when a raycast hit exists, even if a
+// closer exhibit happens to sit out of the cursor's/crosshair's path. Range
+// is still enforced: a visitor can see an exhibit across the room, but
+// can't inspect it from across the room.
+function tryInspect(exhibitId) {
+  const mesh = sceneApi.exhibitMeshes.get(exhibitId);
+  if (!mesh) return;
   const p = mesh.userData.interactPoint;
   const d = Math.hypot(p.x - movement.state.x, p.z - movement.state.z);
-  if (d <= INTERACT_RANGE) openDossier(id);
-});
+  if (d <= INTERACT_RANGE) openDossier(exhibitId);
+}
+
+function anyOverlayOpen() {
+  return !el("dossier").hidden || !el("donate-gate").hidden || !el("name-gate").hidden;
+}
 
 // ---------------------------------------------------------------------------
 // Keyboard: V toggle, E interact, Esc close
@@ -582,15 +632,57 @@ window.addEventListener("keydown", (e) => {
   if (movement?.isTypingTarget(document.activeElement)) return;
   if (e.code === "KeyV") {
     cameraRig.toggle();
-    crosshair.classList.toggle("visible", cameraRig.mode === "first-person");
+    updateCrosshair();
   } else if (e.code === "KeyE") {
     interact();
   } else if (e.code === "Escape") {
-    if (!el("dossier").hidden) closeDossier();
-    else if (!el("donate-gate").hidden) closeDonateGate();
-    if (document.pointerLockElement) document.exitPointerLock();
+    // Esc has two different jobs depending on what's actually open, and
+    // only ever does the more specific one: with a dossier/donation form
+    // open, Esc closes that UI (pointer lock is already released from when
+    // it opened). With nothing open, Esc's job is purely "release the
+    // pointer without switching camera" — exploration mode -> cursor mode,
+    // first-person rig unchanged. It never both closes UI AND independently
+    // releases the lock in the same press; those are the same action when
+    // a dossier is open (openDossier already released it).
+    if (!el("dossier").hidden) {
+      closeDossier();
+    } else if (!el("donate-gate").hidden) {
+      closeDonateGate();
+    } else {
+      cameraRig.releaseLock();
+    }
   }
 });
+
+function updateCrosshair() {
+  crosshair.classList.toggle("visible", cameraRig.mode === "first-person" && cameraRig.pointerLocked);
+}
+
+let hasShownLockHint = false;
+let lastHintKey = "";
+function updateControlHint() {
+  if (cameraRig.pointerLocked && !hasShownLockHint) {
+    hasShownLockHint = true;
+    lockHintEl.hidden = false;
+    // The CSS animation handles the fade; hide it from the accessibility
+    // tree and layout once it's done so it can't linger as an invisible
+    // focus trap.
+    setTimeout(() => {
+      lockHintEl.hidden = true;
+    }, 4600);
+  }
+  const key = `${cameraRig.mode}:${cameraRig.pointerLocked}`;
+  if (key === lastHintKey) return;
+  lastHintKey = key;
+
+  if (cameraRig.mode !== "first-person") {
+    controlHintEl.textContent = "WASD/arrows to move · V to switch view · E or click to inspect";
+  } else if (cameraRig.pointerLocked) {
+    controlHintEl.textContent = "Mouse look active · Esc to free your cursor · E to inspect";
+  } else {
+    controlHintEl.textContent = "Cursor free · click an exhibit to inspect, or empty space to look around";
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Touch fallback
@@ -637,7 +729,7 @@ function setupTouchControls() {
   el("touch-view").addEventListener("pointerdown", (e) => {
     e.preventDefault();
     cameraRig.toggle();
-    crosshair.classList.toggle("visible", cameraRig.mode === "first-person");
+    updateCrosshair();
   });
 }
 
@@ -675,11 +767,16 @@ function frame(now) {
     localAvatarMesh.position.set(movement.state.x, 0, movement.state.z);
     localAvatarMesh.rotation.y = movement.state.yaw;
     localAvatarMesh.visible = cameraRig.mode !== "first-person";
+    const speed01 = result.moved ? 1 : 0;
+    localWalkPhase += dt * 8 * Math.max(0.2, speed01);
+    if (localAvatarRig) animateWalk(localAvatarRig, localWalkPhase, speed01);
   }
 
   cameraRig.update(movement.state);
   updateLocationLabel(movement.state.x, movement.state.z);
   updateProximityUI();
+  updateCrosshair();
+  updateControlHint();
 
   for (const avatar of remoteAvatars.values()) avatar.tick(dt);
 
@@ -704,13 +801,27 @@ async function boot() {
   sceneApi = buildWorldScene(world);
   for (const exhibit of exhibits) instantiateExhibit(exhibit);
 
-  localAvatarMesh = buildAvatarMesh(myIdentity.color);
+  const localBuilt = buildAvatarMesh(myIdentity.color);
+  localAvatarMesh = localBuilt.group;
+  localAvatarRig = localBuilt.rig;
   localAvatarMesh.position.set(world.spawn.x, 0, world.spawn.z);
   sceneApi.scene.add(localAvatarMesh);
 
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // Three.js r155+ uses physically-correct (candela) point-light intensity
+  // by default, where the small intensity values that read fine in an
+  // older/non-physical renderer (~1) are nearly invisible a few metres
+  // away — this is what made every gallery read as "nearly black, empty"
+  // before any furniture was even added. ACES tone mapping plus a modest
+  // exposure lift keeps the warm-lamp-in-shadow mood (still genuinely dim
+  // at the room's edges) while making the lit areas — floor, walls, props,
+  // other visitors — actually readable, which the brief requires
+  // ("mysterious but readable... must clearly see the floor, walls,
+  // navigation routes, objects and other visitors").
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
 
   function resizeRenderer() {
     const { clientWidth, clientHeight } = viewport;
@@ -756,6 +867,7 @@ window.__museumDebug = () => ({
   nearest: nearestExhibitWithin(INTERACT_RANGE),
   donorDist: distanceToDonorCounter(),
 });
+window.__museumInternals = () => ({ scene: sceneApi?.scene, camera: cameraRig?.camera, renderer, THREE });
 
 boot().catch((err) => {
   console.error("failed to start The Cursed Museum", err);

@@ -27,12 +27,17 @@
 
       <div class="crosshair" id="crosshair" aria-hidden="true"></div>
 
+      <!-- A short-lived callout the first time first-person mouse-look
+           actually engages, so the two-state control model (locked
+           exploration vs. free cursor) is discoverable without a manual. -->
+      <div class="lock-hint" id="lock-hint" hidden>Press Esc anytime to free your cursor</div>
+
       <footer class="bottom-bar">
         <div class="scene-caption">
           <h2 id="gallery-title">Entrance Hall</h2>
           <p id="gallery-hint">&nbsp;</p>
         </div>
-        <p class="hint">
+        <p class="hint" id="control-hint">
           WASD/arrows to move &middot; V to switch view &middot; E or click to inspect
         </p>
       </footer>
