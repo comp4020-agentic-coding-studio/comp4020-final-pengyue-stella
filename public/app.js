@@ -31,6 +31,10 @@ let movement = null;
 let cameraRig = null;
 let renderer = null;
 let remoteAvatars = new Map(); // visitorId -> RemoteAvatar
+// Tracks which visitors this session has already shown an "entered the
+// museum" toast for — its own Set, scoped to exactly that one concern (see
+// CLAUDE.md's dedupe-set rule), never reused for avatar presence itself.
+let greetedVisitorIds = new Set();
 let localAvatarMesh = null;
 let localAvatarUpdate = null;
 let lastMovePosted = 0;
@@ -548,7 +552,12 @@ function connectEvents() {
   let firstHello = true;
   eventSource.addEventListener("hello", async (e) => {
     const { presence } = JSON.parse(e.data);
-    for (const p of presence) upsertRemoteAvatar(p.visitorId, p);
+    for (const p of presence) {
+      upsertRemoteAvatar(p.visitorId, p);
+      // Everyone already in the museum when this session connects is
+      // "found here," not "arrived" — no entrance toast for them.
+      greetedVisitorIds.add(p.visitorId);
+    }
     updatePresenceCount();
 
     // The very first connection already hydrated from loadExhibits() in
@@ -567,7 +576,20 @@ function connectEvents() {
 
   eventSource.addEventListener("presence", (e) => {
     const p = JSON.parse(e.data);
+    // A restrained "entered the museum" toast, but only for a visitor
+    // genuinely arriving after this session's own connection — not for
+    // everyone already present at boot (that's what `hello` hydrates
+    // silently) and not twice for the same visitor across their own
+    // ordinary movement updates. This is its own set, scoped to exactly
+    // this one concern, never remoteAvatars itself — see CLAUDE.md's
+    // dedupe-set rule: avatar presence tracking and "have I greeted this
+    // visitor" bookkeeping must not share a Set/Map either.
+    const isNewArrival = !remoteAvatars.has(p.visitorId) && !greetedVisitorIds.has(p.visitorId);
     upsertRemoteAvatar(p.visitorId, p);
+    if (isNewArrival) {
+      greetedVisitorIds.add(p.visitorId);
+      toast(`${p.name ?? "A visitor"} has entered the museum.`);
+    }
     updatePresenceCount();
   });
 
@@ -578,6 +600,8 @@ function connectEvents() {
       avatar.dispose();
       remoteAvatars.delete(visitorId);
     }
+    // A visitor who leaves and later rejoins is a new arrival again.
+    greetedVisitorIds.delete(visitorId);
     updatePresenceCount();
   });
 

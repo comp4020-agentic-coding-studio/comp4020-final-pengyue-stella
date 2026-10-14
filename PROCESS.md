@@ -132,13 +132,66 @@ by overlapping each corridor into both neighbouring rectangles by more than
 twice the collision radius (see the `OVERLAP` constant and its comment in
 `server/src/world.js`).
 
+## The improvement pass: a real artifact library, a real avatar, a guided journey
+
+The first version above shipped a working skeleton — real multiplayer, real
+persistence, real two-camera-rig navigation — but every donated exhibit
+rendered as one of four identical primitive shapes, the avatar was a
+hand-rolled stick figure, and donating ended in a silent form close rather
+than any sense of having actually placed something in the museum. This pass
+closed that gap without touching the underlying architecture: same SQLite
+schema (additively migrated — `exhibits.subtype`, a derived `number` off
+SQLite's own rowid), same SSE hub, same slot/gallery model.
+
+**A real artifact library, not four shapes.** `public/world/artifacts.js`
+builds a dedicated procedural model per subtype (spoon, key, clock, mirror,
+painting, sketch, doll, toy, book, botanical/biological specimen,
+curiosity), server-validated against the donating gallery's category
+(`SUBTYPES_BY_CATEGORY` in `server/src/constants.js`), staged in real
+display furniture (a gilt frame, a glass specimen vitrine, a glass-domed
+velvet pedestal, a small display cabinet) with a brass nameplate and its own
+exhibition light. A seeded PRNG keyed on the exhibit's own id gives every
+donation a stable but distinct scale/rotation/material variation — still no
+per-donation art, but no two donations in a subtype look identical either.
+
+**A real donation journey.** Donating now ends in an archival "Relic
+Archived — Exhibit #N" receipt with a live rendered preview of the actual
+model (the same `renderArtifactPreview` the dossier reuses for its own
+header), and "View My Relic" sends the avatar on a genuine guided walk
+(`movement.js`'s `startAutopilot`, through the hall and the target
+gallery's doorway, the same collision manual movement uses) that ends by
+opening the dossier — never a teleport, and cancelled instantly by any real
+key input, same as handing control back.
+
+**A real avatar.** The hand-built primitive-geometry rig is replaced by a
+real rigged humanoid (Kenney "Mini Characters," CC0 1.0), idle/walk
+animation blended by `THREE.AnimationMixer`, dressed in the original
+procedural cape/collar/belt tinted to the visitor's own colour. This is the
+one deliberate downloaded-asset exception to the project's otherwise fully
+procedural visual stack, recorded as a considered revision (not a quiet
+reversal) in `ASSETS.md`: a jointed, walking humanoid is the one asset class
+genuinely hard to fake with primitive geometry, and the added footprint
+(~260KB total, fetched once, cached) stays well inside the 256MB machine.
+
+**Verified again, the same way.** Two genuinely independent browser
+contexts (separate cookies): distinct identities, each sees the other's
+real-model avatar present immediately, a donation in one session instantiates
+its actual mesh in the other's live scene (not just a re-fetch), a
+contradiction published by one session appears alongside the original
+account (never replacing it) for the other, a vote changes the exhibit's
+derived classification visible to both. A real process kill and restart
+against the same SQLite file preserved every exhibit, its `subtype`, its
+accounts, and its votes exactly.
+
 ## Known limitations, stated rather than hidden
 
-Exhibit imagery is simple original procedural geometry keyed to each
-gallery's category (a pedestal-and-relic family per category), not bespoke
-art per donation — true to the blueprint's "no required AI image
-generation" instruction, but a real simplification against the mood boards
-in `design/references/`. There is no moderation queue beyond length caps and
-per-visitor rate limits, acceptable at classroom scale and explicitly not a
-claim of readiness for open public UGC. Spatial audio, named optional in the
-blueprint, is out of this first version.
+Exhibit models are a procedural library keyed to category and subtype (see
+above), not bespoke art per individual donation — true to the blueprint's
+"no required AI image generation" instruction, but a real simplification
+against the mood boards in `design/references/`. There is no moderation
+queue beyond length caps and per-visitor rate limits, acceptable at
+classroom scale and explicitly not a claim of readiness for open public
+UGC. Spatial audio, named optional in the blueprint, is out of this first
+version. The guided "View My Relic" walk uses a fixed hall-centre/doorway
+waypoint path rather than a general navmesh — correct for this world's
+plus-shaped topology, not a claim of pathfinding around arbitrary obstacles.
