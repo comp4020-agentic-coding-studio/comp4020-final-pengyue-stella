@@ -4,6 +4,14 @@
 // camera at the avatar's own head and drives look yaw/pitch from the mouse,
 // and movement.js's `forwardYaw` reads that same look yaw so WASD is
 // relative to where you're looking.
+//
+// Pointer lock is its own state, independent of which rig is active —
+// switching to first-person (V) never grabs the pointer by itself (a prior
+// version did, which is exactly the "mouse trapped in the center" complaint
+// this fixes): only an explicit click on empty scene space while in
+// first-person engages it, and only Esc (or any UI opening, from app.js)
+// releases it. Overhead never uses pointer lock at all — its camera angle
+// is fixed, so there's nothing for the mouse to look around.
 import * as THREE from "three";
 import { EYE_HEIGHT } from "./scene.js";
 
@@ -40,17 +48,25 @@ export function createCameraRig(renderer, domElement) {
   }
   window.addEventListener("mousemove", onMouseMove);
 
-  function requestPointerLock() {
-    if (mode === "first-person") domElement.requestPointerLock?.();
+  // Exposed explicitly (not auto-triggered by mode switches) so callers
+  // decide exactly when the pointer grabs/releases: a click on empty scene
+  // space requests it, opening any UI overlay releases it, Esc releases it,
+  // and closing an overlay never re-requests it.
+  function requestLock() {
+    if (mode === "first-person" && !pointerLocked) domElement.requestPointerLock?.();
+  }
+  function releaseLock() {
+    if (document.pointerLockElement === domElement) document.exitPointerLock?.();
   }
 
+  // Switching camera rigs never touches pointer lock state in either
+  // direction except the one case that has to: leaving first-person while
+  // still locked must release the lock, since overhead has no mouse-look to
+  // lock for. Entering first-person does NOT auto-lock — the visitor clicks
+  // to resume mouse-look, same as returning from cursor mode.
   function setMode(next) {
     mode = next;
-    if (mode === "first-person") {
-      requestPointerLock();
-    } else if (document.pointerLockElement === domElement) {
-      document.exitPointerLock?.();
-    }
+    if (mode !== "first-person") releaseLock();
   }
 
   function toggle() {
@@ -119,6 +135,8 @@ export function createCameraRig(renderer, domElement) {
     },
     toggle,
     setMode,
+    requestLock,
+    releaseLock,
     update,
     resize,
   };
