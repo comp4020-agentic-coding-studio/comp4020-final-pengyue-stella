@@ -188,7 +188,7 @@ export function addAccount({ exhibitId, kind, body, challengedAccountId, authorN
   ).run(accountId, exhibitId, challengedAccountId ?? null, kind, body, authorName, visitorId ?? "", now);
   logEvent(visitorId, "account.created", { accountId, exhibitId, kind });
 
-  return { account: fullAccount(accountId) };
+  return { account: fullAccount(accountId), exhibitClassification: classifyExhibit(fullExhibit(exhibitId).accounts) };
 }
 
 // Returns { vote } or { error: "not_found" }.
@@ -203,7 +203,11 @@ export function castVote({ accountId, visitorId, verdict }) {
   ).run(`vote_${randomUUID()}`, accountId, visitorId, verdict, now);
   logEvent(visitorId, "vote.changed", { accountId, verdict });
 
-  return { exhibitId: accountRow.exhibit_id, account: fullAccount(accountId) };
+  return {
+    exhibitId: accountRow.exhibit_id,
+    account: fullAccount(accountId),
+    exhibitClassification: classifyExhibit(fullExhibit(accountRow.exhibit_id).accounts),
+  };
 }
 
 function voteTallyFor(accountId) {
@@ -250,12 +254,31 @@ function fullAccount(accountId, visitorId) {
   };
 }
 
+// The exhibit's own "currently accepted" classification (the blueprint's
+// dossier contract: "Current classification: DISPUTED"), derived purely
+// from vote totals at read time — never a field anyone writes directly (see
+// CLAUDE.md). The account with the most total votes across all its verdicts
+// is "currently accepted"; a tie for most-voted is Disputed at the exhibit
+// level too, and an exhibit with no votes anywhere is Unclassified. If the
+// single most-voted account's own verdict is itself Disputed (a tied
+// Believable/Suspicious/Cursed split on that one account), that bubbles up
+// unchanged rather than being silently resolved into one verdict.
+function classifyExhibit(accounts) {
+  const totals = accounts.map((a) => Object.values(a.votes).reduce((x, y) => x + y, 0));
+  const max = Math.max(0, ...totals);
+  if (max === 0) return "Unclassified";
+  const leaders = accounts.filter((_, i) => totals[i] === max);
+  if (leaders.length > 1) return "Disputed";
+  return leaders[0].verdict;
+}
+
 function fullExhibit(exhibitId, visitorId) {
   const row = db.prepare("SELECT * FROM exhibits WHERE id = ?").get(exhibitId);
   if (!row) return null;
   const accountRows = db
     .prepare("SELECT id FROM accounts WHERE exhibit_id = ? ORDER BY created_at ASC")
     .all(exhibitId);
+  const accounts = accountRows.map((a) => fullAccount(a.id, visitorId));
   return {
     id: row.id,
     galleryId: row.gallery_id,
@@ -264,7 +287,8 @@ function fullExhibit(exhibitId, visitorId) {
     title: row.title,
     donorName: row.donor_name,
     createdAt: row.created_at,
-    accounts: accountRows.map((a) => fullAccount(a.id, visitorId)),
+    accounts,
+    classification: classifyExhibit(accounts),
   };
 }
 

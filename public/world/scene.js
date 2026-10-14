@@ -95,10 +95,12 @@ function addWalls(scene, world) {
 }
 
 function addLighting(scene, world) {
+  const breathingLights = [];
   scene.add(new THREE.AmbientLight("#2a2218", 0.9));
   const hallLight = new THREE.PointLight("#e8b873", 1.1, 14, 2);
   hallLight.position.set(0, 3, 0);
   scene.add(hallLight);
+  breathingLights.push({ light: hallLight, base: 1.1 });
 
   for (const gallery of world.galleries) {
     const cx = (gallery.bounds.minX + gallery.bounds.maxX) / 2;
@@ -106,13 +108,39 @@ function addLighting(scene, world) {
     const light = new THREE.PointLight(gallery.accent, 1.4, 16, 2);
     light.position.set(cx, 3.1, cz);
     scene.add(light);
+    breathingLights.push({ light, base: 1.4 });
 
     // A second, dimmer warm lamp off-centre so the room doesn't read as one
     // flat wash of its accent colour.
     const lamp = new THREE.PointLight("#e8b873", 0.7, 10, 2);
     lamp.position.set(cx + (gallery.bounds.maxX - gallery.bounds.minX) * 0.2, 2.4, cz - (gallery.bounds.maxZ - gallery.bounds.minZ) * 0.2);
     scene.add(lamp);
+    breathingLights.push({ light: lamp, base: 0.7 });
   }
+  return breathingLights;
+}
+
+// A sparse field of slow-drifting motes, the blueprint's "subtle
+// supernatural anomalies" read as plain dust catching lamp light rather
+// than anything overtly spectral. Skipped entirely under
+// prefers-reduced-motion (see CLAUDE.md's reduced-motion rule) by simply
+// never calling tickDust from the render loop in that case.
+function addDust(scene) {
+  const count = 220;
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = (Math.random() - 0.5) * 50;
+    positions[i * 3 + 1] = Math.random() * 3.5;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 50;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.PointsMaterial({
+    color: "#c6a16b", size: 0.025, transparent: true, opacity: 0.35, depthWrite: false,
+  });
+  const points = new THREE.Points(geometry, material);
+  scene.add(points);
+  return points;
 }
 
 function addSigns(scene, world) {
@@ -218,9 +246,20 @@ export function buildWorldScene(world) {
 
   addFloor(scene, world);
   addWalls(scene, world);
-  addLighting(scene, world);
+  const breathingLights = addLighting(scene, world);
   addSigns(scene, world);
   const donorCounter = addDonorCounter(scene, world);
+  const dust = addDust(scene);
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+  function tickAmbient(elapsed) {
+    if (prefersReducedMotion) return;
+    for (let i = 0; i < breathingLights.length; i++) {
+      const { light, base } = breathingLights[i];
+      light.intensity = base + Math.sin(elapsed * 0.6 + i) * base * 0.08;
+    }
+    dust.rotation.y = elapsed * 0.01;
+  }
 
   const exhibitGroup = new THREE.Group();
   scene.add(exhibitGroup);
@@ -272,6 +311,7 @@ export function buildWorldScene(world) {
     highlightExhibit,
     removeHighlight,
     donorCounter,
+    tickAmbient,
   };
 }
 

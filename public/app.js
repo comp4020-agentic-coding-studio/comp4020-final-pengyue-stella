@@ -288,7 +288,7 @@ function renderAccountBlock(account, exhibit) {
 }
 
 function renderDossier(exhibit) {
-  el("dossier-kicker").textContent = `${exhibit.category.toUpperCase()} · exhibit`;
+  el("dossier-kicker").textContent = `${exhibit.category.toUpperCase()} · exhibit · ${exhibit.classification}`;
   el("dossier-title").textContent = exhibit.title;
   const gallery = world.galleries.find((g) => g.id === exhibit.galleryId);
   el("dossier-meta").textContent = `${gallery?.name ?? exhibit.galleryId} · donated by ${exhibit.donorName} · ${exhibit.accounts.length} account${exhibit.accounts.length === 1 ? "" : "s"}`;
@@ -352,6 +352,7 @@ function applyAccountUpdate(exhibitId, account, { isNew = false } = {}) {
   const idx = exhibit.accounts.findIndex((a) => a.id === account.id);
   if (idx >= 0) exhibit.accounts[idx] = account;
   else exhibit.accounts.push(account);
+  if (account.exhibitClassification) exhibit.classification = account.exhibitClassification;
   if (openDossierExhibitId === exhibitId) renderDossier(exhibit);
   if (isNew) toast(`New ${KIND_LABEL[account.kind] ?? account.kind} published on "${exhibit.title}".`);
 }
@@ -632,10 +633,12 @@ async function postMove(x, z, yaw) {
 }
 
 let lastFrame = performance.now();
+const bootTime = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
+  sceneApi.tickAmbient((now - bootTime) / 1000);
 
   const forwardYaw = cameraRig.mode === "first-person" ? cameraRig.lookYaw : 0;
   const result = movement.tick(dt, {

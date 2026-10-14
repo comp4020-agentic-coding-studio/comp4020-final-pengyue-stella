@@ -222,7 +222,7 @@ const server = createServer(async (req, res) => {
         return;
       }
 
-      sse.broadcast("account", result.account);
+      sse.broadcast("account", { ...result.account, exhibitClassification: result.exhibitClassification });
       lastAccountAt.set(identity.id, now);
       json(res, 201, { account: result.account }, withCookies({}, identity));
       return;
@@ -255,7 +255,7 @@ const server = createServer(async (req, res) => {
         return;
       }
 
-      sse.broadcast("vote", result.account);
+      sse.broadcast("vote", { ...result.account, exhibitClassification: result.exhibitClassification });
       json(res, 200, { account: result.account }, withCookies({}, identity));
       return;
     }

@@ -103,6 +103,27 @@ describe("rewriting history", () => {
   });
 });
 
+describe("exhibit-level classification", () => {
+  it("starts Unclassified and reflects the leading account's votes", async () => {
+    const { galleryId, slotId } = await freeSlot();
+    const { exhibit } = await (
+      await donate({ galleryId, slotId, title: "The Whispering Mirror", originClaim: "It answers questions.", donorName: "A" })
+    ).json();
+    expect(exhibit.classification).toBe("Unclassified");
+
+    const cookieRes = await fetch(url("/api/me"));
+    const cookie = cookieRes.headers.get("set-cookie")?.split(";")[0] ?? "";
+    await fetch(url(`/api/accounts/${exhibit.accounts[0].id}/vote`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ verdict: "Definitely Cursed" }),
+    });
+
+    const after = await (await fetch(url(`/api/exhibits/${exhibit.id}`))).json();
+    expect(after.exhibit.classification).toBe("Definitely Cursed");
+  });
+});
+
 describe("voting", () => {
   it("upserts one vote per visitor per account, and reports Unclassified with none", async () => {
     const { galleryId, slotId } = await freeSlot();
