@@ -1,21 +1,37 @@
-// Shared, small, deliberately fixed. A trace is one of these kinds — no
-// free-form category text, so composing a trace is picking a vibe and typing
-// a line, not filling in a form.
-export const TRACE_TYPES = [
-  { id: "tip", emoji: "💡", label: "Tip" },
-  { id: "memory", emoji: "🧡", label: "Memory" },
-  { id: "story", emoji: "📖", label: "Story" },
-  { id: "spark", emoji: "✨", label: "Spark" },
+// Shared, small, deliberately fixed — the museum's fixed vocabulary.
+
+// A gallery's exhibits are all one category; this keeps "which gallery does
+// this donation belong in" always unambiguous, no free-form taxonomy.
+export const GALLERY_CATEGORY = {
+  portraits: "portrait",
+  memento: "memento",
+  specimen: "specimen",
+  childhood: "toy",
+};
+
+export const ACCOUNT_KINDS = [
+  "original",
+  "testimony",
+  "contradiction",
+  "revision",
+  "counter-evidence",
 ];
+export const ACCOUNT_KIND_SET = new Set(ACCOUNT_KINDS);
 
-export const TRACE_TYPE_IDS = new Set(TRACE_TYPES.map((t) => t.id));
+export const VERDICTS = ["Believable", "Suspicious", "Definitely Cursed"];
+export const VERDICT_SET = new Set(VERDICTS);
 
-export function emojiForType(typeId) {
-  return TRACE_TYPES.find((t) => t.id === typeId)?.emoji ?? "💬";
-}
+export const MAX_NAME_LENGTH = 40;
+export const MAX_TITLE_LENGTH = 80;
+export const MAX_ACCOUNT_LENGTH = 600;
+export const MAX_CLAIM_LENGTH = 240;
 
-export const MAX_BODY_LENGTH = 240;
+// Cheap per-visitor spam guard, not a moderation system.
+export const DONATE_COOLDOWN_MS = 4000;
+export const ACCOUNT_COOLDOWN_MS = 2000;
 
-// One trace per visitor per this many milliseconds — cheap spam guard, not a
-// moderation system.
-export const POST_COOLDOWN_MS = 3000;
+// Movement reports: bounded frequency and size. A visitor who posts faster
+// than this is simply dropped until the window passes — the server stays
+// authoritative over what it relays, never over how fast a client *tries*
+// to post.
+export const MOVE_MIN_INTERVAL_MS = 80;

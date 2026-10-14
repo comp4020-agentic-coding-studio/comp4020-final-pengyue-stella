@@ -1,11 +1,12 @@
 :root {
-  color-scheme: light;
-  --paper: #f6f2e8;
-  --ink: #2b2a28;
-  --ink-soft: #5b584f;
-  --accent: #b5542e;
-  --line: #ddd4bf;
-  --bubble: #fffdf7;
+  color-scheme: dark;
+  --obsidian: #11100f;
+  --mahogany: #35251c;
+  --brass: #88653d;
+  --gold: #c6a16b;
+  --parchment: #e9ddc5;
+  --rose: #663d43;
+  --ink: #2b241c;
 }
 
 * {
@@ -16,48 +17,61 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: var(--paper);
-  color: var(--ink);
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--obsidian);
+  color: var(--parchment);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-/* The scene is the whole page on the main app view — nothing scrolls behind
-   it. Scoped to body.app-page, not html/body generally, so /readme/ (a plain
-   scrolling document, server/src/readme-page.js) is unaffected. */
 body.app-page {
   height: 100dvh;
   overflow: hidden;
 }
 
 a {
-  color: var(--accent);
+  color: var(--gold);
 }
 
-/* The scene IS the page now, not content a header/footer frame — 100dvh
-   (not 100vh) because a mobile browser's address bar changing height must
-   not leave a dead strip of background below the scene. Everything else in
-   this file under .viewport is an absolutely-positioned overlay floating
-   above it, each opting back in to pointer-events only where it's actually
-   interactive, so dragging/panning the scene still works everywhere an
-   overlay's own background sits. */
 .viewport {
   position: relative;
   width: 100%;
   height: 100dvh;
   overflow: hidden;
-  background: #11141a;
-  cursor: grab;
-  touch-action: pan-y;
+  background: var(--obsidian);
   outline-offset: -3px;
 }
 
-.viewport.dragging {
-  cursor: grabbing;
+.viewport:focus-visible {
+  outline: 3px solid var(--gold);
 }
 
-.viewport:focus-visible {
-  outline: 3px solid var(--accent);
+#scene-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* First-person pointer-lock cue: a small fixed reticle, shown only while
+   the camera rig is first-person and the pointer is locked. */
+.crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: rgba(233, 221, 197, 0.85);
+  box-shadow: 0 0 0 1px rgba(17, 16, 15, 0.6);
+  pointer-events: none;
+  z-index: 2;
+  display: none;
+}
+
+.crosshair.visible {
+  display: block;
 }
 
 .topbar {
@@ -67,36 +81,35 @@ a {
   right: 0;
   z-index: 3;
   padding: calc(0.75rem + env(safe-area-inset-top, 0px)) 1.1rem 2.2rem 1.1rem;
-  background: linear-gradient(to bottom, rgba(10, 12, 16, 0.75), rgba(10, 12, 16, 0) 100%);
+  background: linear-gradient(to bottom, rgba(17, 16, 15, 0.8), rgba(17, 16, 15, 0) 100%);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
-  pointer-events: none; /* only its children (the about link) need clicks */
+  pointer-events: none;
 }
 
 .topbar h1 {
   margin: 0 0 0.15rem;
-  color: #fff;
-  font-size: clamp(1.05rem, 1.8vw, 1.4rem);
-  letter-spacing: -0.01em;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  color: var(--parchment);
+  font-family: Georgia, "Cormorant Garamond", serif;
+  font-size: clamp(1.1rem, 1.8vw, 1.5rem);
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 .presence {
   margin: 0;
   font-size: 0.76rem;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(233, 221, 197, 0.85);
   min-height: 1.1em;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .whoami {
   margin: 0;
   font-size: 0.74rem;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(233, 221, 197, 0.7);
   font-style: italic;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .about-link {
@@ -104,46 +117,17 @@ a {
   flex-shrink: 0;
   font-size: 0.82rem;
   text-decoration: none;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(198, 161, 107, 0.5);
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
-  background: rgba(20, 20, 24, 0.45);
-  color: #fff;
+  background: rgba(53, 37, 28, 0.55);
+  color: var(--parchment);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
 
 .about-link:hover {
-  background: rgba(20, 20, 24, 0.7);
-}
-
-/* The scene's name and blurb read as a caption on the photo itself — like a
-   location label in a street-view app — not as a separate article heading
-   above it, so the photo stays the visual centre of gravity. A plain flex
-   child of .bottom-bar now (not independently absolutely-positioned at a
-   fixed offset guessed to clear a single-line jump-nav) — that guess broke
-   at phone width, where the jump-nav wraps across two lines and the title
-   sat on top of it. Left-aligned against the bar's own centred siblings,
-   matching how a map app's place name sits flush left over a centred
-   action row beneath it. */
-.scene-caption {
-  align-self: stretch;
-  padding: 0 0 0.1rem;
-  pointer-events: none;
-}
-
-.scene-caption h2 {
-  margin: 0;
-  color: #fff;
-  font-size: clamp(1.15rem, 2.2vw, 1.5rem);
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-}
-
-.scene-caption p {
-  margin: 0.15rem 0 0;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 0.85rem;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  background: rgba(53, 37, 28, 0.8);
 }
 
 .bottom-bar {
@@ -152,323 +136,307 @@ a {
   right: 0;
   bottom: 0;
   z-index: 3;
-  padding: 1.8rem 1.1rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(to top, rgba(10, 12, 16, 0.82), rgba(10, 12, 16, 0.55) 55%, rgba(10, 12, 16, 0) 100%);
+  padding: 1.6rem 1.1rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, rgba(17, 16, 15, 0.85), rgba(17, 16, 15, 0.5) 60%, rgba(17, 16, 15, 0) 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  pointer-events: none; /* only the jump buttons and scene-caption's own text selection need clicks */
-}
-
-.panorama {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  display: inline-block;
-  transition: transform 0.35s ease, opacity 0.3s ease;
-  will-change: transform;
-}
-
-.viewport.dragging .panorama {
-  transition: none;
-}
-
-#scene-image {
-  display: block;
-  height: 100%;
-  width: auto;
-  user-select: none;
-  -webkit-user-drag: none;
-}
-
-/* Depth-parallax rendering (currently only Kambri Lawn — see
-   docs/adr/0002-kambri-depth-parallax.md). Fills #viewport exactly, same
-   fade transition as .panorama, so switching between the two in goToScene
-   reads as one consistent "walking in" moment regardless of which a scene
-   ends up using. */
-.depth-host {
-  position: absolute;
-  inset: 0;
-  transition: opacity 0.3s ease;
-}
-
-.depth-host canvas {
-  touch-action: none; /* depth-scene.js reads pointer/touch drag itself via #viewport's own handlers */
-}
-
-.pins {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.pin {
-  position: absolute;
-  transform: translate(-50%, -100%);
-  pointer-events: auto;
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: pointer;
-  font-size: 1.6rem;
-  line-height: 1;
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.55));
-  transition: transform 0.15s ease;
-}
-
-/* A soft contact shadow exactly at the anchor point — the cue that a mark is
-   resting ON the ground at {x, y}, not a UI badge floating over the photo. */
-.pin::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -2px;
-  width: 1.1rem;
-  height: 0.35rem;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 50%;
-  filter: blur(2px);
-  transform: translateX(-50%);
-  z-index: -1;
-}
-
-.pin:hover {
-  transform: translate(-50%, -100%) scale(1.08);
-}
-
-.pin:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 2px;
-  border-radius: 50%;
-}
-
-.pin .pin-dot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.65rem;
-  height: 1.65rem;
-  border-radius: 50% 50% 50% 4px;
-  color: #fff;
-  font-size: 1rem;
-  /* A white ring so a mark reads clearly against a busy photo, whatever its
-     own colour — a sticker pressed onto the place, not a flat UI chip. */
-  box-shadow:
-    0 0 0 2.5px rgba(255, 255, 255, 0.95),
-    0 2px 6px rgba(0, 0, 0, 0.35);
-}
-
-.pin.exit .pin-dot {
-  background: rgba(20, 20, 24, 0.8);
-  color: #fff;
-  box-shadow:
-    0 0 0 2.5px var(--accent),
-    0 2px 6px rgba(0, 0, 0, 0.35);
-}
-
-.pin.exit {
-  animation: bob 2.6s ease-in-out infinite;
-}
-
-@keyframes bob {
-  0%,
-  100% {
-    margin-top: 0;
-  }
-  50% {
-    margin-top: -5px;
-  }
-}
-
-.pan-btn {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 50%;
-  border: none;
-  background: rgba(20, 20, 24, 0.45);
-  color: #fff;
-  font-size: 1.2rem;
-  cursor: pointer;
-}
-
-.pan-btn:hover {
-  background: rgba(20, 20, 24, 0.7);
-}
-
-.pan-left {
-  left: 0.6rem;
-}
-
-.pan-right {
-  right: 0.6rem;
-}
-
-.bubble {
-  position: absolute;
-  transform: translate(-50%, calc(-100% - 1.6rem));
-  width: min(260px, 70vw);
-  background: rgba(27, 26, 23, 0.72);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 14px;
-  padding: 0.65rem 0.7rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-  pointer-events: auto;
-  font-size: 0.88rem;
-  color: #fff;
-  z-index: 5;
-}
-
-.bubble::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -8px;
-  transform: translateX(-50%);
-  border: 8px solid transparent;
-  border-top-color: rgba(27, 26, 23, 0.72);
-}
-
-.bubble .bubble-author {
-  display: flex;
-  align-items: center;
   gap: 0.35rem;
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-  color: #fff;
-}
-
-.bubble .bubble-dot {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.bubble textarea {
-  width: 100%;
-  min-height: 3.2rem;
-  resize: vertical;
-  font: inherit;
-  padding: 0.35rem;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 8px;
-  margin-bottom: 0.4rem;
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--ink);
-}
-
-.bubble .type-row {
-  display: flex;
-  gap: 0.3rem;
-  margin-bottom: 0.4rem;
-}
-
-.bubble .type-row label {
-  cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 8px;
-  padding: 0.2rem 0.4rem;
-  font-size: 1rem;
-}
-
-.bubble .type-row input {
-  position: absolute;
-  opacity: 0;
   pointer-events: none;
+  text-align: center;
 }
 
-.bubble .type-row input:checked + span,
-.bubble .type-row label:has(input:checked) {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: var(--accent);
+.scene-caption h2 {
+  margin: 0;
+  color: var(--gold);
+  font-family: Georgia, "Cormorant Garamond", serif;
+  font-size: clamp(1.1rem, 2.2vw, 1.4rem);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
-.bubble .actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.4rem;
+.scene-caption p {
+  margin: 0.15rem 0 0;
+  color: rgba(233, 221, 197, 0.85);
+  font-size: 0.85rem;
 }
 
-.bubble button[type="submit"] {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 0.3rem 0.7rem;
-  cursor: pointer;
-}
-
-.bubble button[type="button"] {
-  background: none;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 8px;
-  padding: 0.3rem 0.6rem;
-  cursor: pointer;
-}
-
-.bubble .error {
-  color: #ff8a80;
-  font-size: 0.8rem;
-  margin: -0.15rem 0 0.4rem;
-}
-
-/* .hint and .jump-nav now float over the photo as part of .bottom-bar
-   (overlay, not page content) — colours flip from the paper-page palette to
-   white-on-photo, same treatment as .scene-caption above. */
 .hint {
   margin: 0;
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.85);
-  text-align: center;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  color: rgba(233, 221, 197, 0.8);
 }
 
-.jump-nav {
+.floating-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 7.5rem;
+  transform: translateX(-50%);
+  z-index: 4;
+  background: rgba(53, 37, 28, 0.85);
+  color: var(--gold);
+  border: 1px solid var(--brass);
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  animation: hint-bob 2.2s ease-in-out infinite;
+}
+
+@keyframes hint-bob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-4px); }
+}
+
+/* --- overlay gates (name entry, donation form, dossier) ------------------ */
+
+.overlay-gate {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(17, 16, 15, 0.72);
+  backdrop-filter: blur(3px);
+}
+
+/* `hidden` is only the default UA display:none — a plain class rule like
+   `.overlay-gate { display: flex }` would otherwise outrank it and the gate
+   would render even while hidden (caught by actually loading the page: all
+   three gates appeared stacked on first paint). display is set only when
+   NOT hidden, so the attribute always wins when present. */
+.overlay-gate:not([hidden]) {
+  display: flex;
+}
+
+.gate-card {
+  position: relative;
+  width: min(440px, 100%);
+  max-height: min(80vh, 640px);
+  overflow-y: auto;
+  background: var(--parchment);
+  color: var(--ink);
+  border: 3px solid var(--brass);
+  border-radius: 10px;
+  padding: 1.6rem 1.7rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(136, 101, 61, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.gate-card h2 {
+  margin: 0 0 0.1rem;
+  font-family: Georgia, "Cormorant Garamond", serif;
+  color: var(--mahogany);
+  font-size: 1.4rem;
+}
+
+.gate-card label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--mahogany);
+  margin-top: 0.3rem;
+}
+
+.gate-card input,
+.gate-card select,
+.gate-card textarea {
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--brass);
+  border-radius: 6px;
+  background: #fffdf7;
+  color: var(--ink);
+}
+
+.gate-card input:focus-visible,
+.gate-card select:focus-visible,
+.gate-card textarea:focus-visible {
+  outline: 2px solid var(--rose);
+}
+
+.gate-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.gate-card button {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  background: var(--rose);
+  color: #fff;
+}
+
+.gate-card button.secondary {
+  background: none;
+  color: var(--mahogany);
+  border: 1px solid var(--brass);
+}
+
+.gate-card button:hover {
+  filter: brightness(1.08);
+}
+
+.gate-error {
+  min-height: 1.1em;
+  font-size: 0.82rem;
+  color: #a4201f;
+  margin: 0;
+}
+
+/* --- dossier -------------------------------------------------------------- */
+
+.dossier-card {
+  width: min(560px, 100%);
+}
+
+.dossier-close {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1px solid var(--brass);
+  background: #fffdf7;
+  color: var(--mahogany);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dossier-kicker {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brass);
+}
+
+.dossier-meta {
+  margin: -0.2rem 0 0.3rem;
+  font-size: 0.85rem;
+  color: #5b4f3d;
+}
+
+.dossier-accounts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  border-top: 1px solid var(--brass);
+  padding-top: 0.6rem;
+  margin-bottom: 0.3rem;
+}
+
+.account-block {
+  border-left: 3px solid var(--brass);
+  padding-left: 0.65rem;
+}
+
+.account-kind {
+  display: inline-block;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--mahogany);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.account-kind.original {
+  background: var(--brass);
+}
+.account-kind.contradiction {
+  background: var(--rose);
+}
+
+.account-body {
+  margin: 0.2rem 0 0.35rem;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.account-byline {
+  font-size: 0.78rem;
+  color: #6b5d47;
+  margin: 0 0 0.3rem;
+}
+
+.account-votes {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.4rem;
-  font-size: 0.82rem;
-  color: rgba(255, 255, 255, 0.85);
-  pointer-events: auto;
-}
-
-#jump-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
   gap: 0.35rem;
+  font-size: 0.78rem;
 }
 
-#jump-buttons button {
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(20, 20, 24, 0.45);
-  color: #fff;
+.verdict-badge {
+  font-weight: 700;
+  padding: 0.1rem 0.5rem;
   border-radius: 999px;
-  padding: 0.25rem 0.65rem;
-  font-size: 0.82rem;
+  border: 1px solid currentColor;
+}
+
+.verdict-badge.believable {
+  color: #2f6b3a;
+}
+.verdict-badge.suspicious {
+  color: #9a6a16;
+}
+.verdict-badge.definitely-cursed {
+  color: #a4201f;
+}
+.verdict-badge.disputed {
+  color: var(--rose);
+}
+.verdict-badge.unclassified {
+  color: #6b5d47;
+}
+
+.vote-buttons {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.vote-buttons button {
+  font-size: 0.74rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--brass);
+  background: #fffdf7;
+  color: var(--mahogany);
   cursor: pointer;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
 
-#jump-buttons button:hover {
-  background: rgba(20, 20, 24, 0.7);
-}
-
-#jump-buttons button[aria-current="true"] {
-  background: var(--accent);
+.vote-buttons button[aria-pressed="true"] {
+  background: var(--rose);
   color: #fff;
-  border-color: var(--accent);
+  border-color: var(--rose);
+}
+
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border-top: 1px dashed var(--brass);
+  padding-top: 0.6rem;
+}
+
+.account-form h3 {
+  margin: 0 0 0.2rem;
+  font-size: 1rem;
+  color: var(--mahogany);
 }
 
 .toasts {
@@ -482,8 +450,9 @@ a {
 }
 
 .toast {
-  background: rgba(20, 20, 24, 0.85);
-  color: #fff;
+  background: rgba(53, 37, 28, 0.92);
+  color: var(--parchment);
+  border: 1px solid var(--brass);
   padding: 0.45rem 0.8rem;
   border-radius: 999px;
   font-size: 0.82rem;
@@ -514,6 +483,9 @@ a {
   padding: 1.5rem 1.25rem 3rem;
   max-width: 70ch;
   margin: 0 auto;
+  background: var(--parchment);
+  color: var(--ink);
+  min-height: 100vh;
 }
 
 .readme-back {
@@ -525,24 +497,88 @@ a {
 }
 
 .readme pre {
-  background: var(--bubble);
-  border: 1px solid var(--line);
+  background: #fffdf7;
+  border: 1px solid var(--brass);
   border-radius: 8px;
   padding: 0.6rem 0.8rem;
   overflow-x: auto;
 }
 
 .readme blockquote {
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--rose);
   margin: 0;
   padding-left: 1rem;
-  color: var(--ink-soft);
+  color: #5b4f3d;
 }
 
-/* Narrow/phone-width: the title + about-link row can crowd the top overlay
-   next to a scene-scoped presence line and the whoami line beneath it —
-   shrink the title and tighten the about-link so both still fit one row
-   without wrapping onto the photo awkwardly. */
+/* --- touch fallback ------------------------------------------------------ */
+
+.touch-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.dpad {
+  position: absolute;
+  left: 1rem;
+  bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  grid-template-columns: repeat(3, 2.6rem);
+  grid-template-rows: repeat(3, 2.6rem);
+  gap: 0.2rem;
+  pointer-events: auto;
+}
+
+.dpad button {
+  grid-column: 2;
+  background: rgba(53, 37, 28, 0.6);
+  border: 1px solid var(--brass);
+  color: var(--parchment);
+  border-radius: 8px;
+  font-size: 1rem;
+  touch-action: none;
+}
+
+.dpad button[data-dir="left"] {
+  grid-column: 1;
+  grid-row: 2;
+}
+.dpad button[data-dir="up"] {
+  grid-row: 1;
+}
+.dpad button[data-dir="right"] {
+  grid-column: 3;
+  grid-row: 2;
+}
+.dpad button[data-dir="down"] {
+  grid-row: 3;
+}
+
+.touch-interact,
+.touch-view {
+  position: absolute;
+  bottom: calc(7.2rem + env(safe-area-inset-bottom, 0px));
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 50%;
+  background: rgba(102, 61, 67, 0.75);
+  border: 1px solid var(--rose);
+  color: var(--parchment);
+  font-size: 1.1rem;
+  font-weight: 700;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-interact {
+  right: 4.6rem;
+}
+.touch-view {
+  right: 1rem;
+}
+
 @media (max-width: 480px) {
   .topbar h1 {
     font-size: 1rem;
@@ -550,5 +586,14 @@ a {
   .about-link {
     font-size: 0.76rem;
     padding: 0.25rem 0.55rem;
+  }
+  .gate-card {
+    padding: 1.2rem 1.1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-hint {
+    animation: none;
   }
 }

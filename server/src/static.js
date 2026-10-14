@@ -15,11 +15,6 @@ const CONTENT_TYPES = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".ico": "image/x-icon",
-  // Depth-mesh vertex data for depth-scene.js (see
-  // docs/adr/0002-kambri-depth-parallax.md) — a flat binary buffer, not a
-  // format the browser interprets on its own, same treatment any other
-  // opaque downloadable blob would get.
-  ".bin": "application/octet-stream",
 };
 
 // Returns { body, contentType } or null if nothing servable lives there.

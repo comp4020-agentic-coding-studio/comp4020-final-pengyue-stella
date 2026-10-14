@@ -3,82 +3,136 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Traces of ANU</title>
+    <title>The Cursed Museum</title>
     <meta
       name="description"
-      content="An immersive shared layer over ANU campus — explore connected scenes, leave a trace, find what others left."
+      content="A shared, explorable gothic museum of haunted objects and unreliable histories. Move with WASD, press V to switch views, E to inspect."
     />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body class="app-page">
-    <div
-      id="viewport"
-      class="viewport"
-      tabindex="0"
-      role="application"
-      aria-label="Campus scene. Drag, swipe, or use the left and right arrow keys to look around. Press Enter on empty ground to leave a trace."
-    >
-      <!-- Depth-parallax rendering (currently only Kambri Lawn — see
-           docs/adr/0002-kambri-depth-parallax.md) draws into #depth-host
-           instead of the flat #scene-image, with its own pins host
-           (#depth-pins) positioned in plain viewport pixels rather than
-           riding #panorama's translateX — a depth scene's "panning" is
-           the virtual camera moving, not the image sliding, so pins for
-           it must not inherit that transform. Both default hidden;
-           goToScene shows exactly one of the two pin hosts depending on
-           whether a depth scene is active for the current scene. -->
-      <div id="depth-host" class="depth-host" hidden></div>
-      <div id="depth-pins" class="pins" hidden></div>
-      <div id="panorama" class="panorama">
-        <img id="scene-image" alt="" draggable="false" />
-        <div id="pins" class="pins"></div>
-      </div>
+    <div id="viewport" class="viewport" tabindex="0" role="application"
+      aria-label="The Cursed Museum. Move with WASD or arrow keys, press V to switch between overhead and first-person view, E or click to inspect an exhibit.">
+      <canvas id="scene-canvas"></canvas>
 
-      <!-- Everything below is a lightweight overlay above the full-bleed
-           scene, not a page header/footer the scene sits inside — the
-           immersive-viewport requirement means the photo (or depth render)
-           IS the page, and UI floats on top of it. -->
+      <!-- Everything below floats above the full-bleed 3D canvas. -->
       <header class="topbar">
         <div class="topbar-text">
-          <h1>Traces of ANU</h1>
+          <h1>The Cursed Museum</h1>
           <p class="presence" id="presence" aria-live="polite"></p>
           <p class="whoami" id="whoami"></p>
         </div>
         <a class="about-link" href="/readme/">What is this?</a>
       </header>
 
-      <button class="pan-btn pan-left" type="button" aria-label="Look left">&#8592;</button>
-      <button class="pan-btn pan-right" type="button" aria-label="Look right">&#8594;</button>
+      <div class="crosshair" id="crosshair" aria-hidden="true"></div>
 
-      <!-- One bottom-anchored stack, not two overlapping absolutely-
-           positioned blocks: the scene title/blurb, the hint, and the jump
-           nav all live in .bottom-bar's own flex column now, so however
-           many lines .jump-nav wraps to at a given width, the title sits
-           right above it instead of at a fixed offset that only happened to
-           clear a single-line jump-nav on the viewport this was first built
-           against (confirmed broken at phone width: the two overlapped). -->
       <footer class="bottom-bar">
         <div class="scene-caption">
-          <h2 id="scene-title">&nbsp;</h2>
-          <p id="scene-blurb">&nbsp;</p>
+          <h2 id="gallery-title">Entrance Hall</h2>
+          <p id="gallery-hint">&nbsp;</p>
         </div>
         <p class="hint">
-          Drag to look around &middot; click empty ground to leave a trace &middot; click a mark
-          to read it
+          WASD/arrows to move &middot; V to switch view &middot; E or click to inspect
         </p>
-        <nav class="jump-nav" aria-label="Jump to a scene">
-          <span class="jump-label">Scenes:</span>
-          <div id="jump-buttons"></div>
-        </nav>
       </footer>
+
+      <!-- Name-entry gate, shown until a display name is chosen. -->
+      <div id="name-gate" class="overlay-gate" hidden>
+        <form id="name-form" class="gate-card">
+          <h2>Welcome to The Cursed Museum</h2>
+          <p>Every object has a story. None of them can be trusted.</p>
+          <label for="name-input">What shall the archive call you?</label>
+          <input id="name-input" name="name" maxlength="40" autocomplete="off" required
+            placeholder="e.g. The Quiet Curator" />
+          <button type="submit">Enter the museum</button>
+        </form>
+      </div>
+
+      <!-- Donor counter prompt, shown on approach in the hall. -->
+      <button id="donate-hint" class="floating-hint" type="button" hidden>
+        Press E to donate a relic
+      </button>
+
+      <!-- Touch fallback: on-screen movement + interact, shown only on
+           touch-capable devices (no keyboard to rely on). -->
+      <div id="touch-controls" class="touch-controls" hidden>
+        <div class="dpad" aria-label="Move">
+          <button type="button" data-dir="up" aria-label="Move forward">&#9650;</button>
+          <button type="button" data-dir="left" aria-label="Move left">&#9664;</button>
+          <button type="button" data-dir="down" aria-label="Move back">&#9660;</button>
+          <button type="button" data-dir="right" aria-label="Move right">&#9654;</button>
+        </div>
+        <button type="button" id="touch-interact" class="touch-interact" aria-label="Inspect nearest exhibit">E</button>
+        <button type="button" id="touch-view" class="touch-view" aria-label="Switch view">V</button>
+      </div>
+
+      <!-- Donation form overlay. -->
+      <div id="donate-gate" class="overlay-gate" hidden>
+        <form id="donate-form" class="gate-card dossier-card">
+          <h2>Donate a Relic</h2>
+          <label for="donate-gallery">Gallery</label>
+          <select id="donate-gallery" name="galleryId" required></select>
+
+          <label for="donate-slot">Display slot</label>
+          <select id="donate-slot" name="slotId" required></select>
+
+          <label for="donate-title">Title</label>
+          <input id="donate-title" name="title" maxlength="80" required placeholder="The Spoon That Remembers" />
+
+          <label for="donate-claim">One-sentence origin claim</label>
+          <textarea id="donate-claim" name="originClaim" maxlength="240" required rows="2"
+            placeholder="An ordinary silver spoon that remembers every secret told during dinner."></textarea>
+
+          <label for="donate-donor">Donor name</label>
+          <input id="donate-donor" name="donorName" maxlength="40" required placeholder="Anonymous Curator" />
+
+          <div class="gate-actions">
+            <button type="button" id="donate-cancel" class="secondary">Esc &middot; Cancel</button>
+            <button type="submit">Donate</button>
+          </div>
+          <p class="gate-error" id="donate-error" role="alert"></p>
+        </form>
+      </div>
+
+      <!-- Exhibit dossier overlay. -->
+      <div id="dossier" class="overlay-gate" hidden>
+        <div class="gate-card dossier-card" role="dialog" aria-labelledby="dossier-title">
+          <button type="button" id="dossier-close" class="dossier-close" aria-label="Close dossier (Esc)">&times;</button>
+          <p class="dossier-kicker" id="dossier-kicker"></p>
+          <h2 id="dossier-title"></h2>
+          <p class="dossier-meta" id="dossier-meta"></p>
+          <div id="dossier-accounts" class="dossier-accounts"></div>
+
+          <form id="account-form" class="account-form">
+            <h3 id="account-form-title">Add Counter-Evidence</h3>
+            <input type="hidden" id="account-challenged" value="" />
+            <label for="account-kind">This account is a&hellip;</label>
+            <select id="account-kind" name="kind">
+              <option value="testimony">New Testimony</option>
+              <option value="contradiction">Contradiction</option>
+              <option value="revision">Proposed Revision</option>
+              <option value="counter-evidence">Counter-Evidence</option>
+            </select>
+            <label for="account-body">Your account</label>
+            <textarea id="account-body" name="body" maxlength="600" rows="3" required
+              placeholder="Manufacturing records identify a later origin&hellip;"></textarea>
+            <label for="account-author">Your name</label>
+            <input id="account-author" name="authorName" maxlength="40" placeholder="Anonymous Curator" />
+            <div class="gate-actions">
+              <button type="button" id="account-cancel" class="secondary">Cancel</button>
+              <button type="submit">Publish</button>
+            </div>
+            <p class="gate-error" id="account-error" role="alert"></p>
+          </form>
+        </div>
+      </div>
     </div>
 
     <div id="toasts" class="toasts" aria-live="polite"></div>
 
     <!-- three.js is vendored as a static file, not an npm dependency — see
-         public/vendor/README.md and docs/adr/0002-kambri-depth-parallax.md.
-         Only fetched when depth-scene.js is dynamically imported, which
-         only happens on a scene whose config carries a `depth` field. -->
+         public/vendor/README.md. -->
     <script type="importmap">
       { "imports": { "three": "/vendor/three.module.min.js" } }
     </script>

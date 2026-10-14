@@ -52,23 +52,41 @@ function parseCookies(header) {
 }
 
 const VISITOR_COOKIE = "visitor";
+const NAME_COOKIE = "visitor_name";
 const ONE_YEAR = 60 * 60 * 24 * 365;
+const NAME_RE = /^[\p{L}\p{N} '-]{1,40}$/u;
 
-// Reads the visitor cookie off the request, or mints one. Returns the
-// identity plus the Set-Cookie header value to attach to the response when
-// `isNew` is true — callers send it however they're building their response.
+// Reads the visitor cookie off the request, or mints one. If the visitor has
+// chosen a display name (a separate cookie, set via POST /api/me), that name
+// wins; otherwise a stable whimsical name is derived from the id, so a
+// visitor is never nameless even before they type anything. Returns the
+// identity plus any Set-Cookie headers to attach to the response — callers
+// send them however they're building their response.
 export function identify(req) {
   const cookies = parseCookies(req.headers.cookie);
   const existing = cookies.get(VISITOR_COOKIE);
   const id = existing && /^[0-9a-f-]{36}$/i.test(existing) ? existing : randomUUID();
   const isNew = id !== existing;
+
+  const chosenName = cookies.get(NAME_COOKIE);
+  const name = chosenName && NAME_RE.test(chosenName) ? chosenName : nameFor(id);
+
+  const headers = [];
+  if (isNew) headers.push(`${VISITOR_COOKIE}=${id}; Path=/; Max-Age=${ONE_YEAR}; HttpOnly; SameSite=Lax`);
+
   return {
     id,
-    name: nameFor(id),
+    name,
     color: colorFor(id),
     isNew,
-    setCookieHeader: isNew
-      ? `${VISITOR_COOKIE}=${id}; Path=/; Max-Age=${ONE_YEAR}; HttpOnly; SameSite=Lax`
-      : null,
+    setCookieHeaders: headers,
   };
+}
+
+// Validates and returns a Set-Cookie header for a visitor-chosen display
+// name, or null if the candidate is invalid (caller should 400).
+export function nameCookieFor(candidate) {
+  const trimmed = typeof candidate === "string" ? candidate.trim() : "";
+  if (!NAME_RE.test(trimmed)) return null;
+  return `${NAME_COOKIE}=${encodeURIComponent(trimmed)}; Path=/; Max-Age=${ONE_YEAR}; HttpOnly; SameSite=Lax`;
 }

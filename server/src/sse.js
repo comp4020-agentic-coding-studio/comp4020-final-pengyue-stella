@@ -1,83 +1,62 @@
-// One shared hub for Server-Sent Events. Every connected browser is just a
-// response object we keep open and write to; broadcasting is writing the
-// same event to all of them. Traffic here is one-directional (server ->
-// browser), which is the whole reason SSE is enough and a WebSocket would be
-// more than this needs.
-//
-// Presence is scene-scoped (see docs/adr/0001-scene-scoped-presence.md): each
-// connection is tagged with the scene its visitor is currently viewing, kept
-// in-memory only, never written to traces.jsonl. `sceneOf` answers "which
-// scene is this response tagged with"; `byVisitor` answers "which open
-// connections belong to this visitor", so a presence POST (a different
-// request to the same identity, not the same request as the open stream) can
-// find the right response objects to retag.
-const sceneOf = new Map(); // res -> sceneId | null
-const byVisitor = new Map(); // visitorId -> Set<res>
+// One shared hub for Server-Sent Events, carried over from the prior
+// project's architecture (see docs/adr/0002-transport.md for why this stays
+// the only live channel rather than adding a WebSocket for movement). Every
+// connected browser is a response object kept open; broadcasting writes the
+// same event to all of them. There is one shared world now (not per-scene
+// rooms), so presence here is "everyone in the museum," not scoped further.
+const clients = new Map(); // res -> visitorId
+const lastPosition = new Map(); // visitorId -> { x, z, yaw, name, color }
 
-export function addClient(res, visitorId, sceneId) {
-  sceneOf.set(res, sceneId ?? null);
-  const set = byVisitor.get(visitorId) ?? new Set();
-  set.add(res);
-  byVisitor.set(visitorId, set);
+export function addClient(res, visitorId) {
+  clients.set(res, visitorId);
 }
 
-// Returns the scene this connection was tagged with at the moment of
-// removal — not necessarily the one it connected with, since a presence POST
-// can retag a still-open connection after it was added. The caller needs
-// this live value to broadcast the right scene's updated count.
-export function removeClient(res, visitorId) {
-  const sceneId = sceneOf.get(res) ?? null;
-  sceneOf.delete(res);
-  const set = byVisitor.get(visitorId);
-  if (set) {
-    set.delete(res);
-    if (set.size === 0) byVisitor.delete(visitorId);
-  }
-  return sceneId;
-}
-
-export function countForScene(sceneId) {
-  let n = 0;
-  for (const s of sceneOf.values()) {
-    if (s === sceneId) n++;
-  }
-  return n;
+export function removeClient(res) {
+  const visitorId = clients.get(res);
+  clients.delete(res);
+  // Only announce a departure once no other tab/connection for this visitor
+  // remains open, so a reload (close-then-reconnect) doesn't flicker an
+  // avatar out and back in for everyone else.
+  const stillConnected = [...clients.values()].includes(visitorId);
+  if (visitorId && !stillConnected) lastPosition.delete(visitorId);
+  return { visitorId, stillConnected };
 }
 
 function write(res, event, data) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-export function broadcast(event, data) {
-  for (const res of sceneOf.keys()) {
+export function broadcast(event, data, { exceptVisitorId } = {}) {
+  for (const [res, visitorId] of clients.entries()) {
+    if (exceptVisitorId && visitorId === exceptVisitorId) continue;
     try {
       write(res, event, data);
     } catch {
-      // A dead connection fails here before the 'close' handler has run;
-      // drop it so one stale client doesn't throw on every broadcast after.
-      sceneOf.delete(res);
+      // A dead connection fails here before 'close' has run; drop it so one
+      // stale client doesn't throw on every broadcast after.
+      clients.delete(res);
     }
   }
 }
 
-export function broadcastPresenceFor(sceneId) {
-  if (!sceneId) return;
-  broadcast("presence", { sceneId, count: countForScene(sceneId) });
+// Every other visitor currently known to be somewhere in the museum, so a
+// freshly-connected client can draw them immediately rather than waiting
+// for their next move.
+export function knownPresence(exceptVisitorId) {
+  return [...lastPosition.entries()]
+    .filter(([id]) => id !== exceptVisitorId)
+    .map(([visitorId, p]) => ({ visitorId, ...p }));
 }
 
-// Retags every open connection for one visitor to a new scene, returning the
-// distinct scene ids (old and new) whose counts just changed so the caller
-// can rebroadcast exactly those.
-export function setVisitorScene(visitorId, sceneId) {
-  const set = byVisitor.get(visitorId);
-  if (!set || set.size === 0) return [];
-  const changed = new Set();
-  for (const res of set) {
-    const prev = sceneOf.get(res);
-    if (prev === sceneId) continue;
-    if (prev) changed.add(prev);
-    sceneOf.set(res, sceneId);
-    changed.add(sceneId);
-  }
-  return [...changed];
+export function recordAndBroadcastMove(visitorId, position) {
+  lastPosition.set(visitorId, position);
+  broadcast("presence", { visitorId, ...position }, { exceptVisitorId: visitorId });
+}
+
+export function broadcastDeparture(visitorId) {
+  broadcast("presence-left", { visitorId });
+}
+
+export function connectedCount() {
+  return new Set(clients.values()).size;
 }
