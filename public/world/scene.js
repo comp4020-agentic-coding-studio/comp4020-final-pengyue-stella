@@ -231,8 +231,12 @@ function addLighting(scene, world) {
   // unreadably dark by construction. Point lights below now layer warm,
   // moody *accent* pooling on top of that floor, not the only source of
   // visibility.
-  scene.add(new THREE.AmbientLight("#5a4a36", 2.6));
-  scene.add(new THREE.HemisphereLight("#6a5640", "#1a130b", 1.1));
+  // Bumped from an earlier pass's 2.6/1.1: those numbers read fine in a
+  // tight isolated test scene but left most of an 18x14 gallery's far wall
+  // and slot furniture unreadably dark once actually walked through — caught
+  // by exactly that, not by eyeballing the intensity numbers in isolation.
+  scene.add(new THREE.AmbientLight("#5a4a36", 4.2));
+  scene.add(new THREE.HemisphereLight("#6a5640", "#1a130b", 1.8));
 
   const hallChandelier = buildChandelier();
   hallChandelier.position.set(0, WALL_HEIGHT - 0.5, 0);
@@ -253,7 +257,13 @@ function addLighting(scene, world) {
 
     // A coloured accent wash keeps each gallery's identity even once warm
     // candle/chandelier light is layered on top.
-    const accentLight = new THREE.PointLight(gallery.accent, 0.6 * PHYSICAL_LIGHT_SCALE, 0, 2);
+    // decay 1.3, not the physically "correct" 2 — a real inverse-square
+    // falloff leaves a visitor standing at a far display slot (routinely
+    // 6-8 units from a gallery's one or two point lights) in near-darkness;
+    // a gentler falloff is a deliberate departure from physical accuracy in
+    // favour of this specific invariant: exhibits must stay legible from
+    // where a visitor actually interacts with them.
+    const accentLight = new THREE.PointLight(gallery.accent, 0.6 * PHYSICAL_LIGHT_SCALE, 0, 1.3);
     accentLight.position.set(cx, 1.4, cz);
     scene.add(accentLight);
     breathingLights.push({ light: accentLight, base: 0.6 * PHYSICAL_LIGHT_SCALE });
@@ -265,7 +275,7 @@ function addLighting(scene, world) {
     // carry the whole far end of an 18x14 room from one centred chandelier.
     const towardFarWallX = gallery.doorway.x !== cx ? -Math.sign(gallery.doorway.x - cx) * halfW * 0.6 : 0;
     const towardFarWallZ = gallery.doorway.z !== cz ? -Math.sign(gallery.doorway.z - cz) * halfD * 0.6 : 0;
-    const farLamp = new THREE.PointLight("#ffb866", 0.7 * PHYSICAL_LIGHT_SCALE, 0, 2);
+    const farLamp = new THREE.PointLight("#ffb866", 0.7 * PHYSICAL_LIGHT_SCALE, 0, 1.3);
     farLamp.position.set(cx + towardFarWallX, 2.2, cz + towardFarWallZ);
     scene.add(farLamp);
     breathingLights.push({ light: farLamp, base: 0.7 * PHYSICAL_LIGHT_SCALE });
@@ -356,7 +366,7 @@ function addDonorCounter(scene, world) {
   candle.position.set(0.3, 1.04, 0.1);
   group.add(candle);
 
-  const lamp = new THREE.PointLight("#ffb866", 0.9 * PHYSICAL_LIGHT_SCALE, 5, 2);
+  const lamp = new THREE.PointLight("#ffb866", 0.9 * PHYSICAL_LIGHT_SCALE, 5, 1.3);
   lamp.position.set(0, 1.6, 0);
   group.add(lamp);
 
@@ -544,9 +554,12 @@ function furnishChildhoodGallery(group, gallery, breathingLights) {
   rug.position.set(cx, 0, cz);
   group.add(rug);
 
+  // Against the back wall opposite the doorway (doorway sits at bounds.maxZ
+  // here — see GALLERIES in server/src/world.js) — not bounds.maxZ itself,
+  // which would plant the shelf directly in the doorway opening and block
+  // the first-person view straight through it.
   const shelf = buildBookshelf({ width: 1.3, height: 1.7 });
-  shelf.position.set(cx, 0, bounds.maxZ - 0.2);
-  shelf.rotation.y = Math.PI;
+  shelf.position.set(cx, 0, bounds.minZ + 0.2);
   group.add(shelf);
 
   for (const dx of [-0.3, 0.3]) {

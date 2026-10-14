@@ -239,7 +239,7 @@ export function buildCandle({ withLight = true } = {}) {
   flame.position.y = 0.2;
   group.add(flame);
   if (withLight) {
-    const light = new THREE.PointLight("#ffb866", 0.4 * PHYSICAL_LIGHT_SCALE, 2.5, 2);
+    const light = new THREE.PointLight("#ffb866", 0.4 * PHYSICAL_LIGHT_SCALE, 2.5, 1.3);
     light.position.y = 0.22;
     group.add(light);
     group.userData.flickerLight = light;
@@ -265,7 +265,7 @@ export function buildChandelier() {
     bulb.position.set(Math.cos(angle) * 0.35, -0.02, Math.sin(angle) * 0.35);
     group.add(bulb);
   }
-  const light = new THREE.PointLight("#ffcf8a", 1.2 * PHYSICAL_LIGHT_SCALE, 10, 2);
+  const light = new THREE.PointLight("#ffcf8a", 1.2 * PHYSICAL_LIGHT_SCALE, 10, 1.3);
   group.add(light);
   group.userData.flickerLight = light;
   return group;
@@ -330,7 +330,7 @@ export function buildSpecimenVitrine({ accent = "#4A5A3D" } = {}) {
   ribs.position.y = 0.75 + 0.05;
   group.add(ribs);
 
-  const accentGlow = new THREE.PointLight(accent, 0.3 * PHYSICAL_LIGHT_SCALE, 1.5, 2);
+  const accentGlow = new THREE.PointLight(accent, 0.3 * PHYSICAL_LIGHT_SCALE, 1.5, 1.3);
   accentGlow.position.y = 0.75 + 0.4;
   group.add(accentGlow);
 

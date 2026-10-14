@@ -83,7 +83,7 @@ function buildNameplate(title, donorName, y) {
 // lighting," distinct from the ambient/chandelier lighting scene.js already
 // provides per room.
 function buildSpotlight(y) {
-  const light = new THREE.PointLight("#ffcf8a", 0.35 * PHYSICAL_LIGHT_SCALE, 2.2, 2);
+  const light = new THREE.PointLight("#ffcf8a", 0.35 * PHYSICAL_LIGHT_SCALE, 2.2, 1.3);
   light.position.y = y;
   return light;
 }
