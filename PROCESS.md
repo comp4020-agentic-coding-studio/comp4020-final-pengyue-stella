@@ -1,142 +1,144 @@
 # Process overview
 
-Rewritten at each crit to describe the project as it stands, not appended to —
-this is the state as of C8. `PLAN.md` is the working plan; this is the account
-of how it was built and why.
+Rewritten at each crit to describe the project as it stands, not appended to
+— this is the state as of the Final Project pivot to **The Cursed Museum**.
+`PLAN.md` is the working plan; this is the account of how it was built and
+why.
 
-## From brief to harness
+## From Traces of ANU to The Cursed Museum
 
-The brief fixes three things (multi-user, real-time, persists) and leaves the
-app itself open. Before writing code, the student's concept — an immersive,
-connected-scene layer over campus where traces are anchored to places — became
-[`e3e1934`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/e3e1934),
-which is `PLAN.md`: the data model, the API, which four scenes, and explicitly
-what was staying out (accounts, drawing, uploads, more than four scenes).
-`CLAUDE.md` was written alongside it, not after: the stack rules and the
-user-content-safety rule ("never `innerHTML`") were decided before they were
-needed, not patched in once something broke.
+This repo carried crits 8 and 9 as *Traces of ANU*, a 2D pannable-photo
+campus app (see Git history before
+[`804aabc`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/804aabc)
+and `reflections/crit-8.md`, `crit-9.md` for that account). For the Final
+Project the user supplied a full product blueprint —
+`design/The_Cursed_Museum_Project_Blueprint.pdf` — for a different app
+entirely: a shared, explorable Gothic museum with a real 3D world, dual
+camera rigs, and a living archive of competing, votable claims about
+donated relics. The blueprint's own "feasibility note" is explicit that this
+cannot be built as a cropped 2D scene the way Traces of ANU was — a genuine
+freely-navigable first-person camera needs real 3D world geometry — so this
+was a full pivot, not an incremental crit: the prior app's scene/store code,
+scene photography and SVG-era prototype were removed rather than kept
+alongside a second, unrelated product. Git history before the pivot commit
+stays in the repo as process evidence; nothing was force-pushed away.
+
+`README.md`, `DESIGN.md`, `PLAN.md` and `CLAUDE.md` were rewritten for the
+new product before any app code was touched — the galleries, the data model,
+the vote/classification rules and the safety rules were decided up front,
+same discipline the original harness used.
 
 ## Stack decision record
 
-**Context.** One Fly machine, 256MB, one volume, no separate database. The
-brief needs multi-user, real-time (~1s), and persistence across restarts and
-redeploys.
+**Context.** Same infrastructure as before: one Fly machine, 256MB, one
+volume, no separate database app. The new brief adds real geometry (a 3D
+world, two camera rigs) and a richer write surface (donations, competing
+accounts, votes) on top of the same multi-user/real-time/persistence
+requirements.
 
-**Options considered.**
+**Persistence: `node:sqlite`, not a flat file.** Traces of ANU's JSONL log
+fit a handful of append-only pins; this project needs relational structure
+(an exhibit claims exactly one slot, an account can challenge exactly one
+other account, a vote is unique per account+visitor) that a flat file would
+otherwise re-implement by hand. Node 24 ships `node:sqlite` as a stable,
+unflagged built-in — confirmed directly in this environment before
+committing to it — so SQLite is available with the same "zero runtime npm
+dependencies" constraint intact: no `better-sqlite3` native module, no
+install step, same install-free Docker image Traces of ANU had.
 
-- *Astro/React + a managed Postgres-like store.* The course default for the
-  static half, but a separate database app is outside the course's Fly setup,
-  and a framework buys nothing an app this small needs (routing, client state)
-  — it has neither problem.
-- *Node + Express + `ws` + SQLite.* Conventional, reasonable, and still more
-  than the scale needs: a handful of scenes and a classroom of visitors fit in
-  memory, so a query engine and a routing framework both solve problems that
-  don't exist here.
-- **Node, `node:http`, zero runtime dependencies, an append-only JSONL file,
-  Server-Sent Events.** What's actually here: ~10 routes, one-directional
-  server→browser push, a dataset that fits comfortably in memory. Every
-  dependency not taken is a Docker layer that can't fail to install on a
-  remote builder.
+**Transport: still one SSE hub, not WebSockets.** The blueprint suggests a
+WebSocket layer for presence/position/room events. This project adds a new
+kind of traffic (client → server movement, which the prior app never had),
+but the brief's own bar — a change reaches another open session within
+about a second — doesn't need full duplex: a rate-limited `POST
+/api/presence/move`, relayed over the *same* SSE hub Traces of ANU already
+proved, is a complete multiplayer-movement loop with one live channel
+instead of two. Recorded in full in
+[`docs/adr/0002-transport.md`](docs/adr/0002-transport.md), including the
+documented fallback if real testing later shows movement reads as laggy.
 
-**Consequences.** Real cost: no framework conveniences, no SQL, and a flat
-file that would need revisiting (an index, or a real embedded DB) well past
-classroom scale — worth revisiting once a feature actually needs it, not
-before. Real benefit: the Docker image has no install step at all (`COPY` then
-`node server.js`), which matters on a 256MB machine with a remote builder and
-a deadline. SSE over WebSockets was the same logic in miniature: the app never
-needs to hear from a browser outside a normal HTTP request, so a full-duplex
-protocol buys nothing a one-way `EventSource` cannot already deliver inside
-the brief's ~1s window — verified directly in `spec/traces.test.ts`.
-
-The four scenes are real ANU photographs (Wikimedia Commons, CC BY-SA — credits
-in README.md), not illustration: Sullivans Creek at Kambri, Chifley Library's
-footbridge, Union Court, the sign on University Avenue. Each is built by
-`tools/build-scenes.py` into a pseudo-panorama — shown sharp at its own
-aspect, centred on a wider canvas whose edges are a softly blurred, darkened
-extension of the *same* photo, giving real pan room without a 360 shoot this
-week. The interaction model (pan a wide image, anchor pins at normalised
-`{x, y}`) doesn't know or care what format the image is; real equirectangular
-photos later touch only `scenes.js` and `public/scenes/`, nothing client-side.
-
-**This replaced a first attempt at hand-authored SVG illustrations** (still in
-earlier commits). Those satisfied every mechanical spec line — a connected
-graph, a pannable wide image, anchored pins — but failed what the spec can't
-check: on sight, the app read as a generic prototype, not specifically ANU.
-Illustration was chosen first to avoid blocking on asset sourcing; the
-correction was to go find real sourcing instead (Commons has ample CC-licensed
-campus photography) rather than defend placeholder art. The anchoring
-architecture didn't change — only `scenes.js`'s data and `public/scenes/`'s
-files did, the payoff of keeping those decoupled from day one.
-
-## Agent workflow
-
-The build followed `PLAN.md`'s own order: static scaffold, scene data and
-panning, trace read/write, SSE wiring, a persistence check, then `spec/`. Each
-stage was checked against the running app before moving on — `curl` for the
-API surface first (faster than a browser for routing/validation bugs), then
-two independent `agent-browser` sessions (genuinely separate cookies, so
-genuinely separate "visitors") for everything that only shows up with two
-people actually in the app at once
-([`b22c513`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/b22c513)).
-
-That two-session pass is what caught the first real bug: a trace posted in a
-scene session A wasn't viewing produced a toast, but silently never rendered
-as a pin if session A navigated there afterwards — one id-set was doing both
-"don't double-render" and "don't double-toast" duty, so the toast path's
-bookkeeping deleted the render path's chance to ever draw that pin. Fixed in
-the same commit and written up in `CLAUDE.md` ("a dedupe/seen-set is scoped to
-one concern") so it isn't reintroduced under a different name.
-
-Switching to real photos surfaced two more, both only visible by actually
-clicking through the running app rather than reading the code: clicking the
-look-left/-right chevrons opened a compose bubble instead of panning, because
-their click bubbled up to the viewport's own "click empty ground" handler,
-which didn't exclude `.pan-btn` the way it already excluded `.pin`/`.bubble`;
-and on a narrow (mobile) viewport, a scene loaded panned all the way to its
-left edge, which for a photo built sharp-centred-on-a-wider-canvas meant the
-real photo could be entirely out of frame — only its blurred margin showing on
-first paint. Both fixed directly (the click guard gained `.pan-btn`; scene
-load now centres on the pan range's midpoint, which is always where the sharp
-photo sits, by construction).
+**World: Three.js, vendored, one coordinate system, two camera rigs.**
+Three.js was already vendored as a static file for the retired
+depth-parallax prototype (`public/vendor/three.module.min.js` — see its own
+README for provenance); this project is the first one to actually need it in
+production. `server/src/world.js` is the single source of truth for gallery
+geometry, display slots and collision rectangles — the client never invents
+geometry the server doesn't know about, so client-side collision (in
+`public/world/movement.js`) can never disagree with what the server
+validates in `POST /api/presence/move`. Camera A (overhead) and camera C
+(first-person) in `public/world/cameras.js` both read the one avatar
+transform; switching (`V`) touches only which rig renders it, never the
+transform itself.
 
 ## What was checked, and how
 
-Automated, against the running app
-([`2cd146c`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/2cd146c)):
-the scene graph stays connected and every scene's image is actually served; a
-posted trace round-trips and bad input is rejected; two visitors get distinct
-identities and the same visitor is recognised across requests; a trace posted
-while an SSE client is connected arrives as an event within the brief's ~1s
-window. `pnpm check` runs these alongside the course's own `invariants.test.ts`
-(`/` answers, `/readme/` carries the README's headings).
+Automated, against the running app (`spec/world.test.ts`,
+`spec/archive.test.ts`, alongside the course's own `invariants.test.ts`): the
+museum has exactly four galleries each with at least one display slot; two
+visitors get distinct identities and the same visitor is recognised across
+requests; a donation claims a free slot and is rejected on an already-
+occupied one; a contradiction never erases the account it challenges;
+casting, then changing, a vote upserts rather than duplicates; an account
+with no votes reports Unclassified; a presence move broadcasts over SSE
+within the brief's ~1s window.
 
-Manually observed, not just assumed: the full loop end-to-end across two
-browser sessions (explore → discover → leave → the *other* session receives it
-live, no reload); persistence across a killed-and-restarted dev server; and,
-once deployed, persistence across a **real Fly redeploy** — a trace posted
-live before a second `flyctl deploy` was still there after it, over the actual
-volume. `pnpm check` also ran directly against the live URL, not only a dev
-server. The visual correction above was re-verified the same way (both
-viewports, both sessions) before redeploying again.
+Manually observed, not just asserted, with two independent `agent-browser`
+sessions (genuinely separate cookies — genuinely separate visitors):
 
-## Crit 9: several-people-in-it
+- A visitor's avatar is visible to another session **immediately on
+  connect**, not only after their first move — this was a real gap the
+  first implementation had (presence only ever broadcast from the movement
+  handler, so a visitor standing still at spawn was invisible to anyone
+  already in the museum) and is fixed by posting the spawn position once at
+  boot.
+- Live avatar movement, visible in the other session within roughly the
+  movement-post interval, well under 1s.
+- A donation made in one session appears as a real mesh in the other
+  session's world without a reload.
+- A contradiction published against another visitor's original account in
+  one session appears, with the original account still intact, in the
+  other session.
+- A vote cast in one session updates the *other* session's already-open
+  dossier — both the per-account verdict and the exhibit's derived overall
+  classification — live, with no reload and no re-fetch triggered by the
+  voter's own client.
+- Switching camera rigs (`V`) while a dossier-eligible exhibit is in range
+  preserves position, yaw and which exhibit `E`/click resolves to, exactly,
+  in both rigs.
+- A real server-process kill and restart: a donation made before the
+  restart was still present, under the same SQLite file, after it.
 
-The written decision crit 9 asks for is scene-scoped presence — see
-[`docs/adr/0001-scene-scoped-presence.md`](docs/adr/0001-scene-scoped-presence.md)
-for the full record (context, options considered, consequences,
-verification). In short: each SSE connection is tagged with the visitor's
-current scene, and the presence count shown is scoped to that scene rather
-than campus-wide, without exposing names, colours, cursor positions, or exact
-locations. Verified with two independent browser sessions; the count updates
-within about a second of the other session navigating or disconnecting, no
-reload. The flat-file store is sized for this week's scale on purpose — worth
-a note here, not a surprise, if traffic later outgrows it.
+## Two real bugs this process caught
 
-Built across four commits, each checked before the next:
-[`425e17d`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/425e17d)
-(the ADR itself), [`7a9c44a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/7a9c44a)
-(server-side connection tagging and the new `POST /api/presence`),
-[`8b378f7`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/8b378f7)
-(client posts on navigate, filters the presence listener by scene), and
-[`6d4e372`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-pengyue-stella/commit/6d4e372)
-(this pointer, once the decision was implemented and verified).
+**A CSS specificity bug, not a logic bug.** `.overlay-gate { display: flex }`
+outranked the `hidden` attribute's default `display: none`, so all three
+overlay gates (name entry, donation form, dossier) rendered stacked on top
+of each other on first paint — invisible from reading the HTML/JS, only
+visible from actually loading the page. Fixed by scoping the `display: flex`
+rule to `:not([hidden])`, the general lesson being the same one `CLAUDE.md`
+already states for dedupe sets: don't let two independent visibility
+mechanisms (an HTML attribute and a class rule) fight over the same
+property without one of them deferring explicitly.
+
+**A collision seam, found by actually walking through it.** Corridor
+rectangles were defined to exactly abut the hall and gallery bounds they
+connect. Collision shrinks each rectangle's walkable interior inward by the
+avatar's radius before testing a point against it — so two rectangles that
+only *touch* at a shared edge have no radius-shrunk interior in common at
+that edge, and a visitor walking toward the seam gets clamped back into
+whichever rectangle they're already in, forever. The clamp logic read as
+correct in isolation; only driving an avatar at the seam surfaced it. Fixed
+by overlapping each corridor into both neighbouring rectangles by more than
+twice the collision radius (see the `OVERLAP` constant and its comment in
+`server/src/world.js`).
+
+## Known limitations, stated rather than hidden
+
+Exhibit imagery is simple original procedural geometry keyed to each
+gallery's category (a pedestal-and-relic family per category), not bespoke
+art per donation — true to the blueprint's "no required AI image
+generation" instruction, but a real simplification against the mood boards
+in `design/references/`. There is no moderation queue beyond length caps and
+per-visitor rate limits, acceptable at classroom scale and explicitly not a
+claim of readiness for open public UGC. Spatial audio, named optional in the
+blueprint, is out of this first version.
