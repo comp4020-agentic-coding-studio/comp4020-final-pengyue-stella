@@ -2,14 +2,16 @@
 
 Every object has a story. None of them can be trusted.
 
-The Cursed Museum is a shared, explorable gothic museum. You walk in under a
-display name, pick a route through four haunted galleries — The Portraits
-That Watch, Objects That Remember, The Cabinet of Impossible Life, The
-Forgotten Childhood — and find relics other visitors have already donated:
-a spoon that remembers dinner-table secrets, a portrait whose hallway keeps
-changing. Other visitors are there with you, moving through the same rooms
-in real time. Press **V** to drop from a diagonal overhead view into a
-freely-navigable first-person view and back, in place, mid-stride.
+The Cursed Museum is a shared, explorable gothic museum, presented as a
+crafted 2.5D cabinet of curiosities: you walk in under a display name, step
+between richly staged scenes in four haunted galleries — The Portraits That
+Watch, Objects That Remember, The Cabinet of Impossible Life, The Forgotten
+Childhood — and find relics other visitors have already donated: a spoon
+that remembers dinner-table secrets, a portrait whose hallway keeps
+changing. Other visitors are there with you, moving through the same
+galleries in real time, and you can feel it — the room tells you how many of
+you are here, and the archive changes under your eyes as they donate,
+dispute and vote.
 
 Every relic has a dossier: who donated it, what they claimed, and everyone
 since who has disputed it. Publishing a new account never erases the old
@@ -36,39 +38,49 @@ So, for this project, "good" currently means:
 
 - the museum reads as Gothic-Victorian and specifically itself within the
   first screen — amber light, dark wood, crowded cabinets — never a generic
-  grey 3D box;
-- a visitor can move, look around freely, and inspect an object using
-  nothing but WASD/arrows, the mouse, E, V and Esc;
-- other visitors' presence and movement are visibly, immediately real —
-  no simulated placeholder players;
+  grey 3D box, and never a flat slideshow of static images either;
+- a visitor can step between scenes, look closer at a display, and inspect
+  an object using nothing but a mouse click, a tap, or Tab/Enter — no
+  movement keys to learn;
+- other visitors' presence is visibly, immediately real — a live headcount
+  in whatever room you're standing in, not a simulated placeholder;
 - donating a relic, writing a competing account, and casting a vote are all
   one honest shared write, seen by everyone else within about a second;
 - the record survives a refresh, a server restart, and a real redeploy.
 
 ## What this deliberately isn't
 
-Not a 2D painted scene cropped to fake movement — a genuine freely-navigable
-first-person camera needs real 3D world geometry, so the museum is one
-coherent Three.js world with two camera rigs over the same coordinates, not
-two different experiences bolted together. Not a moderated social network —
-there are no accounts, no profile pages, no likes; a visitor is a
+Not unrestricted free-roam — there is no walkable floor, no avatar, no
+collision; exploration is a small fixed graph of richly staged camera
+vantages (an Entrance Hall you turn to face each doorway from, a main view
+per gallery, a close-up per gallery's hero display), moved between by
+clicking glowing hotspots, in the spirit of a crafted cabinet-of-curiosities
+game rather than a generic 3D sandbox (see
+`docs/adr/0003-scene-exploration.md` for the full decision record — this
+replaces an earlier, fully free-roam version this same repo shipped at
+crit 10). Not a flat slideshow either — every scene is a real staged Three.js
+composition (furnished rooms, warm point-light pooling, watching portraits),
+not a static image with hotspots painted over it. Not a moderated social
+network — there are no accounts, no profile pages, no likes; a visitor is a
 cookie-backed identity with a chosen display name, and reports/abuse handling
 is limited to input validation, length caps and per-visitor rate limits, not
 a moderation queue. Not AI-generated art — exhibit imagery is simple,
 original, procedurally-styled iconography keyed to each gallery's category,
-not a generated or scraped image per donation.
+not a generated or scraped image per donation. Not embodied multiplayer
+avatars — other visitors are represented by a live per-room headcount and
+shared archive activity, not a walking character, per the brief's own
+permission to represent presence this way.
 
 ## Controls
 
-| Key | Action |
+| Input | Action |
 | --- | --- |
-| `W A S D` / arrows | Move (diagonal speed normalised) |
-| Mouse (first-person) | Look around |
-| `V` | Toggle overhead ⇄ first-person, in place |
-| `E` / click | Inspect the nearest or clicked exhibit |
-| `Esc` | Close the dossier or donation form |
-| `Enter` | Submit a form without moving the avatar |
-| `Tab` | Move focus through the overlay's own controls |
+| Click a glowing hotspot | Move to another scene, look closer, or go back |
+| Click an exhibit's label | Open its dossier |
+| `◀` / `▶` (or arrow keys, in the hall) | Turn to face a different gallery doorway |
+| `Esc` | Close the dossier/donation form, or step back a scene |
+| `Enter` | Submit a form |
+| `Tab` | Move focus through every hotspot and overlay control in turn |
 
 ## Stack
 

@@ -1,42 +1,29 @@
-# Vendored libraries and assets
+# Vendored libraries
 
 Everything here is a static file served by `server/src/static.js` exactly
 like a scene photograph — never `npm install`ed, never touching the
 server's own dependency graph. This is the one deliberate exception to
-`CLAUDE.md`'s "zero runtime npm dependencies" rule, and (for the avatar
-model) the one deliberate exception to this project's otherwise-procedural
-visual stack — see `ASSETS.md` for the full reasoning on both.
+`CLAUDE.md`'s "zero runtime npm dependencies" rule — see `ASSETS.md` for
+the full reasoning.
 
 ## Three.js r169 (MIT)
 
-- `three.module.min.js` — the core library. Downloaded once from
+- `three.module.min.js` — the core library, and the only thing left in this
+  directory. Downloaded once from
   `https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js`.
-- `addons/loaders/GLTFLoader.js` and `addons/utils/BufferGeometryUtils.js`,
-  `addons/utils/SkeletonUtils.js` — the three.js example addons needed to
-  load a skinned glTF model and clone its skeleton per avatar instance.
-  Downloaded from the matching `three@0.169.0` build
-  (`examples/jsm/loaders/GLTFLoader.js`, `examples/jsm/utils/
-  BufferGeometryUtils.js`, `examples/jsm/utils/SkeletonUtils.js`), same
-  license. The `loaders/`/`utils/` split mirrors the upstream package
-  layout exactly, because `GLTFLoader.js` imports `BufferGeometryUtils.js`
-  by the relative path `../utils/BufferGeometryUtils.js` — moving either
-  file to a flat layout would break that import.
 
-To update any of these: download the same URLs at a newer pinned version,
-replace the files, and keep the version number in this note current so
-provenance stays traceable.
+To update: download the same URL at a newer pinned version, replace the
+file, and keep the version number in this note current so provenance stays
+traceable.
 
-## Kenney "Mini Characters" v1.0 (CC0 1.0 Universal)
+## Retired
 
-- `assets/avatar/character-female-a.glb` + `assets/avatar/Textures/
-  colormap.png` — one character model and its one shared texture from
-  Kenney's CC0 "Mini Characters" pack (`kenney.nl/assets/mini-characters`),
-  downloaded directly from the official zip (`kenney.nl`'s own GLB export —
-  no third-party mirror), used as the visitor avatar's base rigged model
-  (see `public/world/avatar.js` and `ASSETS.md`). The texture's path is kept
-  exactly as the GLB's own internal relative URI
-  (`Textures/colormap.png`) expects it, so `GLTFLoader` resolves it without
-  any remapping. An earlier pass used `character-male-a.glb` from the same
-  pack; it was replaced with the female model (and the file removed) once
-  the creative direction called for a specific female visitor character —
-  see `ASSETS.md`.
+An earlier pass (the crit-10 free-roam version) also vendored
+`addons/loaders/GLTFLoader.js`, `addons/utils/BufferGeometryUtils.js`,
+`addons/utils/SkeletonUtils.js` (the three.js example addons needed to load
+and clone a skinned glTF model) and a Kenney "Mini Characters" model under
+`assets/avatar/`, used as the visitor avatar's base rigged model. The 2.5D
+scene-exploration pivot removed embodied avatars entirely (see
+`docs/adr/0003-scene-exploration.md`), so none of that is loaded any more
+and all of those files were deleted — see `ASSETS.md`'s own "Retired"
+section for the full provenance record, kept there rather than lost.

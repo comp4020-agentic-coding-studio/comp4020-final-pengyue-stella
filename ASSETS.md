@@ -1,45 +1,37 @@
 # Asset credits and provenance
 
-Almost every visual asset in The Cursed Museum is either a third-party
-library already covered by `CLAUDE.md`'s dependency rules, or built as
-original procedural content at load time. The one deliberate exception
-beyond Three.js itself is the visitor avatar's 3D model (below) — a
-considered, documented hybrid decision, not a quiet reversal of the
-project's zero-downloaded-assets stance: a jointed, walking humanoid is the
-one asset class genuinely hard to fake convincingly with primitive geometry
-and a hand-rolled walk cycle, so it alone is downloaded and vendored; every
-other visual (furniture, artifact models, textures, environment) stays
-procedural, for the reasons in "Why procedural over downloaded assets"
-below.
+Every visual asset in The Cursed Museum is either Three.js itself or
+original procedural content built at load time — there are no other
+downloaded assets. An earlier pass (the crit-10 free-roam version) also
+vendored a downloaded rigged humanoid model for the visitor avatar; the
+2.5D scene-exploration pivot removed embodied avatars entirely (see
+`docs/adr/0003-scene-exploration.md`), so that model and its loader addons
+were removed along with it — see "Retired" below for the full account,
+kept for provenance rather than deleted silently.
 
 ## Third-party
 
 - **Three.js** r169, MIT-licensed. Vendored as a static file at
   `public/vendor/three.module.min.js` (see that directory's own README for
-  the exact pinned version and download source) — the original deliberate
+  the exact pinned version and download source) — the one deliberate
   exception to the zero-runtime-npm-dependencies rule, documented since the
-  prior crit. `GLTFLoader.js`, `BufferGeometryUtils.js` and
-  `SkeletonUtils.js` (the three.js example addons needed to load and clone a
-  skinned glTF model) are vendored alongside it at
-  `public/vendor/addons/{loaders,utils}/`, downloaded from the same pinned
-  `three@0.169.0` build and under the same MIT license — each imports only
-  from `three` itself (or, for `GLTFLoader.js`, from
-  `BufferGeometryUtils.js` next to it), so none of this touches the
-  server's own dependency graph; all of it is fetched by the browser, never
-  installed.
-- **Kenney "Mini Characters"** (v1.0, 2024), CC0 1.0 Universal
-  (public domain) — `kenney.nl/assets/mini-characters`, downloaded directly
-  from the official zip (its own GLB export, not a third-party mirror). Only
-  `character-female-a.glb` and its texture (`Textures/colormap.png`) are
-  used, vendored at `public/vendor/assets/avatar/`. This is the visitor
-  avatar's base model: a small rigged humanoid with an `idle` and a `walk`
-  animation clip among its ~30 named clips, used for every visitor (local
-  and remote) with an original Gothic ensemble — a flared dress, a short
-  shoulder cape, a high collar, a waist sash and a small brass pendant,
-  tinted to the visitor's own server-assigned colour — layered on top (see
-  `public/world/avatar.js`). CC0 requires no attribution, but it's recorded
-  here anyway for provenance — same discipline as crediting Three.js even
-  though its license doesn't demand it either.
+  prior crit: fetched by the browser, never installed, never touching the
+  server's own dependency graph.
+
+## Retired: the crit-10 avatar model
+
+Crit 10's free-roam version used **Kenney "Mini Characters"** (v1.0, 2024,
+CC0 1.0 Universal) as the visitor avatar's base rigged model, dressed in an
+original procedural Gothic ensemble, plus the Three.js `GLTFLoader`/
+`BufferGeometryUtils`/`SkeletonUtils` addons needed to load and clone it.
+The scene-exploration pivot removed embodied avatars (other visitors are
+now represented by a live per-room headcount, not a walking character — see
+the ADR), so none of this is loaded or shipped any more:
+`public/vendor/assets/avatar/`, `public/vendor/addons/`, and
+`public/world/avatar.js` were all deleted in that pivot. This removes the
+project's one non-Three.js downloaded asset and its ~260KB payload
+entirely — the visual stack is now Three.js plus procedural content, full
+stop.
 
 ## Original procedural content
 
@@ -47,9 +39,10 @@ Everything else a visitor sees is generated in the browser from code, not
 sourced from an external file:
 
 - **World geometry** (`public/world/scene.js`, `server/src/world.js`) —
-  floors, walls, ceilings, gallery layout and collision are plain Three.js
-  primitives (boxes, planes) positioned from the server's static world
-  config.
+  floors, walls, ceilings and gallery layout are plain Three.js primitives
+  (boxes, planes) positioned from the server's static world config; the
+  fixed camera scenes/hotspots that replace the old collision/movement
+  model are config of the same kind, not a visual asset.
 - **Textures** (`public/world/textures.js`) — wallpaper, wood grain, carpet
   pattern, portrait-canvas imagery, and trim patterns are drawn onto an
   HTML `<canvas>` at boot and used as `THREE.CanvasTexture`s. No image
@@ -68,15 +61,6 @@ sourced from an external file:
   `02_cabinet_reference.png` (dense, warm, cluttered Victorian curiosity
   cabinets) without copying their specific arrangement, objects or any
   pixel content from those screenshots.
-- **The visitor avatar's dressing** (`public/world/avatar.js`'s
-  `buildDressing`) — a flared Gothic dress skirt, a short shoulder cape, a
-  high collar, a waist sash and a small brass pendant, original primitive
-  geometry layered onto the downloaded Kenney model above (tinted to the
-  visitor's own server-assigned colour, desaturated and darkened toward a
-  muted Gothic shade rather than a bright cartoon tone). Carried over in
-  spirit from the project's earlier fully-procedural avatar, redesigned for
-  the small, charming, slightly Gothic female visitor character the
-  blueprint's creative direction calls for.
 - **Donated-relic artifact library** (`public/world/artifacts.js`) — a
   dedicated model family per subtype (spoon, key, clock, mirror, painting,
   sketch, doll, toy, book, botanical specimen, biological specimen,
@@ -92,7 +76,7 @@ sourced from an external file:
   required AI image generation" instruction and without needing per-donation
   art.
 
-## Why procedural over downloaded assets (and the one exception)
+## Why procedural over downloaded assets
 
 The stack has no asset pipeline (no bundler, no texture/model importer —
 see `CLAUDE.md`'s zero-runtime-dependencies rule) and the course's one Fly
@@ -105,16 +89,12 @@ that was already being deployed, at the cost of the geometry reading as
 stylised rather than photorealistic. That trade-off is treated as a known
 limitation, not hidden — see `PROCESS.md`.
 
-The avatar is the one deliberate exception. A believable jointed humanoid
-with a real walk cycle is a different kind of problem than a cabinet or a
-candlestick — convincing joint proportions, weight-bearing animation, and a
-recognisable human silhouette from any angle are exactly what primitive
-geometry and a hand-authored sine-wave walk cycle struggle to sell, which
-the project's earlier fully-procedural avatar (visible in git history before
-this pass) openly was not. The total added footprint is small and bounded
-— one ~250KB GLB plus an ~9KB texture, fetched once and cached by every
-visitor's browser, not re-fetched per avatar instance — well inside the
-256MB machine budget, and the license (CC0) and exact files used are
-pinned above, so the "nothing to license-check" property is preserved even
-though the "nothing downloaded" property isn't. Everything else a visitor
-sees stays procedural.
+The crit-10 free-roam version carried one deliberate exception (a
+downloaded rigged humanoid for the visitor avatar, recorded above under
+"Retired"), justified at the time by how hard a believable walk cycle is to
+fake with primitive geometry. The scene-exploration pivot removed embodied
+avatars from the product entirely, which removed the exception along with
+it — there is no longer a visitor avatar to render at all, so the question
+of how convincingly to fake one no longer applies. Everything a visitor
+sees is now Three.js itself plus procedural content, with no remaining
+downloaded-asset exception beyond Three.js.

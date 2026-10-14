@@ -1,11 +1,11 @@
 # Process overview
 
 Rewritten at each crit to describe the project as it stands, not appended to
-— this is the state as of the Final Project pivot to **The Cursed Museum**.
-`PLAN.md` is the working plan; this is the account of how it was built and
-why.
+— this is the state as of the Final Project's 2.5D scene-exploration pivot
+to **The Cursed Museum**. `PLAN.md` is the working plan; this is the account
+of how it was built and why.
 
-## From Traces of ANU to The Cursed Museum
+## From Traces of ANU, to a free-roam 3D museum, to 2.5D scene exploration
 
 This repo carried crits 8 and 9 as *Traces of ANU*, a 2D pannable-photo
 campus app (see Git history before
@@ -13,185 +13,161 @@ campus app (see Git history before
 and `reflections/crit-8.md`, `crit-9.md` for that account). For the Final
 Project the user supplied a full product blueprint —
 `design/The_Cursed_Museum_Project_Blueprint.pdf` — for a different app
-entirely: a shared, explorable Gothic museum with a real 3D world, dual
-camera rigs, and a living archive of competing, votable claims about
-donated relics. The blueprint's own "feasibility note" is explicit that this
-cannot be built as a cropped 2D scene the way Traces of ANU was — a genuine
-freely-navigable first-person camera needs real 3D world geometry — so this
-was a full pivot, not an incremental crit: the prior app's scene/store code,
-scene photography and SVG-era prototype were removed rather than kept
-alongside a second, unrelated product. Git history before the pivot commit
-stays in the repo as process evidence; nothing was force-pushed away.
+entirely: a shared, explorable Gothic museum with a living archive of
+competing, votable claims about donated relics. The blueprint's own
+"feasibility note" argued this couldn't be a cropped 2D scene the way
+Traces of ANU was, so the first build of The Cursed Museum (crit 10) shipped
+a genuine free-roam 3D world: a walkable avatar, server-authoritative
+position, client-side collision, and two camera rigs (overhead, pointer-
+locked first-person) over the same transform.
 
-`README.md`, `DESIGN.md`, `PLAN.md` and `CLAUDE.md` were rewritten for the
-new product before any app code was touched — the galleries, the data model,
-the vote/classification rules and the safety rules were decided up front,
-same discipline the original harness used.
+After that version was built, verified, and shipped for crit 10, the
+direction changed again: move from "a generic 3D sandbox with a roaming
+avatar" to a **crafted 2.5D cabinet-of-curiosities presentation** —
+richly staged fixed camera scenes, click-driven navigation, optional
+close-up sub-scenes, multiplayer represented through shared activity
+rather than an embodied character. This is a presentation and interaction
+pivot, not a backend rewrite: the full decision record, including exactly
+what was removed and why it's safe to remove, lives in
+[`docs/adr/0003-scene-exploration.md`](docs/adr/0003-scene-exploration.md).
+`README.md`, `DESIGN.md` and `PLAN.md` were rewritten for the new
+presentation model in the same pass; the data model, vote/classification
+rules, and safety rules were untouched, because none of them depended on
+how the camera moved.
 
 ## Stack decision record
 
 **Context.** Same infrastructure as before: one Fly machine, 256MB, one
-volume, no separate database app. The new brief adds real geometry (a 3D
-world, two camera rigs) and a richer write surface (donations, competing
-accounts, votes) on top of the same multi-user/real-time/persistence
-requirements.
+volume, no separate database app. The scene-exploration pivot removes a
+requirement (continuous server-validated movement) rather than adding one.
 
-**Persistence: `node:sqlite`, not a flat file.** Traces of ANU's JSONL log
-fit a handful of append-only pins; this project needs relational structure
-(an exhibit claims exactly one slot, an account can challenge exactly one
-other account, a vote is unique per account+visitor) that a flat file would
-otherwise re-implement by hand. Node 24 ships `node:sqlite` as a stable,
-unflagged built-in — confirmed directly in this environment before
-committing to it — so SQLite is available with the same "zero runtime npm
-dependencies" constraint intact: no `better-sqlite3` native module, no
-install step, same install-free Docker image Traces of ANU had.
+**Persistence: `node:sqlite`, unchanged.** The relational structure this
+project needs (an exhibit claims exactly one slot, an account can challenge
+exactly one other account, a vote is unique per account+visitor) was never
+about movement, so this pivot touches none of `server/src/db.js`'s schema
+or transaction discipline. See `docs/adr/0002-transport.md`'s original
+record for why `node:sqlite` was chosen over a flat file in the first
+place.
 
-**Transport: still one SSE hub, not WebSockets.** The blueprint suggests a
-WebSocket layer for presence/position/room events. This project adds a new
-kind of traffic (client → server movement, which the prior app never had),
-but the brief's own bar — a change reaches another open session within
-about a second — doesn't need full duplex: a rate-limited `POST
-/api/presence/move`, relayed over the *same* SSE hub Traces of ANU already
-proved, is a complete multiplayer-movement loop with one live channel
-instead of two. Recorded in full in
-[`docs/adr/0002-transport.md`](docs/adr/0002-transport.md), including the
-documented fallback if real testing later shows movement reads as laggy.
+**Transport: still one SSE hub.** The free-roam version added
+client→server movement traffic (`POST /api/presence/move`) alongside the
+inherited SSE broadcast hub. The scene-exploration pivot replaces that
+traffic with something strictly lighter: `POST /api/presence` reports
+which *fixed scene* a visitor is viewing, not a continuous position, and
+the server broadcasts a per-scene headcount rather than per-visitor
+coordinates — the same one-SSE-hub architecture `docs/adr/0002-transport.md`
+chose, carrying strictly less specific data than before. See
+`docs/adr/0003-scene-exploration.md` for the full before/after.
 
-**World: Three.js, vendored, one coordinate system, two camera rigs.**
-Three.js was already vendored as a static file for the retired
-depth-parallax prototype (`public/vendor/three.module.min.js` — see its own
-README for provenance); this project is the first one to actually need it in
-production. `server/src/world.js` is the single source of truth for gallery
-geometry, display slots and collision rectangles — the client never invents
-geometry the server doesn't know about, so client-side collision (in
-`public/world/movement.js`) can never disagree with what the server
-validates in `POST /api/presence/move`. Camera A (overhead) and camera C
-(first-person) in `public/world/cameras.js` both read the one avatar
-transform; switching (`V`) touches only which rig renders it, never the
-transform itself.
+**World: Three.js, vendored, one fixed scene graph.** The world geometry,
+furniture, lighting and artifact-library code (`public/world/scene.js`,
+`furniture.js`, `textures.js`, `artifacts.js`) are exactly what the
+free-roam version built — this pivot only changes how the camera is
+positioned and how a visitor tells it where to go next. `server/src/
+world.js` is still the single source of truth, now for a graph of named
+camera vantages and their hotspots (`SCENES`) instead of walkable
+rectangles and collision; the client never invents geometry or a hotspot
+position the server doesn't define.
 
 ## What was checked, and how
 
 Automated, against the running app (`spec/world.test.ts`,
-`spec/archive.test.ts`, alongside the course's own `invariants.test.ts`): the
-museum has exactly four galleries each with at least one display slot; two
-visitors get distinct identities and the same visitor is recognised across
-requests; a donation claims a free slot and is rejected on an already-
-occupied one; a contradiction never erases the account it challenges;
-casting, then changing, a vote upserts rather than duplicates; an account
-with no votes reports Unclassified; a presence move broadcasts over SSE
-within the brief's ~1s window.
+`spec/archive.test.ts`, alongside the course's own `invariants.test.ts`):
+the museum has exactly four galleries each with at least one display slot;
+the fixed scene graph has a hub plus a main and close-up scene per gallery,
+each reachable (a `parentSceneId`/`turnLeft`/`turnRight` chain back to
+somewhere); two visitors get distinct identities and the same visitor is
+recognised across requests; a donation claims a free slot and is rejected
+on an already-occupied one; a contradiction never erases the account it
+challenges; casting, then changing, a vote upserts rather than duplicates;
+an account with no votes reports Unclassified; a scene-presence report
+broadcasts over SSE within the brief's ~1s window; an unknown scene id is
+rejected.
 
-Manually observed, not just asserted, with two independent `agent-browser`
-sessions (genuinely separate cookies — genuinely separate visitors):
+A genuinely new category of check this pivot needed, since a bug here is
+invisible by reading the code and only shows up as "this is in the room
+but has no way to click it": every hotspot's and every display slot's
+world position was checked (view-angle math against the actual camera
+vantage, not just "the number looks plausible in isolation") to fall
+inside that scene's real camera frustum — at the reference aspect ratio,
+at a square aspect, and down to a real phone-portrait aspect ratio
+(~0.46). Several real placement bugs were caught and fixed exactly this
+way; the full list is in the ADR.
 
-- A visitor's avatar is visible to another session **immediately on
-  connect**, not only after their first move — this was a real gap the
-  first implementation had (presence only ever broadcast from the movement
-  handler, so a visitor standing still at spawn was invisible to anyone
-  already in the museum) and is fixed by posting the spawn position once at
-  boot.
-- Live avatar movement, visible in the other session within roughly the
-  movement-post interval, well under 1s.
-- A donation made in one session appears as a real mesh in the other
-  session's world without a reload.
-- A contradiction published against another visitor's original account in
-  one session appears, with the original account still intact, in the
-  other session.
-- A vote cast in one session updates the *other* session's already-open
-  dossier — both the per-account verdict and the exhibit's derived overall
-  classification — live, with no reload and no re-fetch triggered by the
-  voter's own client.
-- Switching camera rigs (`V`) while a dossier-eligible exhibit is in range
-  preserves position, yaw and which exhibit `E`/click resolves to, exactly,
-  in both rigs.
-- A real server-process kill and restart: a donation made before the
+Manually observed, not just asserted, with a real headless-browser
+walkthrough (Chromium via Playwright) and two independent browser
+contexts (genuinely separate cookies — genuinely separate visitors):
+
+- A full click-driven path through the app — name gate, hub turn, enter a
+  gallery, close-up, lore popover (both auto-shown and via its own
+  hotspot), back, exit to hub, donate, receipt, "View My Relic", dossier —
+  with zero console/page errors at any step, on both a desktop viewport
+  and a real iPhone-portrait viewport (390×844).
+- Two independent sessions both see "2 visitors in this room" immediately
+  on joining the same scene, and only "alone" before the second arrives —
+  the scene-scoped presence claim, not just the old global count.
+- A donation made in one session instantiates its real mesh, with its own
+  clickable hotspot, in the other session's already-open scene, with no
+  reload.
+- A real server-process kill and restart: every exhibit donated before the
   restart was still present, under the same SQLite file, after it.
 
-## Two real bugs this process caught
+## Real bugs this process caught
 
-**A CSS specificity bug, not a logic bug.** `.overlay-gate { display: flex }`
-outranked the `hidden` attribute's default `display: none`, so all three
-overlay gates (name entry, donation form, dossier) rendered stacked on top
-of each other on first paint — invisible from reading the HTML/JS, only
-visible from actually loading the page. Fixed by scoping the `display: flex`
-rule to `:not([hidden])`, the general lesson being the same one `CLAUDE.md`
-already states for dedupe sets: don't let two independent visibility
-mechanisms (an HTML attribute and a class rule) fight over the same
-property without one of them deferring explicitly.
+**Several hotspot/slot placement bugs, all found by actually computing (and
+then clicking) view angles, not by reading the code.** The first version of
+each gallery's main-scene camera stood near one side wall at a diagonal
+angle "for a nicer establishing shot" — which meant roughly half of every
+gallery's own display slots fell outside that camera's actual field of
+view, so a donation landing in one of those slots would have rendered with
+no way to click it at all. Centreing the vantage on the room's own
+cross-axis fixed this structurally rather than per-slot. A `back` hotspot
+anchored at its close-up scene's literal lookAt target, and lore/closeup
+hotspots anchored at raw furniture coordinates, both suffered the same
+class of bug for the same reason: a position that's valid *somewhere* in
+the room isn't necessarily valid *from this specific camera*. The general
+fix (`hotspotNear`, in `server/src/world.js`) derives a hotspot's position
+from the vantage it actually needs to be visible from.
 
-**A collision seam, found by actually walking through it.** Corridor
-rectangles were defined to exactly abut the hall and gallery bounds they
-connect. Collision shrinks each rectangle's walkable interior inward by the
-avatar's radius before testing a point against it — so two rectangles that
-only *touch* at a shared edge have no radius-shrunk interior in common at
-that edge, and a visitor walking toward the seam gets clamped back into
-whichever rectangle they're already in, forever. The clamp logic read as
-correct in isolation; only driving an avatar at the seam surfaced it. Fixed
-by overlapping each corridor into both neighbouring rectangles by more than
-twice the collision radius (see the `OVERLAP` constant and its comment in
-`server/src/world.js`).
+**A narrower-than-reference viewport silently shrinking the usable field of
+view.** Three.js's camera FOV is vertical; horizontal FOV follows from
+aspect, so a viewport narrower than the one every scene was authored
+against (most visibly a phone in portrait) quietly lost horizontal field of
+view and pushed side-wall content out of frame — invisible on the desktop
+screenshot used to author the scenes, only caught by actually computing the
+frustum at a phone's real aspect ratio and then loading the app at that
+viewport. Fixed two ways: a vertical-FOV correction that holds horizontal
+FOV roughly constant down to a capped minimum (`exploration.js`'s
+`verticalFovFor`), and moving side-wall display slots further from the
+doorway than a desktop-only check would have required.
 
-## The improvement pass: a real artifact library, a real avatar, a guided journey
+**Overlapping hotspots, a distinct bug from the frustum one.** Once every
+hotspot was reliably in frame, several of them still projected close enough
+together on a narrow viewport to visually stack and make some unclickable
+— a whole room's width collapses toward one vanishing point on a tall,
+narrow screen. Fixed generally (`declutterHotspots` in `public/app.js`):
+every frame, after projecting hotspots to screen space, clamp each
+horizontally within the viewport and greedily push any still-overlapping
+pair apart vertically, rather than hand-tuning spacing per scene.
 
-The first version above shipped a working skeleton — real multiplayer, real
-persistence, real two-camera-rig navigation — but every donated exhibit
-rendered as one of four identical primitive shapes, the avatar was a
-hand-rolled stick figure, and donating ended in a silent form close rather
-than any sense of having actually placed something in the museum. This pass
-closed that gap without touching the underlying architecture: same SQLite
-schema (additively migrated — `exhibits.subtype`, a derived `number` off
-SQLite's own rowid), same SSE hub, same slot/gallery model.
-
-**A real artifact library, not four shapes.** `public/world/artifacts.js`
-builds a dedicated procedural model per subtype (spoon, key, clock, mirror,
-painting, sketch, doll, toy, book, botanical/biological specimen,
-curiosity), server-validated against the donating gallery's category
-(`SUBTYPES_BY_CATEGORY` in `server/src/constants.js`), staged in real
-display furniture (a gilt frame, a glass specimen vitrine, a glass-domed
-velvet pedestal, a small display cabinet) with a brass nameplate and its own
-exhibition light. A seeded PRNG keyed on the exhibit's own id gives every
-donation a stable but distinct scale/rotation/material variation — still no
-per-donation art, but no two donations in a subtype look identical either.
-
-**A real donation journey.** Donating now ends in an archival "Relic
-Archived — Exhibit #N" receipt with a live rendered preview of the actual
-model (the same `renderArtifactPreview` the dossier reuses for its own
-header), and "View My Relic" sends the avatar on a genuine guided walk
-(`movement.js`'s `startAutopilot`, through the hall and the target
-gallery's doorway, the same collision manual movement uses) that ends by
-opening the dossier — never a teleport, and cancelled instantly by any real
-key input, same as handing control back.
-
-**A real avatar.** The hand-built primitive-geometry rig is replaced by a
-real rigged humanoid (Kenney "Mini Characters," CC0 1.0), idle/walk
-animation blended by `THREE.AnimationMixer`, dressed in the original
-procedural cape/collar/belt tinted to the visitor's own colour. This is the
-one deliberate downloaded-asset exception to the project's otherwise fully
-procedural visual stack, recorded as a considered revision (not a quiet
-reversal) in `ASSETS.md`: a jointed, walking humanoid is the one asset class
-genuinely hard to fake with primitive geometry, and the added footprint
-(~260KB total, fetched once, cached) stays well inside the 256MB machine.
-
-**Verified again, the same way.** Two genuinely independent browser
-contexts (separate cookies): distinct identities, each sees the other's
-real-model avatar present immediately, a donation in one session instantiates
-its actual mesh in the other's live scene (not just a re-fetch), a
-contradiction published by one session appears alongside the original
-account (never replacing it) for the other, a vote changes the exhibit's
-derived classification visible to both. A real process kill and restart
-against the same SQLite file preserved every exhibit, its `subtype`, its
-accounts, and its votes exactly.
+**From the crit-10 free-roam version, carried forward as still-relevant
+context:** a CSS specificity bug where `.overlay-gate { display: flex }`
+outranked the `hidden` attribute (fixed by scoping to `:not([hidden])`),
+and a collision seam at corridor boundaries (fixed by deliberately
+overlapping rectangles) — both retired along with the collision system
+itself in this pivot, but the general lesson (two independent mechanisms
+must not silently fight over the same property without one deferring
+explicitly) is the same lesson the hotspot-declutter fix above follows.
 
 ## Known limitations, stated rather than hidden
 
-Exhibit models are a procedural library keyed to category and subtype (see
-above), not bespoke art per individual donation — true to the blueprint's
-"no required AI image generation" instruction, but a real simplification
-against the mood boards in `design/references/`. There is no moderation
-queue beyond length caps and per-visitor rate limits, acceptable at
-classroom scale and explicitly not a claim of readiness for open public
-UGC. Spatial audio, named optional in the blueprint, is out of this first
-version. The guided "View My Relic" walk uses a fixed hall-centre/doorway
-waypoint path rather than a general navmesh — correct for this world's
-plus-shaped topology, not a claim of pathfinding around arbitrary obstacles.
+Exhibit models are a procedural library keyed to category and subtype, not
+bespoke art per individual donation — true to the blueprint's "no required
+AI image generation" instruction, but a real simplification against the
+mood boards in `design/references/`. There is no moderation queue beyond
+length caps and per-visitor rate limits, acceptable at classroom scale and
+explicitly not a claim of readiness for open public UGC. Spatial audio,
+named optional in the blueprint, is out of this version. Other visitors
+are represented by a live per-room headcount and shared archive activity,
+not an embodied character — a deliberate choice per the blueprint's own
+permission to represent presence this way, not an unstated simplification.
