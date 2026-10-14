@@ -118,6 +118,16 @@ function findSlot(slotId) {
   return {};
 }
 
+async function resyncExhibits() {
+  const exhibits = await loadExhibits();
+  for (const exhibit of exhibits) {
+    if (!sceneApi.exhibitMeshes.has(exhibit.id)) instantiateExhibit(exhibit);
+  }
+  if (openDossierExhibitId && exhibitsById.has(openDossierExhibitId)) {
+    renderDossier(exhibitsById.get(openDossierExhibitId));
+  }
+}
+
 function occupiedSlotIdsForGallery(galleryId) {
   const out = new Set();
   for (const exhibit of exhibitsById.values()) {
@@ -399,10 +409,24 @@ let eventSource = null;
 function connectEvents() {
   eventSource = new EventSource("/api/events");
 
-  eventSource.addEventListener("hello", (e) => {
+  let firstHello = true;
+  eventSource.addEventListener("hello", async (e) => {
     const { presence } = JSON.parse(e.data);
     for (const p of presence) upsertRemoteAvatar(p.visitorId, p);
     updatePresenceCount();
+
+    // The very first connection already hydrated from loadExhibits() in
+    // boot(); every `hello` after that one means the stream reconnected
+    // (a network blip, a backgrounded tab), during which a donation/
+    // account/vote broadcast could have been missed entirely — EventSource
+    // retrying the connection is not itself a guarantee of no lost events.
+    // Re-fetching the whole archive here is the no-loss-refresh behaviour
+    // the blueprint asks for.
+    if (firstHello) {
+      firstHello = false;
+      return;
+    }
+    await resyncExhibits();
   });
 
   eventSource.addEventListener("presence", (e) => {
