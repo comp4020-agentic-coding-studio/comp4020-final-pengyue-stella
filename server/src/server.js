@@ -230,6 +230,12 @@ const server = createServer(async (req, res) => {
 
     const voteMatch = pathname.match(/^\/api\/accounts\/([a-zA-Z0-9_-]+)\/vote$/);
     if (req.method === "POST" && voteMatch) {
+      // Deliberately not rate-limited like donate/account: the blueprint
+      // treats changing your mind as ordinary use ("permit vote change
+      // rather than duplicate votes"), and the upsert-per-(account,visitor)
+      // constraint already prevents any actual spam accumulation — there is
+      // nothing here a cooldown would protect that the unique constraint
+      // doesn't already handle.
       const identity = identify(req);
       let payload;
       try {
