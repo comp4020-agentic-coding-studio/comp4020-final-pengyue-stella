@@ -35,11 +35,14 @@ export function nameFor(visitorId) {
 }
 
 // Comma-separated syntax, not the newer space-separated CSS4 form: browsers'
-// CSS parser accepts either, but THREE.Color.setStyle's own hsl() regex
-// (used to tint the avatar's dressing — see public/world/avatar.js) only
-// matches the comma form, so the space-separated form silently fell back to
-// white there (caught by actually rendering an avatar and comparing against
-// its intended tint, not by reading the regex in isolation).
+// CSS parser accepts either, so this is a safe, maximally-compatible choice
+// for the one place this value is consumed — `whoamiEl.style.color` in
+// `public/app.js`. (An earlier version also fed this into
+// `THREE.Color.setStyle` to tint a 3D avatar's dressing; that regex only
+// matched the comma form, which is what made this choice deliberate rather
+// than arbitrary. The avatar itself was removed in the scene-exploration
+// pivot — see `docs/adr/0003-scene-exploration.md` — but the comma-form
+// choice is kept, since it's still strictly safer than the alternative.)
 export function colorFor(visitorId) {
   const h = hashString(`colour:${visitorId}`);
   const hue = h % 360;

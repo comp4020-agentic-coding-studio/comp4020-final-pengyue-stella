@@ -1,7 +1,7 @@
 // Our own checks, alongside the course's invariants.test.ts (see
 // spec/README.md for the split). These assert the museum's actual shape —
-// four galleries, each with slots, each reachable — against the running
-// app, not against how it happens to be implemented.
+// four galleries each with slots, a fixed graph of scenes each reachable —
+// against the running app, not against how it happens to be implemented.
 import { inject, it, expect, describe } from "vitest";
 
 const baseUrl = inject("baseUrl");
@@ -40,19 +40,60 @@ describe("the museum world", () => {
     const second = await (await fetch(url("/api/me"), { headers: { Cookie: cookie } })).json();
     expect(second.name).toBe(first.name);
   });
+
+  it("exposes a fixed scene graph: a hub, and a main + close-up scene per gallery, each reachable", async () => {
+    const { galleries, scenes, defaultSceneId } = await (await fetch(url("/api/world"))).json();
+    expect(Array.isArray(scenes)).toBe(true);
+    expect(scenes.some((s: { id: string }) => s.id === defaultSceneId)).toBe(true);
+
+    type Scene = {
+      id: string;
+      parentSceneId: string | null;
+      hotspots: Array<{ targetSceneId?: string }>;
+      turnLeft?: string;
+      turnRight?: string;
+    };
+    const byId = new Map<string, Scene>(scenes.map((s: Scene) => [s.id, s]));
+    for (const gallery of galleries) {
+      const main = byId.get(`${gallery.id}-main`);
+      const closeup = byId.get(`${gallery.id}-closeup`);
+      expect(main, `${gallery.id} has no main scene`).toBeTruthy();
+      expect(closeup, `${gallery.id} has no close-up scene`).toBeTruthy();
+      if (!main || !closeup) continue;
+
+      // Every scene a visitor can reach has a way back — either a
+      // parentSceneId (closeup -> main -> hub) or, for the hub's own
+      // facings, a turnLeft/turnRight neighbour.
+      expect(typeof main.parentSceneId).toBe("string");
+      expect(byId.has(main.parentSceneId as string)).toBe(true);
+      expect(closeup.parentSceneId).toBe(main.id);
+
+      // The main scene's own door hotspot actually leads back to that
+      // parent scene, and its close-up hotspot leads to its own close-up —
+      // no hotspot should ever point at a scene id the world doesn't know.
+      for (const hotspot of main.hotspots) {
+        if (hotspot.targetSceneId) expect(byId.has(hotspot.targetSceneId)).toBe(true);
+      }
+    }
+
+    const hub = byId.get(defaultSceneId);
+    expect(hub && byId.has(hub.turnLeft ?? "")).toBe(true);
+    expect(hub && byId.has(hub.turnRight ?? "")).toBe(true);
+  });
 });
 
-describe("real-time: a presence move reaches another open session", () => {
-  it("broadcasts a moved position over /api/events within about a second", async () => {
+describe("real-time: scene presence reaches another open session", () => {
+  it("broadcasts a scene headcount over /api/events within about a second", async () => {
     const stream = await fetch(url("/api/events"));
     expect(stream.headers.get("content-type")).toMatch(/text\/event-stream/);
     const reader = stream.body!.getReader();
 
-    const marker = Math.random().toString(36).slice(2);
-    const moved = fetch(url("/api/presence/move"), {
+    const { scenes } = await (await fetch(url("/api/world"))).json();
+    const sceneId = scenes[0].id;
+    const moved = fetch(url("/api/presence"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ x: 1.23, z: 4.56, yaw: 0.7, galleryId: marker }),
+      body: JSON.stringify({ sceneId }),
     });
 
     const deadline = Date.now() + 2000;
@@ -67,11 +108,20 @@ describe("real-time: a presence move reaches another open session", () => {
       ]);
       if (done) break;
       if (value) buffered += new TextDecoder().decode(value);
-      seenIt = buffered.includes("presence");
+      seenIt = buffered.includes("scene-presence");
     }
     await reader.cancel();
     await moved;
 
-    expect(seenIt, "a presence event should arrive as an SSE event").toBe(true);
+    expect(seenIt, "a scene-presence event should arrive as an SSE event").toBe(true);
+  });
+
+  it("rejects a presence report naming an unknown scene", async () => {
+    const res = await fetch(url("/api/presence"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sceneId: "not-a-real-scene" }),
+    });
+    expect(res.status).toBe(400);
   });
 });

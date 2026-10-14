@@ -44,8 +44,10 @@ export const MAX_CLAIM_LENGTH = 240;
 export const DONATE_COOLDOWN_MS = 4000;
 export const ACCOUNT_COOLDOWN_MS = 2000;
 
-// Movement reports: bounded frequency and size. A visitor who posts faster
+// Scene-presence reports: bounded frequency. A visitor who posts faster
 // than this is simply dropped until the window passes — the server stays
 // authoritative over what it relays, never over how fast a client *tries*
-// to post.
-export const MOVE_MIN_INTERVAL_MS = 80;
+// to post. Scene navigation is a discrete, infrequent action (not a
+// per-frame stream like the old continuous movement was), so this floor is
+// generous, not a performance-critical rate limit.
+export const PRESENCE_MIN_INTERVAL_MS = 150;

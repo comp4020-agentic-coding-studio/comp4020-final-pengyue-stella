@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { identify, nameCookieFor } from "./identity.js";
-import { galleryById, publicWorld, isWalkable } from "./world.js";
+import { galleryById, publicWorld, SCENE_IDS, DEFAULT_SCENE_ID } from "./world.js";
 import * as db from "./db.js";
 import * as sse from "./sse.js";
 import { serveStatic } from "./static.js";
@@ -15,14 +15,14 @@ import {
   MAX_CLAIM_LENGTH,
   DONATE_COOLDOWN_MS,
   ACCOUNT_COOLDOWN_MS,
-  MOVE_MIN_INTERVAL_MS,
+  PRESENCE_MIN_INTERVAL_MS,
 } from "./constants.js";
 
 const PORT = Number(process.env.PORT ?? 8080);
 
 const lastDonateAt = new Map(); // visitorId -> epoch ms
 const lastAccountAt = new Map();
-const lastMoveAt = new Map();
+const lastPresenceAt = new Map();
 
 function json(res, status, body, extraHeaders = {}) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...extraHeaders });
@@ -270,48 +270,43 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "POST" && pathname === "/api/presence/move") {
+    // Scene-scoped presence (see docs/adr/0003-scene-exploration.md): a
+    // visitor reports which fixed scene they're currently looking at
+    // whenever they navigate. There is no position/yaw any more — this is
+    // the entire multiplayer-presence write surface now.
+    if (req.method === "POST" && pathname === "/api/presence") {
       const identity = identify(req);
-      const last = lastMoveAt.get(identity.id) ?? 0;
+      const last = lastPresenceAt.get(identity.id) ?? 0;
       const now = Date.now();
-      if (now - last < MOVE_MIN_INTERVAL_MS) {
-        // Silently dropped, not an error: a client posting faster than the
-        // floor is just told nothing changed server-side this time.
+      if (now - last < PRESENCE_MIN_INTERVAL_MS) {
         json(res, 204, {});
         return;
       }
 
       let payload;
       try {
-        payload = await readJsonBody(req, 512);
+        payload = await readJsonBody(req, 256);
       } catch {
         json(res, 400, { error: "bad request body" }, withCookies({}, identity));
         return;
       }
 
-      const { x, z, yaw } = payload;
-      if (
-        typeof x !== "number" || !Number.isFinite(x) ||
-        typeof z !== "number" || !Number.isFinite(z) ||
-        typeof yaw !== "number" || !Number.isFinite(yaw) ||
-        !isWalkable(x, z)
-      ) {
-        json(res, 400, { error: "invalid position" }, withCookies({}, identity));
+      if (typeof payload.sceneId !== "string" || !SCENE_IDS.has(payload.sceneId)) {
+        json(res, 400, { error: "invalid scene" }, withCookies({}, identity));
         return;
       }
 
-      lastMoveAt.set(identity.id, now);
-      sse.recordAndBroadcastMove(identity.id, {
-        x, z, yaw,
-        name: identity.name,
-        color: identity.color,
-      });
+      lastPresenceAt.set(identity.id, now);
+      sse.setVisitorScene(identity.id, payload.sceneId);
       json(res, 200, { ok: true }, withCookies({}, identity));
       return;
     }
 
     if (req.method === "GET" && pathname === "/api/events") {
       const identity = identify(req);
+      const initialSceneId = SCENE_IDS.has(url.searchParams.get("scene"))
+        ? url.searchParams.get("scene")
+        : DEFAULT_SCENE_ID;
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -320,19 +315,24 @@ const server = createServer(async (req, res) => {
       });
       res.write(`retry: 2000\n\n`);
 
-      // Hydrate the new connection with everyone already known to be
-      // present, so it doesn't wait for their next move to draw them.
+      sse.addClient(res, identity.id, initialSceneId);
+
+      // Hydrate the new connection with current per-scene headcounts, so it
+      // doesn't wait for someone else to navigate before it draws them.
       res.write(
         `event: hello\ndata: ${JSON.stringify({
           you: identity.id,
-          presence: sse.knownPresence(identity.id),
+          sceneCounts: sse.sceneCounts(),
         })}\n\n`,
       );
+      // Announce this arrival to everyone else immediately, same reasoning
+      // as the old spawn-announce: a visitor present at boot must be
+      // visible in the headcount right away, not only once they navigate.
+      sse.setVisitorScene(identity.id, initialSceneId);
 
-      sse.addClient(res, identity.id);
       req.on("close", () => {
-        const { visitorId, stillConnected } = sse.removeClient(res);
-        if (visitorId && !stillConnected) sse.broadcastDeparture(visitorId);
+        const { visitorId, sceneId, stillConnected } = sse.removeClient(res);
+        if (visitorId && !stillConnected) sse.broadcastDeparture(visitorId, sceneId);
       });
       return;
     }
