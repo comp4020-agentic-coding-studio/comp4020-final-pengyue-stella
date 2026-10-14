@@ -81,6 +81,10 @@ function placeSideTable(group, x, z, accent, variantSeed) {
 const WALL_HEIGHT = 3.4;
 const WALL_THICKNESS = 0.25;
 const EYE_HEIGHT = 1.65;
+// Ceiling meshes render only on this layer; the overhead rig stays on
+// layer 0 only (so its downward view is never blocked), first-person
+// enables this layer too (see cameras.js) so the room reads as enclosed.
+const CEILING_LAYER = 1;
 
 function canvasTexture(text, { bg = "#11100f", fg = "#c6a16b", size = [512, 128] } = {}) {
   const canvas = document.createElement("canvas");
@@ -131,14 +135,28 @@ function addFloorAndCeiling(scene, world) {
   positionRect(hallFloor, world.hall.bounds);
   scene.add(hallFloor);
 
-  // Deliberately no ceiling mesh: the overhead camera rig sits well above
-  // wall height (see cameras.js's OVERHEAD_HEIGHT) looking straight down,
-  // and an opaque ceiling plane there blocks that entire camera mode's view
-  // of the room — caught by actually loading the page and reading back
-  // rendered pixel values, not visible from the code or the collision
-  // model, since nothing about movement or interaction depends on a
-  // ceiling existing. Walls alone (addWalls, full height) already read as
-  // an enclosed room from both camera rigs.
+  // Ceiling meshes exist, but live on render layer 1 (CEILING_LAYER) rather
+  // than the default layer 0 — the overhead camera rig never enables that
+  // layer (see cameras.js), so its straight-down view of the room is
+  // unaffected, while first-person (which looks up, not down) enables it and
+  // gets a properly enclosed room instead of a view straight into the void.
+  // An earlier version had no ceiling mesh at all to avoid blocking the
+  // overhead camera; the layer split gets both rigs what they need from the
+  // same geometry instead of omitting it.
+  const ceilingMat = new THREE.MeshStandardMaterial({ color: "#1a140f", roughness: 0.95, side: THREE.BackSide });
+  function addCeiling(rect) {
+    const ceiling = new THREE.Mesh(rectGeometry(rect), ceilingMat);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.y = WALL_HEIGHT - 0.02;
+    positionRect(ceiling, rect);
+    ceiling.layers.set(CEILING_LAYER);
+    scene.add(ceiling);
+  }
+  addCeiling(world.hall.bounds);
+  for (const gallery of world.galleries) {
+    addCeiling(gallery.bounds);
+    addCeiling(gallery.corridor);
+  }
 
   for (const gallery of world.galleries) {
     const floorMat = floorMaterial(shadeColor(gallery.accent, -0.55));
@@ -679,4 +697,4 @@ export function buildWorldScene(world) {
   };
 }
 
-export { EYE_HEIGHT };
+export { EYE_HEIGHT, CEILING_LAYER };

@@ -13,7 +13,7 @@
 // releases it. Overhead never uses pointer lock at all — its camera angle
 // is fixed, so there's nothing for the mouse to look around.
 import * as THREE from "three";
-import { EYE_HEIGHT } from "./scene.js";
+import { EYE_HEIGHT, CEILING_LAYER } from "./scene.js";
 
 const OVERHEAD_DISTANCE = 7.5;
 const OVERHEAD_HEIGHT = 8.5;
@@ -67,6 +67,13 @@ export function createCameraRig(renderer, domElement) {
   function setMode(next) {
     mode = next;
     if (mode !== "first-person") releaseLock();
+    // Ceiling meshes live on their own render layer (see scene.js's
+    // CEILING_LAYER) precisely so this is the only place that decides
+    // whether they're visible: overhead looks straight down and must never
+    // see them, first-person looks roughly level/up and needs them for the
+    // room to read as enclosed.
+    if (mode === "first-person") camera.layers.enable(CEILING_LAYER);
+    else camera.layers.disable(CEILING_LAYER);
   }
 
   function toggle() {

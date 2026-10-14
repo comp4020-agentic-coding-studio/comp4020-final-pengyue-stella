@@ -183,6 +183,9 @@ function populateDonateForm() {
 function openDonateGate() {
   populateDonateForm();
   el("donate-error").textContent = "";
+  // Pre-filled from the visitor's current display name, editable — the
+  // brief's "keep the author-name field, pre-filled but editable" contract.
+  el("donate-donor").value = myIdentity?.name ?? "";
   el("donate-gate").hidden = false;
   cameraRig.releaseLock();
   el("donate-title").focus();
@@ -612,13 +615,19 @@ canvas.addEventListener("click", (e) => {
 // not fall back to "nearest exhibit" when a raycast hit exists, even if a
 // closer exhibit happens to sit out of the cursor's/crosshair's path. Range
 // is still enforced: a visitor can see an exhibit across the room, but
-// can't inspect it from across the room.
+// can't inspect it from across the room. A valid hit that's merely too far
+// away is never silently dropped — it gets an explicit hint instead, same
+// as the brief requires.
 function tryInspect(exhibitId) {
   const mesh = sceneApi.exhibitMeshes.get(exhibitId);
   if (!mesh) return;
   const p = mesh.userData.interactPoint;
   const d = Math.hypot(p.x - movement.state.x, p.z - movement.state.z);
-  if (d <= INTERACT_RANGE) openDossier(exhibitId);
+  if (d <= INTERACT_RANGE) {
+    openDossier(exhibitId);
+  } else {
+    toast("Move closer to inspect.");
+  }
 }
 
 function anyOverlayOpen() {
