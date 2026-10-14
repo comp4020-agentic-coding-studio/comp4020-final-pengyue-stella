@@ -1,6 +1,0 @@
-# Large and fully reproducible — see README.md's "Reproducing" section.
-.venv/
-MoGe-src/
-out/
-assets/
-__pycache__/
