@@ -56,6 +56,10 @@ db.exec(`
     donor_name TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
+  -- exhibits.rowid (SQLite's implicit integer key, stable and
+  -- insertion-ordered since the id column above is a non-integer TEXT
+  -- primary key) backs the "Exhibit #N" the dossier/receipt show — a free,
+  -- honest display number with no separate counter to keep in sync.
 
   CREATE TABLE IF NOT EXISTS accounts (
     id TEXT PRIMARY KEY,
@@ -85,6 +89,18 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 `);
+
+// Additive migration: `subtype` (which artifact model family within a
+// category — see constants.js's SUBTYPES_BY_CATEGORY) was added after this
+// table first shipped. Guarded the same way the gallery/slot seeding below
+// is idempotent: check before writing, so an exhibits table that already has
+// the column (every boot after the first with this code) is never touched,
+// and one that doesn't (an older deployed database) gets it without losing
+// any existing row.
+const exhibitColumns = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumns.some((c) => c.name === "subtype")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN subtype TEXT");
+}
 
 // Seed galleries + slots from the static world layout, idempotently — this
 // is config, never written to via the public API, so re-seeding on every
@@ -119,7 +135,7 @@ export function upsertVisitor(id, displayName) {
 }
 
 // Returns { exhibit } or { error: "slot_taken" | "not_found" }.
-export function donateExhibit({ galleryId, slotId, title, originClaim, donorName, visitorId }) {
+export function donateExhibit({ galleryId, slotId, title, subtype, originClaim, donorName, visitorId }) {
   const slotRow = db
     .prepare("SELECT * FROM display_slots WHERE id = ? AND gallery_id = ?")
     .get(slotId, galleryId);
@@ -147,8 +163,8 @@ export function donateExhibit({ galleryId, slotId, title, originClaim, donorName
     }
 
     db.prepare(
-      "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).run(exhibitId, galleryId, slotId, galleryRow.category, title, donorName, now);
+      "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(exhibitId, galleryId, slotId, galleryRow.category, title, donorName, now, subtype);
 
     db.prepare("UPDATE display_slots SET occupied_exhibit_id = ? WHERE id = ?").run(
       exhibitId,
@@ -273,7 +289,7 @@ function classifyExhibit(accounts) {
 }
 
 function fullExhibit(exhibitId, visitorId) {
-  const row = db.prepare("SELECT * FROM exhibits WHERE id = ?").get(exhibitId);
+  const row = db.prepare("SELECT *, rowid AS number FROM exhibits WHERE id = ?").get(exhibitId);
   if (!row) return null;
   const accountRows = db
     .prepare("SELECT id FROM accounts WHERE exhibit_id = ? ORDER BY created_at ASC")
@@ -281,9 +297,11 @@ function fullExhibit(exhibitId, visitorId) {
   const accounts = accountRows.map((a) => fullAccount(a.id, visitorId));
   return {
     id: row.id,
+    number: row.number,
     galleryId: row.gallery_id,
     slotId: row.slot_id,
     category: row.category,
+    subtype: row.subtype,
     title: row.title,
     donorName: row.donor_name,
     createdAt: row.created_at,

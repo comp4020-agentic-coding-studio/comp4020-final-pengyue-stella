@@ -22,6 +22,8 @@ import {
   wallpaperMaterial,
   floorMaterial,
 } from "./furniture.js";
+import { buildLabelTexture } from "./textures.js";
+import { buildArtifactMesh } from "./artifacts.js";
 
 // Hangs a short run of portrait frames along one wall of a gallery, well
 // inside the walkable rect (see movement.js's RADIUS) so a frame is never
@@ -85,26 +87,6 @@ const EYE_HEIGHT = 1.65;
 // layer 0 only (so its downward view is never blocked), first-person
 // enables this layer too (see cameras.js) so the room reads as enclosed.
 const CEILING_LAYER = 1;
-
-function canvasTexture(text, { bg = "#11100f", fg = "#c6a16b", size = [512, 128] } = {}) {
-  const canvas = document.createElement("canvas");
-  canvas.width = size[0];
-  canvas.height = size[1];
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = fg;
-  ctx.lineWidth = 6;
-  ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
-  ctx.fillStyle = fg;
-  ctx.font = `600 ${Math.floor(size[1] * 0.3)}px Georgia, serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
 
 function rectGeometry(rect) {
   return new THREE.PlaneGeometry(rect.maxX - rect.minX, rect.maxZ - rect.minZ);
@@ -313,7 +295,7 @@ function addDust(scene) {
 
 function addSigns(scene, world) {
   for (const gallery of world.galleries) {
-    const tex = canvasTexture(gallery.name, { fg: gallery.accent });
+    const tex = buildLabelTexture(gallery.name, { fg: gallery.accent });
     const mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(3, 0.75),
       new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }),
@@ -343,7 +325,7 @@ function addDonorCounter(scene, world) {
   // Front-facing nameplate reading "DONATIONS", the blueprint's "clearly
   // identifiable reception/donation desk" requirement — not just a prop
   // that happens to be near a proximity hint.
-  const plateTex = canvasTexture("DONATIONS", { bg: "#1c1109", fg: "#c6a16b", size: [512, 128] });
+  const plateTex = buildLabelTexture("DONATIONS", { bg: "#1c1109", fg: "#c6a16b", size: [512, 128] });
   const plate = new THREE.Mesh(
     new THREE.PlaneGeometry(1.6, 0.4),
     new THREE.MeshBasicMaterial({ map: plateTex, transparent: true }),
@@ -382,57 +364,6 @@ function addDonorCounter(scene, world) {
   group.position.set(world.hall.donorCounter.x, 0, world.hall.donorCounter.z);
   scene.add(group);
   return { group, flickerLight: candle.userData.flickerLight };
-}
-
-// One procedurally-styled object per category — original geometry, not
-// photography or generated art, keyed to the gallery's category so every
-// donation in a gallery reads as a family of similar objects. Kept
-// deliberately modest in footprint so it sits naturally inside the denser
-// gallery furnishing added below, on its own slot rather than fighting a
-// cabinet for the same floor space.
-function buildCategoryMesh(category, accent) {
-  const group = new THREE.Group();
-  const accentMat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.4, metalness: 0.3 });
-  const woodMat = new THREE.MeshStandardMaterial({ color: "#2a1c14", roughness: 0.7 });
-  const glassMat = new THREE.MeshPhysicalMaterial({
-    color: "#cfe8ec", roughness: 0.05, metalness: 0, transmission: 0.85, transparent: true, opacity: 0.35,
-  });
-
-  if (category === "portrait") {
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.4, 0.08), woodMat);
-    const canvas = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.15), new THREE.MeshStandardMaterial({ color: "#3a2f28" }));
-    canvas.position.z = 0.045;
-    group.add(frame, canvas);
-    return { group, interactY: 0.7 };
-  }
-
-  if (category === "memento") {
-    const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.38, 0.9, 10), woodMat);
-    pedestal.position.y = 0.45;
-    const relic = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 0), accentMat);
-    relic.position.y = 0.98;
-    group.add(pedestal, relic);
-    return { group, interactY: 0.98 };
-  }
-
-  if (category === "specimen") {
-    const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.6, 10), woodMat);
-    pedestal.position.y = 0.3;
-    const vitrine = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.8, 0.62), glassMat);
-    vitrine.position.y = 1.0;
-    const specimen = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), accentMat);
-    specimen.position.y = 1.0;
-    group.add(pedestal, vitrine, specimen);
-    return { group, interactY: 1.0 };
-  }
-
-  // toy
-  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.55, 8), woodMat);
-  plinth.position.y = 0.275;
-  const toy = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.4, 0.28), accentMat);
-  toy.position.y = 0.72;
-  group.add(plinth, toy);
-  return { group, interactY: 0.72 };
 }
 
 // Gallery-specific furniture layouts. Each places furniture against the
@@ -650,7 +581,14 @@ export function buildWorldScene(world) {
 
   function addExhibitMesh(exhibit, slot) {
     const gallery = world.galleries.find((g) => g.id === exhibit.galleryId);
-    const { group, interactY } = buildCategoryMesh(exhibit.category, gallery?.accent ?? "#88653d");
+    const { group, interactY } = buildArtifactMesh({
+      category: exhibit.category,
+      subtype: exhibit.subtype,
+      accent: gallery?.accent ?? "#88653d",
+      exhibitId: exhibit.id,
+      title: exhibit.title,
+      donorName: exhibit.donorName,
+    });
     group.position.set(slot.x, 0, slot.z);
     group.rotation.y = slot.rotationY;
     group.userData.exhibitId = exhibit.id;
@@ -695,6 +633,43 @@ export function buildWorldScene(world) {
     donorCounter,
     tickAmbient,
   };
+}
+
+// A one-shot (not continuously rendered) preview of a single artifact mesh
+// on its own canvas, used by the donation receipt and the dossier header —
+// rebuilding the same procedural model the exhibit itself uses rather than
+// a screenshot, so the preview is always exactly what the visitor will find
+// in the gallery. `canvas` is caller-owned so each UI surface can size its
+// own; this function tears its renderer/scene down immediately after the
+// single frame is drawn, leaving nothing running in the background.
+export function renderArtifactPreview(canvas, { category, subtype, accent, exhibitId, title, donorName }) {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color("#120d09");
+  scene.add(new THREE.AmbientLight("#5a4a36", 3));
+  const key = new THREE.PointLight("#ffcf8a", 60, 0, 2);
+  key.position.set(0.6, 1.2, 1.0);
+  scene.add(key);
+
+  const { group, interactY } = buildArtifactMesh({ category, subtype, accent, exhibitId, title, donorName });
+  group.position.set(0, 0, 0);
+  scene.add(group);
+
+  const camera = new THREE.PerspectiveCamera(42, canvas.width / canvas.height, 0.05, 20);
+  const focusHeight = Math.max(0.3, interactY);
+  camera.position.set(0.55, focusHeight + 0.35, 0.85);
+  camera.lookAt(0, focusHeight * 0.6, 0);
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  renderer.setSize(canvas.width, canvas.height, false);
+  renderer.render(scene, camera);
+
+  // Nothing here is kept running: dispose the renderer immediately since
+  // this is a single still frame, not a live viewport.
+  renderer.dispose();
 }
 
 export { EYE_HEIGHT, CEILING_LAYER };

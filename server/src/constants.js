@@ -9,6 +9,20 @@ export const GALLERY_CATEGORY = {
   childhood: "toy",
 };
 
+// Within a category, a donor also picks a subtype — which bespoke artifact
+// model family (see public/world/scene.js's ARTIFACT_BUILDERS) their relic
+// is built from. Kept as a fixed, small vocabulary per category (not
+// free-form) for the same reason GALLERY_CATEGORY is fixed: the server can
+// validate a donation's subtype against its gallery without a client ever
+// being trusted to supply one the scene has no model for.
+export const SUBTYPES_BY_CATEGORY = {
+  portrait: ["painting", "sketch"],
+  memento: ["spoon", "key", "clock", "mirror", "curiosity"],
+  specimen: ["botanical", "biological", "curiosity"],
+  toy: ["doll", "toy", "book"],
+};
+export const SUBTYPE_SET = new Set(Object.values(SUBTYPES_BY_CATEGORY).flat());
+
 export const ACCOUNT_KINDS = [
   "original",
   "testimony",

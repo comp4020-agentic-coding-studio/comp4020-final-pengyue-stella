@@ -79,6 +79,9 @@
           <label for="donate-gallery">Gallery</label>
           <select id="donate-gallery" name="galleryId" required></select>
 
+          <label for="donate-subtype">Artifact type</label>
+          <select id="donate-subtype" name="subtype" required></select>
+
           <label for="donate-slot">Display slot</label>
           <select id="donate-slot" name="slotId" required></select>
 
@@ -100,10 +103,28 @@
         </form>
       </div>
 
+      <!-- Post-donation archival receipt: shown immediately after a
+           successful donation, before returning to the world — the
+           blueprint's "elegant museum-style confirmation" with a guided
+           "View My Relic" action, not a silent form-close. -->
+      <div id="donate-receipt" class="overlay-gate" hidden>
+        <div class="gate-card dossier-card receipt-card" role="dialog" aria-labelledby="receipt-title">
+          <p class="dossier-kicker">Relic Archived</p>
+          <h2 id="receipt-title"></h2>
+          <p class="dossier-meta" id="receipt-meta"></p>
+          <canvas id="receipt-preview" class="receipt-preview" width="420" height="260"></canvas>
+          <div class="gate-actions">
+            <button type="button" id="receipt-browse" class="secondary">Keep Browsing</button>
+            <button type="button" id="receipt-view">View My Relic</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Exhibit dossier overlay. -->
       <div id="dossier" class="overlay-gate" hidden>
         <div class="gate-card dossier-card" role="dialog" aria-labelledby="dossier-title">
           <button type="button" id="dossier-close" class="dossier-close" aria-label="Close dossier (Esc)">&times;</button>
+          <canvas id="dossier-preview" class="receipt-preview" width="420" height="220"></canvas>
           <p class="dossier-kicker" id="dossier-kicker"></p>
           <h2 id="dossier-title"></h2>
           <p class="dossier-meta" id="dossier-meta"></p>

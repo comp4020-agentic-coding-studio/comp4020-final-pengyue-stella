@@ -26,7 +26,10 @@ function cached(key, build) {
 // values were first written against.
 const PHYSICAL_LIGHT_SCALE = 40;
 
-function woodMaterial() {
+// Exported so artifacts.js's donated-relic model library can stage pieces
+// in the same wood/brass/glass/velvet finish as the room's own furniture,
+// instead of inventing a second material palette.
+export function woodMaterial() {
   return cached("wood-mat", () => {
     const tex = buildWoodTexture();
     tex.repeat.set(2, 2);
@@ -34,11 +37,11 @@ function woodMaterial() {
   });
 }
 
-function brassMaterial() {
+export function brassMaterial() {
   return cached("brass-mat", () => new THREE.MeshStandardMaterial({ color: "#9c7a44", roughness: 0.35, metalness: 0.75 }));
 }
 
-function glassMaterial() {
+export function glassMaterial() {
   return cached(
     "glass-mat",
     () =>
@@ -49,7 +52,7 @@ function glassMaterial() {
   );
 }
 
-function fabricMaterial(color) {
+export function fabricMaterial(color) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
 }
 

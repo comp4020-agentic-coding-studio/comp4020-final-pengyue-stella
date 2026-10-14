@@ -135,6 +135,67 @@ export function buildPortraitTexture(accent = "#663D43") {
   return toTexture(c, { repeat: [1, 1] });
 }
 
+// A short bordered label on a dark ground — gallery signs and the donor
+// counter's "DONATIONS" plate both want this; moved here from scene.js so
+// artifacts.js's nameplates can reuse the same bordered-plaque look rather
+// than inventing a second one.
+export function buildLabelTexture(text, { bg = "#11100f", fg = "#c6a16b", size = [512, 128] } = {}) {
+  const c = document.createElement("canvas");
+  c.width = size[0];
+  c.height = size[1];
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, size[0], size[1]);
+  ctx.strokeStyle = fg;
+  ctx.lineWidth = 6;
+  ctx.strokeRect(8, 8, size[0] - 16, size[1] - 16);
+  ctx.fillStyle = fg;
+  ctx.font = `600 ${Math.floor(size[1] * 0.3)}px Georgia, serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, size[0] / 2, size[1] / 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// A worn brass museum nameplate: title on top, "Donated by ..." smaller
+// beneath — the exhibit library's one shared label style, so every donated
+// relic (whatever its procedural model family) carries the same archival
+// read the blueprint asks for ("a readable brass nameplate with its title
+// and donor").
+export function buildNameplateTexture(title, donorName) {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 176;
+  const ctx = c.getContext("2d");
+  const grad = ctx.createLinearGradient(0, 0, 0, 176);
+  grad.addColorStop(0, "#9c7a44");
+  grad.addColorStop(1, "#6b5330");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 512, 176);
+  ctx.strokeStyle = "#2a1c14";
+  ctx.lineWidth = 5;
+  ctx.strokeRect(4, 4, 504, 168);
+  ctx.strokeStyle = "rgba(42,28,20,0.5)";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(14, 14, 484, 148);
+
+  ctx.fillStyle = "#1c1109";
+  ctx.textAlign = "center";
+  ctx.font = "700 36px Georgia, serif";
+  const trimmedTitle = title.length > 30 ? `${title.slice(0, 29)}…` : title;
+  ctx.fillText(trimmedTitle, 256, 76);
+
+  ctx.font = "italic 26px Georgia, serif";
+  const trimmedDonor = donorName.length > 34 ? `${donorName.slice(0, 33)}…` : donorName;
+  ctx.fillText(`Donated by ${trimmedDonor}`, 256, 128);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 // A ceiling/ornament gilt-on-dark pattern for crown moulding trims.
 export function buildTrimTexture(base = "#1c1109", gold = "#c6a16b") {
   const { c, ctx } = canvas(64);

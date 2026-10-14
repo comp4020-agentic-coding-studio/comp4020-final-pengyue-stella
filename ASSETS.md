@@ -51,12 +51,20 @@ sourced from an external file:
   approved later, swapping it in only touches `avatar.js`'s mesh-building
   functions — the rig interface (`{ group, rig: { leftArm, rightArm,
   leftLeg, rightLeg } }`) is already the seam for that.
-- **Exhibit category icons** (`public/world/scene.js`'s
-  `buildCategoryMesh`) — one simple procedural object family per gallery
-  category (framed canvas, pedestal-and-relic, vitrine-and-specimen,
-  plinth-and-toy), unchanged from the prior pass: original geometry, never
-  user-supplied or AI-generated imagery, per the blueprint's "no required AI
-  image generation" instruction.
+- **Donated-relic artifact library** (`public/world/artifacts.js`) — a
+  dedicated model family per subtype (spoon, key, clock, mirror, painting,
+  sketch, doll, toy, book, botanical specimen, biological specimen,
+  curiosity — see `server/src/constants.js`'s `SUBTYPES_BY_CATEGORY`), each
+  staged in real display furniture (a gilt frame, a glass specimen vitrine,
+  a velvet pedestal under a glass dome, or a small display cabinet, reusing
+  `furniture.js`'s own builders) with a brass nameplate
+  (`textures.js`'s `buildNameplateTexture`) and its own small exhibition
+  light. A donation's specific look (scale, rotation, material tone) is
+  derived from a small seeded PRNG keyed on the exhibit's own id — stable
+  across reloads, but never two donations looking pixel-identical — never
+  from user-supplied or AI-generated imagery, per the blueprint's "no
+  required AI image generation" instruction and without needing per-donation
+  art.
 
 ## Why procedural over downloaded assets
 

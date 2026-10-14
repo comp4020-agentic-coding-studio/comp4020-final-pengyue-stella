@@ -33,6 +33,13 @@ export function createMovementController(world) {
   const rects = [world.hall.bounds, ...world.galleries.flatMap((g) => [g.bounds, g.corridor])];
   const state = { x: world.spawn.x, z: world.spawn.z, yaw: world.spawn.yaw };
   const keys = new Set();
+  // The guided "View My Relic" walk (see app.js): a short queue of
+  // {x, z} waypoints the avatar steers toward on its own, through the same
+  // clampToRects collision manual movement uses — never a teleport, and
+  // never a second position/collision path to keep in sync with the manual
+  // one. Any real key input cancels it immediately, same as a player
+  // reclaiming the wheel.
+  let autopilot = null; // { waypoints: [{x,z}], index, onArrive }
 
   function onKeyDown(e) {
     keys.add(e.code);
@@ -71,6 +78,47 @@ export function createMovementController(world) {
     return len > 0 ? { x: x / len, z: z / len } : { x: 0, z: 0 };
   }
 
+  const ARRIVE_RADIUS = 0.25;
+
+  // Queues a guided walk through `waypoints` ({x, z} pairs in world space),
+  // calling `onArrive` once the last one is reached. Steers at the same
+  // MOVE_SPEED and through the same clampToRects collision as manual
+  // movement — a visitor watching sees their avatar actually walk the
+  // route, not jump to it.
+  function startAutopilot(waypoints, onArrive) {
+    if (!waypoints || waypoints.length === 0) return;
+    autopilot = { waypoints, index: 0, onArrive };
+  }
+
+  function cancelAutopilot() {
+    autopilot = null;
+  }
+
+  function tickAutopilot(dt) {
+    const target = autopilot.waypoints[autopilot.index];
+    const dx = target.x - state.x;
+    const dz = target.z - state.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist <= ARRIVE_RADIUS) {
+      autopilot.index += 1;
+      if (autopilot.index >= autopilot.waypoints.length) {
+        const { onArrive } = autopilot;
+        autopilot = null;
+        onArrive?.();
+        return { ...state, moved: false };
+      }
+      return tickAutopilot(dt);
+    }
+    const step = Math.min(dist, MOVE_SPEED * dt);
+    const nextX = state.x + (dx / dist) * step;
+    const nextZ = state.z + (dz / dist) * step;
+    const clamped = clampToRects(nextX, nextZ, rects);
+    state.x = clamped.x;
+    state.z = clamped.z;
+    state.yaw = Math.atan2(dx, dz);
+    return { ...state, moved: true };
+  }
+
   // `forwardYaw` is the direction "W" means: 0 (world +Z-negative/"north")
   // for the overhead rig, or the mouse-look yaw for first-person — in both
   // cases the same clamp/slide collision logic applies identically.
@@ -80,6 +128,13 @@ export function createMovementController(world) {
   // otherwise spin the camera).
   function tick(dt, { forwardYaw = 0, snapYawToMovement = true } = {}) {
     const dir = axis();
+
+    // Real player input always wins: a guided walk in progress is cancelled
+    // the instant the visitor presses a movement key themselves, same as
+    // grabbing a wheel back from autopilot.
+    if (autopilot && (dir.x !== 0 || dir.z !== 0)) cancelAutopilot();
+    if (autopilot) return tickAutopilot(dt);
+
     if (dir.x === 0 && dir.z === 0) return { ...state, moved: false };
 
     const cos = Math.cos(forwardYaw);
@@ -102,5 +157,15 @@ export function createMovementController(world) {
     state.yaw = yaw;
   }
 
-  return { state, tick, setYaw, isTypingTarget };
+  return {
+    state,
+    tick,
+    setYaw,
+    isTypingTarget,
+    startAutopilot,
+    cancelAutopilot,
+    get isAutopiloting() {
+      return autopilot !== null;
+    },
+  };
 }

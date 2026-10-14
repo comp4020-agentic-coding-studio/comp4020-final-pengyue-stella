@@ -14,6 +14,8 @@
 // of these rectangles," resolved identically on every client regardless of
 // which camera is active.
 
+import { SUBTYPES_BY_CATEGORY } from "./constants.js";
+
 const HALL_BOUNDS = { minX: -7, maxX: 7, minZ: -5, maxZ: 5 };
 
 // Corridors deliberately OVERLAP the hall and gallery bounds they connect
@@ -233,6 +235,7 @@ export function publicWorld() {
       bounds: g.bounds,
       corridor: g.corridor,
       doorway: g.doorway,
+      subtypes: SUBTYPES_BY_CATEGORY[g.category] ?? [],
       slots: g.slots.map((s) => ({ id: s.id, x: s.x, z: s.z, rotationY: s.rotationY })),
     })),
   };

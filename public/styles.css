@@ -317,6 +317,24 @@ a {
   margin: 0;
 }
 
+/* --- donation receipt ------------------------------------------------------ */
+
+.receipt-card {
+  text-align: center;
+  align-items: center;
+}
+
+.receipt-preview {
+  width: 100%;
+  max-width: 380px;
+  aspect-ratio: 420 / 260;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid var(--brass);
+  background: radial-gradient(circle at 50% 40%, #241a12, #0f0b08);
+  margin: 0.3rem 0 0.5rem;
+}
+
 /* --- dossier -------------------------------------------------------------- */
 
 .dossier-card {

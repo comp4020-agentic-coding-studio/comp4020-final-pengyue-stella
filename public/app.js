@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { buildWorldScene } from "./world/scene.js";
+import { buildWorldScene, renderArtifactPreview } from "./world/scene.js";
 import { createMovementController } from "./world/movement.js";
 import { createCameraRig } from "./world/cameras.js";
 import { RemoteAvatar, buildAvatarMesh, animateWalk } from "./world/avatar.js";
@@ -143,8 +143,16 @@ function occupiedSlotIdsForGallery(galleryId) {
 // ---------------------------------------------------------------------------
 // Donation form
 
+const SUBTYPE_LABEL = {
+  painting: "Painting", sketch: "Sketch",
+  spoon: "Spoon", key: "Key", clock: "Clock", mirror: "Mirror", curiosity: "Curiosity",
+  botanical: "Botanical specimen", biological: "Biological specimen",
+  doll: "Doll", toy: "Toy", book: "Book or letter",
+};
+
 function populateDonateForm() {
   const gallerySelect = el("donate-gallery");
+  const subtypeSelect = el("donate-subtype");
   const slotSelect = el("donate-slot");
   gallerySelect.innerHTML = "";
   for (const g of world.galleries) {
@@ -152,6 +160,17 @@ function populateDonateForm() {
     opt.value = g.id;
     opt.textContent = g.name;
     gallerySelect.appendChild(opt);
+  }
+
+  function refreshSubtypes() {
+    const gallery = world.galleries.find((g) => g.id === gallerySelect.value);
+    subtypeSelect.innerHTML = "";
+    for (const subtype of gallery?.subtypes ?? []) {
+      const opt = document.createElement("option");
+      opt.value = subtype;
+      opt.textContent = SUBTYPE_LABEL[subtype] ?? subtype;
+      subtypeSelect.appendChild(opt);
+    }
   }
 
   function refreshSlots() {
@@ -176,7 +195,11 @@ function populateDonateForm() {
       }
     }
   }
-  gallerySelect.onchange = refreshSlots;
+  gallerySelect.onchange = () => {
+    refreshSubtypes();
+    refreshSlots();
+  };
+  refreshSubtypes();
   refreshSlots();
 }
 
@@ -204,6 +227,7 @@ el("donate-form").addEventListener("submit", async (e) => {
   const form = e.target;
   const payload = {
     galleryId: form.galleryId.value,
+    subtype: form.subtype.value,
     slotId: form.slotId.value,
     title: form.title.value.trim(),
     originClaim: form.originClaim.value.trim(),
@@ -221,6 +245,8 @@ el("donate-form").addEventListener("submit", async (e) => {
   });
   const data = await res.json();
   if (!res.ok) {
+    // A failed donation is reported exactly as what it is — never a success
+    // toast papering over a rejected write.
     errEl.textContent = data.error ?? "Could not donate that relic.";
     return;
   }
@@ -228,9 +254,66 @@ el("donate-form").addEventListener("submit", async (e) => {
   slotToExhibitId.set(data.exhibit.slotId, data.exhibit.id);
   instantiateExhibit(data.exhibit);
   closeDonateGate();
-  toast(`You donated "${data.exhibit.title}".`);
   form.reset();
+  openReceipt(data.exhibit);
 });
+
+// ---------------------------------------------------------------------------
+// Post-donation receipt + guided "View My Relic" walk
+
+function openReceipt(exhibit) {
+  const gallery = world.galleries.find((g) => g.id === exhibit.galleryId);
+  el("receipt-title").textContent = exhibit.title;
+  el("receipt-meta").textContent =
+    `Exhibit #${exhibit.number} · ${gallery?.name ?? exhibit.galleryId} · donated by ${exhibit.donorName}`;
+
+  const canvas = el("receipt-preview");
+  renderArtifactPreview(canvas, {
+    category: exhibit.category,
+    subtype: exhibit.subtype,
+    accent: gallery?.accent ?? "#88653d",
+    exhibitId: exhibit.id,
+    title: exhibit.title,
+    donorName: exhibit.donorName,
+  });
+
+  el("donate-receipt").hidden = false;
+  cameraRig.releaseLock();
+
+  el("receipt-browse").onclick = closeReceipt;
+  el("receipt-view").onclick = () => {
+    closeReceipt();
+    viewMyRelic(exhibit.id);
+  };
+}
+
+function closeReceipt() {
+  el("donate-receipt").hidden = true;
+  viewport.focus();
+}
+
+// Builds a short waypoint path from wherever the visitor currently stands to
+// the donated exhibit's own slot, via the hall centre and the target
+// gallery's doorway — enough for this world's plus-shaped topology (every
+// gallery connects only through the hall) without a general navmesh. The
+// avatar visibly walks this route at normal speed; arriving opens the
+// dossier, same as walking there and pressing E yourself.
+function viewMyRelic(exhibitId) {
+  const exhibit = exhibitsById.get(exhibitId);
+  const { gallery, slot } = findSlot(exhibit?.slotId);
+  if (!exhibit || !gallery || !slot) return;
+
+  const waypoints = [];
+  const { x, z } = movement.state;
+  const inGallery = galleryContaining(x, z)?.id === gallery.id;
+  if (!inGallery) {
+    waypoints.push({ x: 0, z: 0 }); // hall centre
+    waypoints.push({ x: gallery.doorway.x, z: gallery.doorway.z });
+  }
+  waypoints.push({ x: slot.x, z: slot.z });
+
+  movement.startAutopilot(waypoints, () => openDossier(exhibitId));
+}
 
 // ---------------------------------------------------------------------------
 // Dossier
@@ -308,11 +391,29 @@ function renderAccountBlock(account, exhibit) {
   return block;
 }
 
+let dossierPreviewExhibitId = null;
+
 function renderDossier(exhibit) {
-  el("dossier-kicker").textContent = `${exhibit.category.toUpperCase()} · exhibit · ${exhibit.classification}`;
+  el("dossier-kicker").textContent =
+    `Exhibit #${exhibit.number} · ${exhibit.category.toUpperCase()} · ${exhibit.classification}`;
   el("dossier-title").textContent = exhibit.title;
   const gallery = world.galleries.find((g) => g.id === exhibit.galleryId);
   el("dossier-meta").textContent = `${gallery?.name ?? exhibit.galleryId} · donated by ${exhibit.donorName} · ${exhibit.accounts.length} account${exhibit.accounts.length === 1 ? "" : "s"}`;
+
+  // Rendered once per exhibit, not on every re-render (a vote landing while
+  // the dossier is open calls this again) — it's the same still model every
+  // time, so there's nothing to gain from redrawing it on every update.
+  if (dossierPreviewExhibitId !== exhibit.id) {
+    dossierPreviewExhibitId = exhibit.id;
+    renderArtifactPreview(el("dossier-preview"), {
+      category: exhibit.category,
+      subtype: exhibit.subtype,
+      accent: gallery?.accent ?? "#88653d",
+      exhibitId: exhibit.id,
+      title: exhibit.title,
+      donorName: exhibit.donorName,
+    });
+  }
 
   const container = el("dossier-accounts");
   container.innerHTML = "";
@@ -631,7 +732,12 @@ function tryInspect(exhibitId) {
 }
 
 function anyOverlayOpen() {
-  return !el("dossier").hidden || !el("donate-gate").hidden || !el("name-gate").hidden;
+  return (
+    !el("dossier").hidden ||
+    !el("donate-gate").hidden ||
+    !el("donate-receipt").hidden ||
+    !el("name-gate").hidden
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -657,6 +763,8 @@ window.addEventListener("keydown", (e) => {
       closeDossier();
     } else if (!el("donate-gate").hidden) {
       closeDonateGate();
+    } else if (!el("donate-receipt").hidden) {
+      closeReceipt();
     } else {
       cameraRig.releaseLock();
     }

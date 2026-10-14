@@ -6,13 +6,13 @@ import { inject, it, expect, describe } from "vitest";
 const baseUrl = inject("baseUrl");
 const url = (path: string): URL => new URL(path, baseUrl);
 
-async function freeSlot(): Promise<{ galleryId: string; slotId: string }> {
+async function freeSlot(): Promise<{ galleryId: string; slotId: string; subtype: string }> {
   const { galleries } = await (await fetch(url("/api/world"))).json();
   const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
   const occupied = new Set(exhibits.map((e: { slotId: string }) => e.slotId));
   for (const gallery of galleries) {
     for (const slot of gallery.slots) {
-      if (!occupied.has(slot.id)) return { galleryId: gallery.id, slotId: slot.id };
+      if (!occupied.has(slot.id)) return { galleryId: gallery.id, slotId: slot.id, subtype: gallery.subtypes[0] };
     }
   }
   throw new Error("no free slot in any gallery — widen the seed or extend this test");
@@ -27,12 +27,13 @@ async function donate(body: Record<string, unknown>) {
 }
 
 describe("donating a relic", () => {
-  it("places a validated donation into a free slot, visible in the archive", async () => {
-    const { galleryId, slotId } = await freeSlot();
+  it("places a validated donation into a free slot, visible in the archive, numbered and subtyped", async () => {
+    const { galleryId, slotId, subtype } = await freeSlot();
     const title = `spec exhibit ${Date.now()}`;
     const res = await donate({
       galleryId,
       slotId,
+      subtype,
       title,
       originClaim: "Found behind a false wall.",
       donorName: "Spec Visitor",
@@ -41,16 +42,19 @@ describe("donating a relic", () => {
     const { exhibit } = await res.json();
     expect(exhibit.title).toBe(title);
     expect(exhibit.slotId).toBe(slotId);
+    expect(exhibit.subtype).toBe(subtype);
+    expect(typeof exhibit.number).toBe("number");
 
     const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
     expect(exhibits.some((e: { id: string }) => e.id === exhibit.id)).toBe(true);
   });
 
   it("rejects a donation into an already-occupied slot", async () => {
-    const { galleryId, slotId } = await freeSlot();
+    const { galleryId, slotId, subtype } = await freeSlot();
     const first = await donate({
       galleryId,
       slotId,
+      subtype,
       title: "first claim",
       originClaim: "x",
       donorName: "A",
@@ -60,6 +64,7 @@ describe("donating a relic", () => {
     const second = await donate({
       galleryId,
       slotId,
+      subtype,
       title: "second claim, same slot",
       originClaim: "y",
       donorName: "B",
@@ -67,20 +72,34 @@ describe("donating a relic", () => {
     expect(second.status).toBe(409);
   });
 
-  it("rejects a donation with no title or an unknown slot", async () => {
-    const { galleryId, slotId } = await freeSlot();
-    expect((await donate({ galleryId, slotId, title: "", originClaim: "x", donorName: "A" })).status).toBe(400);
+  it("rejects a donation with no title, an unknown slot, or a subtype foreign to the gallery's category", async () => {
+    const { galleryId, slotId, subtype } = await freeSlot();
+    expect((await donate({ galleryId, slotId, subtype, title: "", originClaim: "x", donorName: "A" })).status).toBe(400);
     expect(
-      (await donate({ galleryId, slotId: "not-a-real-slot", title: "x", originClaim: "x", donorName: "A" })).status,
+      (await donate({ galleryId, slotId: "not-a-real-slot", subtype, title: "x", originClaim: "x", donorName: "A" }))
+        .status,
+    ).toBe(400);
+
+    // A subtype that belongs to a different category's vocabulary entirely
+    // (not just an unknown string) must still be rejected — the gallery's
+    // category, not the client, decides which subtypes are valid for it.
+    const { galleries } = await (await fetch(url("/api/world"))).json();
+    const thisGallery = galleries.find((g: { id: string }) => g.id === galleryId);
+    const foreignSubtype = galleries
+      .flatMap((g: { subtypes: string[] }) => g.subtypes)
+      .find((s: string) => !thisGallery.subtypes.includes(s));
+    expect(
+      (await donate({ galleryId, slotId, subtype: foreignSubtype, title: "x", originClaim: "x", donorName: "A" }))
+        .status,
     ).toBe(400);
   });
 });
 
 describe("rewriting history", () => {
   it("never erases a prior account — a contradiction is a new row alongside it", async () => {
-    const { galleryId, slotId } = await freeSlot();
+    const { galleryId, slotId, subtype } = await freeSlot();
     const { exhibit } = await (
-      await donate({ galleryId, slotId, title: "The Disputed Locket", originClaim: "1892.", donorName: "A" })
+      await donate({ galleryId, slotId, subtype, title: "The Disputed Locket", originClaim: "1892.", donorName: "A" })
     ).json();
 
     const original = exhibit.accounts[0];
@@ -105,9 +124,9 @@ describe("rewriting history", () => {
 
 describe("exhibit-level classification", () => {
   it("starts Unclassified and reflects the leading account's votes", async () => {
-    const { galleryId, slotId } = await freeSlot();
+    const { galleryId, slotId, subtype } = await freeSlot();
     const { exhibit } = await (
-      await donate({ galleryId, slotId, title: "The Whispering Mirror", originClaim: "It answers questions.", donorName: "A" })
+      await donate({ galleryId, slotId, subtype, title: "The Whispering Mirror", originClaim: "It answers questions.", donorName: "A" })
     ).json();
     expect(exhibit.classification).toBe("Unclassified");
 
@@ -126,9 +145,9 @@ describe("exhibit-level classification", () => {
 
 describe("voting", () => {
   it("upserts one vote per visitor per account, and reports Unclassified with none", async () => {
-    const { galleryId, slotId } = await freeSlot();
+    const { galleryId, slotId, subtype } = await freeSlot();
     const { exhibit } = await (
-      await donate({ galleryId, slotId, title: "The Humming Jar", originClaim: "It arrived humming.", donorName: "A" })
+      await donate({ galleryId, slotId, subtype, title: "The Humming Jar", originClaim: "It arrived humming.", donorName: "A" })
     ).json();
     const accountId = exhibit.accounts[0].id;
 
@@ -159,9 +178,9 @@ describe("voting", () => {
   });
 
   it("rejects a vote with an unknown verdict", async () => {
-    const { galleryId, slotId } = await freeSlot();
+    const { galleryId, slotId, subtype } = await freeSlot();
     const { exhibit } = await (
-      await donate({ galleryId, slotId, title: "The Second Jar", originClaim: "Also humming.", donorName: "A" })
+      await donate({ galleryId, slotId, subtype, title: "The Second Jar", originClaim: "Also humming.", donorName: "A" })
     ).json();
     const accountId = exhibit.accounts[0].id;
     const res = await fetch(url(`/api/accounts/${accountId}/vote`), {

@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { identify, nameCookieFor } from "./identity.js";
-import { GALLERY_IDS, publicWorld, isWalkable } from "./world.js";
+import { galleryById, publicWorld, isWalkable } from "./world.js";
 import * as db from "./db.js";
 import * as sse from "./sse.js";
 import { serveStatic } from "./static.js";
@@ -8,6 +8,7 @@ import { renderReadmePage } from "./readme-page.js";
 import {
   ACCOUNT_KIND_SET,
   VERDICT_SET,
+  SUBTYPES_BY_CATEGORY,
   MAX_NAME_LENGTH,
   MAX_TITLE_LENGTH,
   MAX_ACCOUNT_LENGTH,
@@ -136,17 +137,19 @@ const server = createServer(async (req, res) => {
         return;
       }
 
-      const { galleryId, slotId } = payload;
+      const { galleryId, slotId, subtype } = payload;
       const title = typeof payload.title === "string" ? payload.title.trim() : "";
       const originClaim = typeof payload.originClaim === "string" ? payload.originClaim.trim() : "";
       const donorName = typeof payload.donorName === "string" ? payload.donorName.trim() : identity.name;
+      const gallery = galleryById(galleryId);
 
       if (
-        !GALLERY_IDS.has(galleryId) ||
+        !gallery ||
         typeof slotId !== "string" ||
         !isNonEmptyString(title, MAX_TITLE_LENGTH) ||
         !isNonEmptyString(originClaim, MAX_CLAIM_LENGTH) ||
-        !isNonEmptyString(donorName, MAX_NAME_LENGTH)
+        !isNonEmptyString(donorName, MAX_NAME_LENGTH) ||
+        !(SUBTYPES_BY_CATEGORY[gallery.category] ?? []).includes(subtype)
       ) {
         json(res, 400, { error: "invalid donation" }, withCookies({}, identity));
         return;
@@ -156,6 +159,7 @@ const server = createServer(async (req, res) => {
         galleryId,
         slotId,
         title,
+        subtype,
         originClaim,
         donorName,
         visitorId: identity.id,
