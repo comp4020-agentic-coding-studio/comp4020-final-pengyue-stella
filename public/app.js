@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { buildWorldScene, renderArtifactPreview } from "./world/scene.js";
 import { createMovementController } from "./world/movement.js";
 import { createCameraRig } from "./world/cameras.js";
-import { RemoteAvatar, buildAvatarMesh, animateWalk } from "./world/avatar.js";
+import { RemoteAvatar, buildAvatarMesh } from "./world/avatar.js";
 
 const INTERACT_RANGE = 2.2;
 const DONATE_RANGE = 2.0;
@@ -32,8 +32,7 @@ let cameraRig = null;
 let renderer = null;
 let remoteAvatars = new Map(); // visitorId -> RemoteAvatar
 let localAvatarMesh = null;
-let localAvatarRig = null;
-let localWalkPhase = 0;
+let localAvatarUpdate = null;
 let lastMovePosted = 0;
 let currentGalleryId = null;
 let openDossierExhibitId = null;
@@ -906,8 +905,7 @@ function frame(now) {
     localAvatarMesh.rotation.y = movement.state.yaw;
     localAvatarMesh.visible = cameraRig.mode !== "first-person";
     const speed01 = result.moved ? 1 : 0;
-    localWalkPhase += dt * 8 * Math.max(0.2, speed01);
-    if (localAvatarRig) animateWalk(localAvatarRig, localWalkPhase, speed01);
+    localAvatarUpdate?.(dt, speed01);
   }
 
   cameraRig.update(movement.state);
@@ -941,7 +939,7 @@ async function boot() {
 
   const localBuilt = buildAvatarMesh(myIdentity.color);
   localAvatarMesh = localBuilt.group;
-  localAvatarRig = localBuilt.rig;
+  localAvatarUpdate = localBuilt.update;
   localAvatarMesh.position.set(world.spawn.x, 0, world.spawn.z);
   sceneApi.scene.add(localAvatarMesh);
 

@@ -102,8 +102,9 @@ to every connected client, who instantiate its mesh at that slot without a
 page reload.
 
 **Inspect a relic.** The dossier is a parchment/brass-styled overlay over the
-(paused but not hidden) world: exhibit number, procedurally-styled icon,
-title, gallery, donor, every account in chronological order each tagged
+(paused but not hidden) world: exhibit number, a live rendered preview of
+the exhibit's own 3D model, title, gallery, donor, every account in
+chronological order each tagged
 *Original Account / New Testimony / Contradiction / Proposed Revision /
 Counter-Evidence*, each account's own vote tally and the visitor's own current
 vote on it, and an "Add Counter-Evidence" action. Esc returns to the world
@@ -194,8 +195,10 @@ announced to other visitors before it is durable.
 
 ## Known limitations (first version)
 
-- Exhibit imagery is simple original procedural iconography per category,
-  not bespoke art per donation — documented, not hidden.
+- Exhibit models are a procedural library keyed to a donation's category and
+  subtype (one bespoke model family per subtype, varied per donation by a
+  seeded scale/rotation/tone PRNG), not bespoke art per individual donation
+  — documented, not hidden; see `ASSETS.md`.
 - No moderation queue beyond length caps and rate limits — acceptable for a
   classroom-scale deployment, not for open public UGC at scale.
 - Spatial audio is the blueprint's explicitly optional item and is out of

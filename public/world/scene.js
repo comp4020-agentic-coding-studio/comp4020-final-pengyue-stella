@@ -19,6 +19,9 @@ import {
   buildDollDisplay,
   buildSideTable,
   buildClutterObject,
+  buildFloorMirror,
+  buildSculptureBust,
+  buildTrunk,
   wallpaperMaterial,
   floorMaterial,
 } from "./furniture.js";
@@ -419,6 +422,17 @@ function furnishPortraitGallery(group, gallery, breathingLights) {
 
   placeSideTable(group, cx + (bounds.maxX - bounds.minX) * 0.3, bounds.maxZ - 0.6, accent, 1);
   placeSideTable(group, cx - (bounds.maxX - bounds.minX) * 0.3, bounds.maxZ - 0.6, accent, 3);
+
+  // A free-standing floor mirror — fitting company for a gallery about
+  // watching portraits — and a sculpture bust, both extra floor-level
+  // "hero" density beyond the frames and pedestal tables above.
+  const mirror = buildFloorMirror({ height: 1.6 });
+  mirror.position.set(cx, 0, bounds.minZ + (bounds.maxZ - bounds.minZ) * 0.14);
+  group.add(mirror);
+
+  const bust = buildSculptureBust({ accent });
+  bust.position.set(cx + (bounds.maxX - bounds.minX) * 0.38, 0, cz);
+  group.add(bust);
 }
 
 function furnishMementoGallery(group, gallery, breathingLights) {
@@ -462,6 +476,12 @@ function furnishMementoGallery(group, gallery, breathingLights) {
   candle.position.set(bounds.minX + 0.6, candleTable.userData.topHeight, cz + (bounds.maxZ - bounds.minZ) * 0.28);
   group.add(candle);
   if (candle.userData.flickerLight) breathingLights.push({ light: candle.userData.flickerLight, base: 0.4 });
+
+  // A steamer trunk against the near wall — floor-level clutter between the
+  // cabinet and the clock, "objects that remember" fitting its own gallery.
+  const trunk = buildTrunk();
+  trunk.position.set(cx + (bounds.maxX - bounds.minX) * 0.1, 0, bounds.maxZ - 0.6);
+  group.add(trunk);
 }
 
 function furnishSpecimenGallery(group, gallery, breathingLights) {
@@ -502,6 +522,12 @@ function furnishSpecimenGallery(group, gallery, breathingLights) {
   candle.position.set(bounds.maxX - 0.6, candleTable.userData.topHeight, cz + (bounds.maxZ - bounds.minZ) * 0.28);
   group.add(candle);
   if (candle.userData.flickerLight) breathingLights.push({ light: candle.userData.flickerLight, base: 0.4 });
+
+  // A second sculptural piece, this gallery's own "strange object" beyond
+  // the vitrines themselves.
+  const bust = buildSculptureBust({ accent });
+  bust.position.set(bounds.minX + (bounds.maxX - bounds.minX) * 0.18, 0, bounds.maxZ - 0.5);
+  group.add(bust);
 }
 
 function furnishChildhoodGallery(group, gallery, breathingLights) {
@@ -538,6 +564,11 @@ function furnishChildhoodGallery(group, gallery, breathingLights) {
   candle.position.set(bounds.maxX - 0.6, candleTable.userData.topHeight, bounds.minZ + 0.6);
   group.add(candle);
   if (candle.userData.flickerLight) breathingLights.push({ light: candle.userData.flickerLight, base: 0.4 });
+
+  // An old toy trunk between the doll displays and the bookshelf.
+  const trunk = buildTrunk();
+  trunk.position.set(cx, 0, bounds.minZ + (bounds.maxZ - bounds.minZ) * 0.14);
+  group.add(trunk);
 }
 
 function addGalleryFurniture(scene, world, breathingLights) {

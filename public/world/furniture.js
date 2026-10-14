@@ -377,6 +377,96 @@ export function buildSideTable({ height = 0.5, radius = 0.22 } = {}) {
   return group;
 }
 
+// A free-standing ornate floor mirror in a gilt oval frame — denser, more
+// "crowded curiosity cabinet" furnishing per the brief, distinct from the
+// wall-hung buildPortraitFrame family.
+export function buildFloorMirror({ height = 1.7 } = {}) {
+  const group = new THREE.Group();
+  const wood = woodMaterial();
+  const brass = brassMaterial();
+
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.08, 16), wood);
+  base.position.y = 0.04;
+  group.add(base);
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.3, 10), wood);
+  post.position.y = 0.23;
+  group.add(post);
+
+  const frameHeight = height - 0.38;
+  const frame = new THREE.Mesh(new THREE.TorusGeometry(frameHeight * 0.42, 0.045, 10, 28), brass);
+  frame.scale.set(0.72, 1, 1);
+  frame.position.y = 0.38 + frameHeight * 0.5;
+  group.add(frame);
+
+  const glass = new THREE.Mesh(
+    new THREE.CircleGeometry(frameHeight * 0.4, 28),
+    new THREE.MeshPhysicalMaterial({ color: "#dfe8ea", roughness: 0.08, metalness: 0.85 }),
+  );
+  glass.scale.set(0.72, 1, 1);
+  glass.position.set(0, 0.38 + frameHeight * 0.5, 0.02);
+  group.add(glass);
+
+  return group;
+}
+
+// A small sculpted bust on its own plinth — the "sculptures" the brief
+// names explicitly, built as abstracted original geometry (never a
+// recognisable likeness of any real person).
+export function buildSculptureBust({ accent = "#9c7a44" } = {}) {
+  const group = new THREE.Group();
+  const wood = woodMaterial();
+  const stoneMat = new THREE.MeshStandardMaterial({ color: "#c9c2ab", roughness: 0.55 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.35, metalness: 0.7 });
+
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.75, 10), wood);
+  plinth.position.y = 0.375;
+  group.add(plinth);
+
+  const shoulders = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.22, 16), stoneMat);
+  shoulders.position.y = 0.86;
+  group.add(shoulders);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 14), stoneMat);
+  head.scale.set(1, 1.15, 0.95);
+  head.position.y = 1.04;
+  group.add(head);
+
+  const trim = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.012, 6, 16), trimMat);
+  trim.position.y = 0.76;
+  group.add(trim);
+
+  return group;
+}
+
+// A low leather-strapped steamer trunk — the "strange objects" / dense
+// floor-level clutter the brief names, doubling as a surface for clutter
+// pieces the way buildSideTable already does.
+export function buildTrunk({ width = 0.6, depth = 0.38, height = 0.32 } = {}) {
+  const group = new THREE.Group();
+  const wood = woodMaterial();
+  const strapMat = new THREE.MeshStandardMaterial({ color: "#2a1c14", roughness: 0.8 });
+  const brass = brassMaterial();
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), wood);
+  body.position.y = height / 2;
+  group.add(body);
+  const lid = new THREE.Mesh(new THREE.CylinderGeometry(depth / 2, depth / 2, width, 12, 1, false, 0, Math.PI), wood);
+  lid.rotation.z = Math.PI / 2;
+  lid.position.y = height;
+  group.add(lid);
+
+  for (const dz of [-depth * 0.32, depth * 0.32]) {
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(width * 1.02, 0.05, 0.05), strapMat);
+    strap.position.set(0, height * 0.6, dz);
+    group.add(strap);
+  }
+  const clasp = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.02), brass);
+  clasp.position.set(0, height * 0.75, depth / 2 + 0.01);
+  group.add(clasp);
+
+  group.userData.topHeight = height + 0.16; // lid's rounded top apex
+  return group;
+}
+
 // Applies textured wallpaper + crown trim to a wall mesh in place (used by
 // scene.js when building gallery walls, so every wall picks up the same
 // furnishing pass without scene.js needing its own texture logic).

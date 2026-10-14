@@ -1,122 +1,127 @@
-// A proportionate, jointed humanoid visitor model — head, torso, two arms
-// and two legs on hip/shoulder pivots, with a walk-cycle animation driven by
-// how fast the avatar is actually moving. Built as original procedural
-// geometry rather than an imported rigged model: no verified, properly-
-// licensed humanoid glTF was available to source and check provenance for
-// inside this build, and the zero-runtime-dependency stack (see CLAUDE.md)
-// has no asset pipeline to vet one through — a hand-built rig keeps the
-// same "every asset's provenance is known" guarantee the rest of the scene
-// already holds itself to. Gothic-Victorian styling (long coat silhouette,
-// dark palette, a short cape) keyed to the blueprint's visual identity.
+// The visitor avatar: a real rigged humanoid model (Kenney "Mini
+// Characters", CC0 1.0 — see public/vendor/README.md and ASSETS.md for full
+// provenance) with idle/walk animation blending, dressed in a procedural
+// Gothic-Victorian cape/collar/belt tinted to the visitor's own colour. This
+// is the one deliberate exception to the project's otherwise-procedural
+// visual stack (see ASSETS.md's hybrid-asset decision): a jointed walking
+// humanoid is the one asset class genuinely hard to fake convincingly with
+// primitive geometry, so it's downloaded and vendored exactly like
+// three.module.min.js already was — nothing here touches the server's own
+// dependency graph, and the model is fetched by the browser once and cached.
 //
 // Shared by the local visitor (hidden in first-person, per CLAUDE.md's
 // camera-rig rule) and every remote visitor (always shown, position/yaw
-// interpolated, walk-cycle driven by its own interpolated speed).
+// interpolated).
 import * as THREE from "three";
+import { GLTFLoader } from "../vendor/addons/loaders/GLTFLoader.js";
+import { clone as cloneSkeleton } from "../vendor/addons/utils/SkeletonUtils.js";
 
-const HIP_HEIGHT = 0.9;
-const SHOULDER_HEIGHT = 1.45;
-const HEAD_HEIGHT = 1.72;
+const MODEL_URL = "/vendor/assets/avatar/character-male-a.glb";
+const TARGET_HEIGHT = 1.7; // world units, feet to top of head
+const HEAD_HEIGHT = 1.72; // approximate — used only to park the name label
+
+let templatePromise = null;
+// Loaded once, reused as the clone source for every avatar instance — the
+// network fetch and glTF parse happen exactly once per page load, not once
+// per visitor.
+function loadAvatarTemplate() {
+  if (!templatePromise) {
+    const loader = new GLTFLoader();
+    templatePromise = loader.loadAsync(MODEL_URL).then((gltf) => ({
+      scene: gltf.scene,
+      animations: gltf.animations,
+    }));
+  }
+  return templatePromise;
+}
 
 function limbMaterial(color) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05 });
 }
 
-// A pivot Group at the joint origin containing the visible limb mesh offset
-// downward from it, so rotating the pivot swings the limb like a real joint
-// rather than rotating around the limb's own centre.
-function buildLimb({ length, radius, color, topRadius = radius }) {
-  const pivot = new THREE.Group();
-  const mesh = new THREE.Mesh(
-    new THREE.CapsuleGeometry(radius, Math.max(0.01, length - radius * 2), 4, 8),
-    limbMaterial(color),
-  );
-  mesh.position.y = -length / 2;
-  pivot.add(mesh);
-  return { pivot, mesh };
-}
-
-export function buildAvatarMesh(color) {
-  const skinColor = "#caa37c";
+// Gothic-Victorian dressing — a short cape, collar and belt — carried over
+// from the original hand-built rig and now layered onto the downloaded
+// model instead of replacing it. Scaled to `scale` (the same factor the
+// model itself is normalised by) so the dressing always sits correctly
+// regardless of the base model's own raw proportions.
+function buildDressing(color, scale) {
+  const group = new THREE.Group();
   const coatColor = color ?? "#3a2a22";
   const trimColor = "#c6a16b";
+  const shoulderY = TARGET_HEIGHT * 0.62;
+  const hipY = TARGET_HEIGHT * 0.32;
 
-  const group = new THREE.Group();
-
-  // Torso: a long Gothic coat silhouette — wider at the shoulders, flaring
-  // slightly at the hem — rather than a plain cylinder.
-  const torso = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.2, 0.26, SHOULDER_HEIGHT - HIP_HEIGHT + 0.35, 10),
-    limbMaterial(coatColor),
-  );
-  torso.position.y = HIP_HEIGHT + (SHOULDER_HEIGHT - HIP_HEIGHT) / 2;
-  group.add(torso);
-
-  // A short cape, two back-facing planes, for Gothic-Victorian silhouette
-  // read from any angle.
-  const capeMat = new THREE.MeshStandardMaterial({
-    color: coatColor, roughness: 0.85, side: THREE.DoubleSide,
-  });
-  const cape = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.75), capeMat);
-  cape.position.set(0, SHOULDER_HEIGHT - 0.3, -0.16);
+  const capeMat = new THREE.MeshStandardMaterial({ color: coatColor, roughness: 0.85, side: THREE.DoubleSide });
+  const cape = new THREE.Mesh(new THREE.PlaneGeometry(0.42 * scale, 0.75 * scale), capeMat);
+  cape.position.set(0, shoulderY - 0.18 * scale, -0.1 * scale);
   cape.rotation.x = 0.15;
   group.add(cape);
 
-  // Trim collar/belt accents for silhouette readability at a distance.
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.025, 6, 12), limbMaterial(trimColor));
-  collar.position.y = SHOULDER_HEIGHT + 0.02;
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.16 * scale, 0.025 * scale, 6, 12), limbMaterial(trimColor));
+  collar.position.y = shoulderY + 0.05 * scale;
   collar.rotation.x = Math.PI / 2;
   group.add(collar);
-  const belt = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.02, 6, 12), limbMaterial(trimColor));
-  belt.position.y = HIP_HEIGHT + 0.05;
+
+  const belt = new THREE.Mesh(new THREE.TorusGeometry(0.2 * scale, 0.02 * scale, 6, 12), limbMaterial(trimColor));
+  belt.position.y = hipY;
   belt.rotation.x = Math.PI / 2;
   group.add(belt);
 
-  // Head + a simple brow line so facing direction reads even from overhead.
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 12), limbMaterial(skinColor));
-  head.position.y = HEAD_HEIGHT;
-  group.add(head);
-  const brow = new THREE.Mesh(
-    new THREE.BoxGeometry(0.2, 0.03, 0.05),
-    new THREE.MeshStandardMaterial({ color: "#1a1410" }),
-  );
-  brow.position.set(0, HEAD_HEIGHT + 0.03, 0.145);
-  group.add(brow);
-
-  // Arms: shoulder pivots at shoulder height, limb hanging down from there.
-  const armLength = 0.62;
-  const leftArm = buildLimb({ length: armLength, radius: 0.055, color: coatColor });
-  leftArm.pivot.position.set(0.24, SHOULDER_HEIGHT - 0.05, 0);
-  const rightArm = buildLimb({ length: armLength, radius: 0.055, color: coatColor });
-  rightArm.pivot.position.set(-0.24, SHOULDER_HEIGHT - 0.05, 0);
-  group.add(leftArm.pivot, rightArm.pivot);
-
-  // Legs: hip pivots at hip height.
-  const legLength = HIP_HEIGHT;
-  const leftLeg = buildLimb({ length: legLength, radius: 0.08, color: "#241a15" });
-  leftLeg.pivot.position.set(0.1, HIP_HEIGHT, 0);
-  const rightLeg = buildLimb({ length: legLength, radius: 0.08, color: "#241a15" });
-  rightLeg.pivot.position.set(-0.1, HIP_HEIGHT, 0);
-  group.add(leftLeg.pivot, rightLeg.pivot);
-
-  return {
-    group,
-    rig: { leftArm: leftArm.pivot, rightArm: rightArm.pivot, leftLeg: leftLeg.pivot, rightLeg: rightLeg.pivot },
-  };
+  return group;
 }
 
-// Oscillates the limb pivots in a simple walk cycle. `speed01` is how fast
-// the avatar is currently moving, 0 (idle — limbs settle to rest) to 1 (full
-// stride); `phase` is an ever-increasing accumulator the caller owns so gait
-// timing stays stable in both app.js's local-avatar loop and RemoteAvatar's
-// own tick.
-export function animateWalk(rig, phase, speed01) {
-  const amplitude = 0.55 * Math.min(1, speed01);
-  const swing = Math.sin(phase) * amplitude;
-  rig.leftLeg.rotation.x = swing;
-  rig.rightLeg.rotation.x = -swing;
-  rig.leftArm.rotation.x = -swing * 0.7;
-  rig.rightArm.rotation.x = swing * 0.7;
+// Builds one avatar instance. Returns `{ group, update(dt, speed01) }`
+// immediately and synchronously — `group` is usable and addable to the
+// scene right away (empty but positioned correctly) while the model loads
+// in the background and is spliced in, so callers never need to await
+// anything or redesign around a Promise.
+export function buildAvatarMesh(color) {
+  const group = new THREE.Group();
+  let mixer = null;
+  let idleAction = null;
+  let walkAction = null;
+
+  loadAvatarTemplate().then(({ scene: templateScene, animations }) => {
+    const model = cloneSkeleton(templateScene);
+
+    // Normalise scale from the model's own real (post-bind-pose) bounding
+    // box, not a hand-measured constant — robust to this specific Kenney
+    // character's actual proportions without needing to hard-code them.
+    const box = new THREE.Box3().setFromObject(model);
+    const height = Math.max(0.01, box.max.y - box.min.y);
+    const scale = TARGET_HEIGHT / height;
+    model.scale.setScalar(scale);
+    // Re-centre on the floor plane: the model's own bind pose may not put
+    // its feet at exactly y=0 after scaling.
+    model.position.y -= box.min.y * scale;
+    group.add(model);
+    group.add(buildDressing(color, scale));
+
+    const idleClip = animations.find((a) => a.name === "idle");
+    const walkClip = animations.find((a) => a.name === "walk");
+    mixer = new THREE.AnimationMixer(model);
+    if (idleClip) {
+      idleAction = mixer.clipAction(idleClip);
+      idleAction.play();
+    }
+    if (walkClip) {
+      walkAction = mixer.clipAction(walkClip);
+      walkAction.play();
+      walkAction.setEffectiveWeight(0);
+    }
+  });
+
+  // `speed01` is how fast this avatar is currently moving (0 idle, 1 full
+  // stride) — crossfades idle/walk by weight rather than hard-switching, so
+  // starting/stopping reads as a blend, not a pop.
+  function update(dt, speed01) {
+    if (!mixer) return;
+    if (idleAction) idleAction.setEffectiveWeight(1 - speed01);
+    if (walkAction) walkAction.setEffectiveWeight(speed01);
+    mixer.update(dt);
+  }
+
+  return { group, update };
 }
 
 export function buildNameLabel(text) {
@@ -143,16 +148,15 @@ export class RemoteAvatar {
   constructor(scene, visitorId, { x, z, yaw, name, color }) {
     this.scene = scene;
     this.visitorId = visitorId;
-    const { group, rig } = buildAvatarMesh(color);
+    const { group, update } = buildAvatarMesh(color);
     this.mesh = group;
-    this.rig = rig;
+    this.update = update;
     this.mesh.position.set(x, 0, z);
     this.mesh.rotation.y = yaw;
     this.label = buildNameLabel(name ?? "Visitor");
     this.mesh.add(this.label);
     scene.add(this.mesh);
     this.target = { x, z, yaw };
-    this.walkPhase = 0;
   }
 
   setTarget(x, z, yaw) {
@@ -173,9 +177,8 @@ export class RemoteAvatar {
     this.mesh.rotation.y += dyaw * k;
 
     const movedDist = Math.hypot(this.mesh.position.x - prevX, this.mesh.position.z - prevZ);
-    const speed01 = dt > 0 ? Math.min(1, (movedDist / dt) / 3) : 0;
-    this.walkPhase += dt * 8 * Math.max(0.2, speed01);
-    animateWalk(this.rig, this.walkPhase, speed01);
+    const speed01 = dt > 0 ? Math.min(1, movedDist / dt / 3) : 0;
+    this.update(dt, speed01);
   }
 
   dispose() {

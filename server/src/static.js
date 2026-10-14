@@ -15,6 +15,7 @@ const CONTENT_TYPES = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".ico": "image/x-icon",
+  ".glb": "model/gltf-binary",
 };
 
 // Returns { body, contentType } or null if nothing servable lives there.
