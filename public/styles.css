@@ -483,43 +483,6 @@ a {
   border-radius: 999px;
 }
 
-/* --- hub-only look-turn controls ------------------------------------------*/
-.turn-controls {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.turn-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3rem;
-  height: 3rem;
-  border-radius: 50%;
-  border: 1px solid var(--brass);
-  background: rgba(53, 37, 28, 0.55);
-  color: var(--parchment);
-  font-size: 1.1rem;
-  cursor: pointer;
-  pointer-events: auto;
-  backdrop-filter: blur(4px);
-}
-
-.turn-arrow:hover,
-.turn-arrow:focus-visible {
-  background: rgba(53, 37, 28, 0.85);
-  outline: none;
-}
-
-.turn-left {
-  left: 1rem;
-}
-.turn-right {
-  right: 1rem;
-}
-
 /* --- quiet corner navigation ----------------------------------------------*/
 /* Replaces a large bubble floated over the artwork's centre: a compact
    "enter the next room" control upper-left (clear of the museum title) and

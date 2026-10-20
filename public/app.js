@@ -6,7 +6,6 @@ const NAME_STORAGE_KEY = "cursedMuseumNamed";
 
 const el = (id) => document.getElementById(id);
 const viewport = el("viewport");
-const turnControlsEl = el("turn-controls");
 const presenceEl = el("presence");
 const whoamiEl = el("whoami");
 const galleryTitleEl = el("gallery-title");
@@ -917,7 +916,7 @@ function handleObjectActivate(object) {
     openLoreCard(object.label, object.text, `object:${object.id}`);
     return;
   }
-  if (object.type === "closeup" && object.targetSceneId) {
+  if ((object.type === "closeup" || object.type === "portal") && object.targetSceneId) {
     // A click never fires a native DOM `focus` event the way Tab navigation
     // does, so without this, looking closer at a portrait — the single most
     // common interaction in the museum — would never report a focus change
@@ -1049,12 +1048,8 @@ function refreshInteractiveObjects() {
   }
   if (focusedObjectId) setFocusedObject(focusedObjectId);
 
-  turnControlsEl.hidden = scene.kind !== "hub";
-  el("turn-left").disabled = !scene.turnLeft;
-  el("turn-right").disabled = !scene.turnRight;
-
   renderCornerNav(scene);
-  galleryTitleEl.textContent = scene.kind === "hub" ? "" : scene.caption;
+  galleryTitleEl.textContent = scene.id === "hall" ? "" : scene.caption;
 }
 
 // ---------------------------------------------------------------------------
@@ -1109,7 +1104,7 @@ function renderRoomsMenu() {
   hubItem.textContent = "Entrance Hall";
   hubItem.addEventListener("click", () => {
     closeRoomsMenu();
-    illustrator.goToScene("hall-n", { direction: "back" });
+    illustrator.goToScene("hall", { direction: "back" });
   });
   menu.appendChild(hubItem);
 }
@@ -1168,22 +1163,16 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (isTypingTarget(document.activeElement) || anyOverlayOpen() || illustrator.isTransitioning) return;
-  const scene = illustrator.currentScene();
   if (e.code === "ArrowLeft") {
-    if (scene.kind === "hub") illustrator.turnLeft();
-    else illustrator.camera.panLeft();
+    illustrator.camera.panLeft();
   } else if (e.code === "ArrowRight") {
-    if (scene.kind === "hub") illustrator.turnRight();
-    else illustrator.camera.panRight();
+    illustrator.camera.panRight();
   } else if (e.key === "+" || e.key === "=") {
     illustrator.camera.zoomIn();
   } else if (e.key === "-" || e.key === "_") {
     illustrator.camera.zoomOut();
   }
 });
-
-el("turn-left").addEventListener("click", () => illustrator.turnLeft());
-el("turn-right").addEventListener("click", () => illustrator.turnRight());
 
 // ---------------------------------------------------------------------------
 // Boot

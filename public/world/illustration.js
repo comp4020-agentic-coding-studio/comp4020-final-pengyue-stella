@@ -1,6 +1,7 @@
 // The illustrated-scene controller: owns scene-to-scene transitions (a
-// page-turn/cabinet-door cut between rooms, a cross-slide "turn" at the
-// hub) AND, new in the immersive-2.5D pass, a bounded look-around camera
+// page-turn/cabinet-door cut between rooms — the hall is an ordinary room
+// like any other, not a special cross-slide "turn" mode) AND, new in the
+// immersive-2.5D pass, a bounded look-around camera
 // per scene (public/world/camera.js) — see docs/adr/0005-immersive-2.5d-
 // camera.md. There is still exactly one small fixed graph of named scenes
 // (server/src/world.js's SCENES); only how a scene is PRESENTED changed
@@ -18,14 +19,13 @@ import { createSceneCamera } from "./camera.js";
 
 const PREFERS_REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 const CUT_MS = PREFERS_REDUCED_MOTION ? 1 : 620;
-const TURN_MS = PREFERS_REDUCED_MOTION ? 1 : 420;
 
 // Maps a scene/gallery `image` key (server/src/world.js) to its file in
 // public/assets/gallery-scenes/ — kept as one small table here rather than
 // baked into the server payload, since it's purely a client rendering
 // concern (which asset file backs which illustrated vantage).
 const IMAGE_FILES = {
-  entrance: "entrance-reference.webp",
+  hall: "entrance-hall-v2.png",
   portraits: "portraits.webp",
   memento: "memento.webp",
   specimen: "specimen.webp",
@@ -106,54 +106,7 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
     };
   }
 
-  // A hub turn (left/right between the four doorway facings) is a quick
-  // cross-slide, implying "looking a different way in the same room," never
-  // a full page-turn cut — the visitor hasn't gone anywhere.
-  function turnTo(sceneId) {
-    const next = scenesById.get(sceneId);
-    if (!next || transitioning) return;
-    transitioning = true;
-    paint(back, next);
-    backCamera?.destroy();
-    backCamera = createSceneCamera({
-      container: back,
-      layers: [
-        { el: roomLayers(back).room, parallax: 1 },
-        { el: roomLayers(back).dust, parallax: 0.55 },
-      ],
-    });
-    backCamera.configure(next.camera);
-    back.hidden = false;
-    back.className = "scene-layer scene-layer-incoming-turn";
-    front.className = "scene-layer scene-layer-outgoing-turn";
-    frontCamera.setEnabled(false);
-    // Force reflow so the browser registers the start state before the
-    // transition-driving class swap below animates toward the end state.
-    void back.offsetWidth;
-    requestAnimationFrame(() => {
-      back.className = "scene-layer scene-layer-settled";
-      front.className = "scene-layer scene-layer-exited-turn";
-    });
-    window.setTimeout(() => {
-      front.hidden = true;
-      front.className = "scene-layer";
-      [front, back] = [back, front];
-      [frontCamera, backCamera] = [backCamera, frontCamera];
-      frontCamera.setEnabled(true);
-      current = next;
-      transitioning = false;
-      onSceneChange?.(current);
-    }, TURN_MS);
-  }
-
-  function turnLeft() {
-    if (current.turnLeft) turnTo(current.turnLeft);
-  }
-  function turnRight() {
-    if (current.turnRight) turnTo(current.turnRight);
-  }
-
-  // Every other navigation (entering a gallery, looking closer, going back,
+  // Every navigation (entering a gallery, looking closer, going back,
   // returning to the hub) is a page-turn / cabinet-door cut: the incoming
   // scene rotates in from one hinge edge over the outgoing one, which fades
   // and rotates slightly away — "turning a heavy illustrated page" rather
@@ -204,8 +157,6 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
     currentScene,
     goToScene,
     back: back_,
-    turnLeft,
-    turnRight,
     activeLayers,
     get isTransitioning() {
       return transitioning;

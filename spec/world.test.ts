@@ -52,8 +52,6 @@ describe("the museum world", () => {
       interactiveObjects: Array<{ targetSceneId?: string; anchor: { x: number; y: number; width: number; height: number } }>;
       nav?: { forward?: { targetSceneId: string }; back?: { targetSceneId: string } };
       camera: { minPan: number; maxPan: number; minZoom: number; maxZoom: number };
-      turnLeft?: string;
-      turnRight?: string;
     };
     const byId = new Map<string, Scene>(scenes.map((s: Scene) => [s.id, s]));
     for (const gallery of galleries) {
@@ -100,11 +98,21 @@ describe("the museum world", () => {
       }
     }
 
+    // The hall is now exactly one scene — panned/zoomed/dragged the same
+    // bounded way as every other main room, not a special four-facing "hub"
+    // mode. Its own doorways are ordinary in-room `type: "portal"` objects
+    // pointing directly at real scenes, rather than a `nav.forward`/
+    // turnLeft/turnRight pair.
     const hub = byId.get(defaultSceneId);
-    expect(hub && byId.has(hub.turnLeft ?? "")).toBe(true);
-    expect(hub && byId.has(hub.turnRight ?? "")).toBe(true);
-    expect(hub?.nav?.forward?.targetSceneId).toBeTruthy();
-    expect(hub && byId.has(hub.nav!.forward!.targetSceneId)).toBe(true);
+    expect(hub).toBeTruthy();
+    expect(hub?.camera.minPan).toBeLessThanOrEqual(hub!.camera.maxPan);
+    const portalTargets = (hub?.interactiveObjects ?? [])
+      .filter((o: { targetSceneId?: string }) => o.targetSceneId)
+      .map((o: { targetSceneId?: string }) => o.targetSceneId as string);
+    expect(portalTargets.length).toBeGreaterThan(0);
+    for (const targetId of portalTargets) {
+      expect(byId.has(targetId)).toBe(true);
+    }
   });
 });
 

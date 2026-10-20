@@ -21,27 +21,45 @@
 // small set of server-defined positions (with a depth value for subtle
 // parallax) where another visitor's cameo may stand in this scene, distinct
 // from exhibit display slots so a cameo never overlaps a relic.
+//
+// What changed in the following foyer-repair pass (see docs/adr/0006-foyer-
+// repair-and-archive.md): the Entrance Hall used to be four stitched
+// "facings" turned between with left/right arrows, each cropped from one
+// small low-resolution reference image — a special interaction mode no
+// other room had. The approved replacement foyer (entrance-hall-v2.png,
+// 1672x941, the same full-size footing every gallery image already has) is
+// one genuine wide-angle view of the whole hall, so the hall is now exactly
+// one scene — `hall` — panned/zoomed/dragged the same bounded way as every
+// main gallery scene, not a special case. Its own visible doorways (two
+// arched doors flanking the base of the staircase) are ordinary `type:
+// "portal"` interactive objects pointing at two of the four galleries
+// directly; the other two stay reachable the same way they always were for
+// a gallery not in frame at the hub — the persistent "Rooms" menu.
 
 import { SUBTYPES_BY_CATEGORY } from "./constants.js";
 
-// A generic 6-point anchor arrangement for a gallery's display slots: a
-// loose two-row arc sitting in the lower two-thirds of the frame, clear of
-// the doorway/arch each reference composition centres near the top, and
-// clear of VISITOR_ANCHORS below so a donated relic and a visitor cameo
-// never occupy the same illustrated spot. Each slot is now a small BOX
-// (width/height added alongside the existing x/z point), used as the
-// placement-mode highlight region and the ghost-preview footprint — shared
-// across galleries rather than hand-tuned per image, since the exhibit
-// display itself is a dimensional object placed ON the illustration, not
-// something that needs to align with a specific painted shelf pixel-for-
-// pixel.
+// An 8-point anchor arrangement for a gallery's display slots: two rows —
+// a lower row of five sitting on the room's own floor-level furniture
+// (plinths/tables/cabinet tops every reference composition shows along the
+// bottom two-thirds) and an upper row of three on wall-height shelf/alcove
+// positions, clear of the doorway/arch each composition centres near the
+// top and clear of VISITOR_ANCHORS below so a donated relic and a visitor
+// cameo never occupy the same illustrated spot. Each slot is a small BOX
+// (width/height alongside x/z), used as the placement-mode highlight region
+// and the ghost-preview footprint — still shared across galleries (the
+// exhibit display itself is a dimensional object placed ON the
+// illustration, not pixel-matched to one specific painted shelf), but now
+// with enough positions ("at least 8", CLAUDE.md) that a gallery with many
+// donations never runs out of a visually plausible spot.
 const SLOT_ANCHORS = [
-  { x: 14, z: 68, width: 10, height: 16 },
-  { x: 32, z: 76, width: 10, height: 16 },
-  { x: 50, z: 70, width: 10, height: 16 },
-  { x: 68, z: 76, width: 10, height: 16 },
-  { x: 86, z: 68, width: 10, height: 16 },
-  { x: 50, z: 58, width: 10, height: 16 },
+  { x: 12, z: 70, width: 9, height: 15 },
+  { x: 28, z: 78, width: 9, height: 15 },
+  { x: 44, z: 72, width: 9, height: 15 },
+  { x: 60, z: 78, width: 9, height: 15 },
+  { x: 76, z: 72, width: 9, height: 15 },
+  { x: 90, z: 66, width: 9, height: 15 },
+  { x: 20, z: 40, width: 8, height: 13 },
+  { x: 70, z: 40, width: 8, height: 13 },
 ];
 
 // Where another visitor's silhouette may stand in a main/close-up scene —
@@ -60,10 +78,14 @@ const VISITOR_ANCHORS = [
   { x: 34, y: 90, depth: 1.2 },
 ];
 
+// The hall is wider (one real 1672x941 room, not a cropped facing), so its
+// cameos get their own, slightly more spread arrangement rather than
+// reusing VISITOR_ANCHORS, clear of every interactive-object anchor below.
 const HALL_VISITOR_ANCHORS = [
-  { x: 10, y: 70, depth: 1.0 },
-  { x: 90, y: 70, depth: 1.0 },
-  { x: 50, y: 90, depth: 1.15 },
+  { x: 4, y: 68, depth: 1.0 },
+  { x: 96, y: 68, depth: 1.0 },
+  { x: 50, y: 92, depth: 1.18 },
+  { x: 36, y: 88, depth: 1.1 },
 ];
 
 // A main gallery scene's default "look around the room" range — bounded
@@ -76,7 +98,13 @@ const HALL_VISITOR_ANCHORS = [
 // wide a look-around a single 16:9 illustration can sincerely support.
 const DEFAULT_MAIN_CAMERA = { initialPan: 50, minPan: 8, maxPan: 92, initialZoom: 1.3, minZoom: 1.15, maxZoom: 2.1 };
 const DEFAULT_CLOSEUP_CAMERA = { initialPan: 50, minPan: 20, maxPan: 80, initialZoom: 1.5, minZoom: 1.3, maxZoom: 2.2 };
-const DEFAULT_HUB_CAMERA = { initialPan: 50, minPan: 32, maxPan: 68, initialZoom: 1.12, minZoom: 1.05, maxZoom: 1.45 };
+// The hall is now one genuine wide-angle room image (entrance-hall-v2.png,
+// the same full-size footing as every gallery illustration), not a small
+// low-resolution reference cropped into four narrow facings — so it uses
+// the identical camera treatment as any other main scene, never a special,
+// narrower "hub-only" range (CLAUDE.md: "do not make Entrance Hall a
+// special interaction mode").
+const HALL_CAMERA = DEFAULT_MAIN_CAMERA;
 
 const GALLERY_LAYOUT = [
   {
@@ -235,12 +263,15 @@ export function slotById(slotId) {
 // The donor counter: an atmospheric secondary entrance point in the hall —
 // a real in-world interactive object kept for flavour, but (per the
 // product direction) no longer the only way to discover donation; see the
-// persistent "Donate a Relic" action the client always renders.
-export const DONOR_COUNTER = { x: 50, z: 80 };
-const DONOR_COUNTER_ANCHOR = { x: 40, y: 58, width: 20, height: 26 };
+// persistent "Donate a Relic" action the client always renders. In the new
+// foyer image this is the armillary-sphere-and-registry counter on the far
+// left, distinct from the chained guestbook on the far right (its own
+// `lore` object below).
+export const DONOR_COUNTER = { x: 7, z: 62 };
+const DONOR_COUNTER_ANCHOR = { x: 2, y: 48, width: 13, height: 28 };
 
 export function hallConfig() {
-  return { image: "entrance", donorCounter: DONOR_COUNTER };
+  return { image: "hall", donorCounter: DONOR_COUNTER };
 }
 
 // ---------------------------------------------------------------------------
@@ -250,63 +281,113 @@ export function hallConfig() {
 // painted item they represent. A visitor is always exactly "at" one scene
 // id; `POST /api/presence` reports which one (see server.js).
 
-// The hub: four "facings," one per doorway, turned between — same single
-// entrance illustration, a different doorway highlighted/panned-to each
-// time, in the spirit of turning your head inside one real room rather than
-// four different photographs. `hall-s` (facing the donor counter and the
-// childhood doorway) is the default spawn facing.
-const HALL_FACINGS = [
-  { dir: "n", galleryId: "portraits", doorAnchor: { x: 42, y: 8, width: 16, height: 40 } },
-  { dir: "e", galleryId: "memento", doorAnchor: { x: 78, y: 20, width: 16, height: 40 } },
-  { dir: "s", galleryId: "childhood", doorAnchor: { x: 42, y: 60, width: 16, height: 36 } },
-  { dir: "w", galleryId: "specimen", doorAnchor: { x: 6, y: 20, width: 16, height: 40 } },
+// The hub's two real, visibly painted doorways (flanking the base of the
+// grand staircase in entrance-hall-v2.png) lead directly to two of the four
+// galleries as ordinary `type: "portal"` interactive objects, exactly like
+// any other in-room clickable item — never a special "hub mode" the other
+// two galleries don't get. The other two galleries (not in frame as a
+// doorway in this one composition) stay reachable the same way they always
+// were: the persistent, gallery-agnostic "Rooms" menu (`renderRoomsMenu()`
+// in app.js, unchanged by this pass).
+const HALL_PORTALS = [
+  { galleryId: "memento", doorAnchor: { x: 20, y: 56, width: 11, height: 30 } },
+  { galleryId: "specimen", doorAnchor: { x: 66, y: 54, width: 13, height: 32 } },
 ];
 
-// galleryId -> the hub facing that looks at its doorway, so a gallery's main
-// scene can send "back" to the exact facing a visitor would have entered
-// from, not an arbitrary default hub facing.
-const HALL_FACING_BY_GALLERY = Object.fromEntries(HALL_FACINGS.map((f) => [f.galleryId, `hall-${f.dir}`]));
+// galleryId -> the hall as "back" target for a gallery whose doorway isn't
+// one of the two portals above (reached via the Rooms menu instead) — every
+// gallery's main scene still sends "back" to the one hall scene either way.
+const HALL_FACING_BY_GALLERY = Object.fromEntries(GALLERY_LAYOUT.map((g) => [g.id, "hall"]));
 
-// Room-to-room navigation is deliberately NOT an in-room glowing object any
-// more (see docs/adr/0005-immersive-2.5d-camera.md): a scene's `nav.forward`
-// and `nav.back` describe the quiet corner controls the client renders
-// instead — "enter the next room" upper-left, "back" lower-right — so a
-// doorway or archway in the illustration is simply left to be itself,
-// never covered by a floating button in the middle of the composition.
-// Looking closer at a gallery's hero display IS still an in-room object
-// (clicking the actual painted item), since that's "discovered through
-// light and attention," not room-to-room travel.
+// Rich, authored content for the hall's own built-in objects — chandelier,
+// twin guardian statues, floor compass, antique map, mechanical clock, and
+// the chained guestbook/registry — each anchored to something actually
+// painted in entrance-hall-v2.png (located via direct pixel-region
+// inspection of the approved asset), never an arbitrary box over empty wall
+// or floor (CLAUDE.md).
+const HALL_LORE_OBJECTS = [
+  {
+    id: "hall-chandelier",
+    type: "lore",
+    label: "The tiered chandelier",
+    text: "Every candle on the lowest tier burns down at the same rate, night after night, regardless of how many visitors pass beneath it. The upper two tiers have never been lit in any record staff can find.",
+    anchor: { x: 42, y: 2, width: 18, height: 22 },
+  },
+  {
+    id: "hall-guardian-left",
+    type: "lore",
+    label: "The left guardian",
+    text: "Catalogued as a griffin, though no two inventories describe the same number of wings. It faces the staircase in every photograph taken of this hall since the museum opened — except one, filed separately, which nobody will say where it is now.",
+    anchor: { x: 4, y: 48, width: 13, height: 34 },
+  },
+  {
+    id: "hall-guardian-right",
+    type: "lore",
+    label: "The right guardian",
+    text: "Its twin, supposedly. Conservation measured a half-centimetre difference in wingspan between the two in 1964 and has re-measured every decade since. The difference has never been the same number twice.",
+    anchor: { x: 83, y: 48, width: 13, height: 34 },
+  },
+  {
+    id: "hall-compass",
+    type: "lore",
+    label: "The floor compass mosaic",
+    text: "A star-and-compass mosaic set directly before the stair. Cleaning staff report it is always faintly warm to the touch, in every season, regardless of the hall's own temperature.",
+    anchor: { x: 38, y: 74, width: 24, height: 20 },
+  },
+  {
+    id: "hall-map",
+    type: "lore",
+    label: "The antique map",
+    text: "A folded map of a coastline that matches no surveyed country. It has been re-folded along the same creases for as long as anyone has worked here, though no one admits to doing it.",
+    anchor: { x: 86, y: 30, width: 10, height: 20 },
+  },
+  {
+    id: "hall-clock",
+    type: "lore",
+    label: "The mechanical clock",
+    text: "A brass-and-wood clock that keeps correct time, checked against the city's own civic clock every month without fail. Staff still avoid being alone with it at the top of the hour.",
+    anchor: { x: 90, y: 50, width: 9, height: 26 },
+  },
+  {
+    id: "hall-guestbook",
+    type: "lore",
+    label: "The chained guestbook",
+    text: "Chained to its podium, like a book meant never to leave, though several names inside are of visitors who the front desk has no record of ever admitting.",
+    anchor: { x: 93, y: 62, width: 7, height: 18 },
+  },
+];
+
 function buildHallScenes() {
-  const order = HALL_FACINGS.map((f) => `hall-${f.dir}`);
-  return HALL_FACINGS.map((facing, i) => {
-    const gallery = galleryById(facing.galleryId);
-    const objects = [
-      {
-        id: "hall-donate",
-        type: "donate",
-        label: "Donate a Relic",
-        anchor: DONOR_COUNTER_ANCHOR,
-      },
-    ];
+  const donateObject = {
+    id: "hall-donate",
+    type: "donate",
+    label: "Donate a Relic",
+    anchor: DONOR_COUNTER_ANCHOR,
+  };
+  const portalObjects = HALL_PORTALS.map((portal) => {
+    const gallery = galleryById(portal.galleryId);
     return {
-      id: `hall-${facing.dir}`,
-      kind: "hub",
+      id: `hall-portal-${portal.galleryId}`,
+      type: "portal",
+      label: `Enter ${gallery.name}`,
+      targetSceneId: `${portal.galleryId}-main`,
+      anchor: portal.doorAnchor,
+    };
+  });
+  return [
+    {
+      id: "hall",
+      kind: "main",
       galleryId: null,
       parentSceneId: null,
       caption: "Entrance Hall",
-      image: "entrance",
-      panTo: facing.doorAnchor,
-      camera: DEFAULT_HUB_CAMERA,
-      // Only the hall's south facing actually shows the donor counter in
-      // frame in this composition; the other three facings have nothing to
-      // glow there.
-      interactiveObjects: facing.dir === "s" ? objects : [],
+      image: "hall",
+      camera: HALL_CAMERA,
+      interactiveObjects: [donateObject, ...portalObjects, ...HALL_LORE_OBJECTS],
       visitorAnchors: HALL_VISITOR_ANCHORS,
-      nav: { forward: { targetSceneId: `${facing.galleryId}-main`, label: `Enter ${gallery.name}` } },
-      turnLeft: order[(i + order.length - 1) % order.length],
-      turnRight: order[(i + 1) % order.length],
-    };
-  });
+      nav: {},
+    },
+  ];
 }
 
 // A main gallery scene's own fixed object anchors — placed to clear both
@@ -354,7 +435,7 @@ function buildGalleryScenes(gallery) {
 
 export const SCENES = [...buildHallScenes(), ...GALLERIES.flatMap(buildGalleryScenes)];
 export const SCENE_IDS = new Set(SCENES.map((s) => s.id));
-export const DEFAULT_SCENE_ID = "hall-n";
+export const DEFAULT_SCENE_ID = "hall";
 
 export function sceneById(id) {
   return SCENES.find((s) => s.id === id);
