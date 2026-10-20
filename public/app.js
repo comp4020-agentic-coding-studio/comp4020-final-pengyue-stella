@@ -310,6 +310,12 @@ function viewMyRelic(exhibitId) {
 // Archive index: find an existing exhibit without already knowing which
 // gallery holds it (CLAUDE.md: a persistent "Collection"/"Archive" action).
 
+// A stable CSS hook per classification value, so each status gets its own
+// restrained accent colour without a string-matched style anywhere else.
+function statusSlug(classification) {
+  return classification.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+}
+
 function renderArchiveList() {
   const container = el("archive-list");
   container.innerHTML = "";
@@ -329,14 +335,28 @@ function renderArchiveList() {
       const row = document.createElement("button");
       row.type = "button";
       row.className = "archive-exhibit-row";
+
+      // Every row shares exactly the same four-column structure regardless
+      // of title length, so the catalogue reads as one stable table rather
+      // than rows that stretch/shrink with their own content (CLAUDE.md:
+      // "content length must not change row width").
+      const number = document.createElement("span");
+      number.className = "row-number";
+      number.textContent = `#${String(exhibit.number).padStart(3, "0")}`;
+
       const title = document.createElement("span");
       title.className = "row-title";
-      title.textContent = exhibit.title;
-      const meta = document.createElement("span");
-      meta.className = "row-meta";
-      meta.textContent = `#${exhibit.number} · ${exhibit.classification}`;
-      row.appendChild(title);
-      row.appendChild(meta);
+      title.textContent = exhibit.title; // textContent only — never innerHTML
+
+      const galleryCol = document.createElement("span");
+      galleryCol.className = "row-gallery";
+      galleryCol.textContent = gallery.name;
+
+      const status = document.createElement("span");
+      status.className = `row-status row-status-${statusSlug(exhibit.classification)}`;
+      status.textContent = exhibit.classification;
+
+      row.append(number, title, galleryCol, status);
       row.addEventListener("click", () => {
         closeArchive();
         goToSceneThen(`${exhibit.galleryId}-main`, () => openDossier(exhibit.id));
