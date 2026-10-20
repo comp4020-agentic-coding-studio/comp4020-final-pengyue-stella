@@ -12,6 +12,8 @@ import {
   decayVelocity,
   INERTIA_STOP_THRESHOLD,
   transformFor,
+  exceedsDragThreshold,
+  DRAG_THRESHOLD_PX,
 } from "../public/world/camera-math.js";
 
 function parseTransform(css: string): { scale: number; translateXPercent: number } {
@@ -93,6 +95,21 @@ describe("camera layer transform (the art can never show bare background past it
 
   it("is centred (no shift) at pan=50 regardless of zoom", () => {
     expect(parseTransform(transformFor(50, 1.8, 1)).translateXPercent).toBeCloseTo(0);
+  });
+});
+
+describe("click-vs-drag threshold (a plain click must never be swallowed as a drag)", () => {
+  it("does not count a near-stationary pointer as a drag", () => {
+    expect(exceedsDragThreshold(0, 0)).toBe(false);
+    expect(exceedsDragThreshold(2, 1)).toBe(false);
+    expect(exceedsDragThreshold(DRAG_THRESHOLD_PX - 1, 0)).toBe(false);
+  });
+
+  it("counts real movement past the threshold as a drag, measured as straight-line distance", () => {
+    expect(exceedsDragThreshold(DRAG_THRESHOLD_PX + 1, 0)).toBe(true);
+    // 3-4-5 triangle: hypot(3,4) = 5, comfortably past a 1px threshold even
+    // though neither axis alone would be.
+    expect(exceedsDragThreshold(3, 4, 1)).toBe(true);
   });
 });
 

@@ -364,6 +364,18 @@ a {
   border-color: #8ad1aa;
 }
 
+/* The chosen anchor's real subtype preview (see buildPlacementAnchor) —
+   sized to sit inside its own anchor box at a believable scale, never
+   overflowing it, and ignoring pointer events so the anchor button itself
+   stays the click target. */
+.placement-ghost-preview {
+  position: absolute;
+  inset: 8%;
+  width: 84%;
+  height: 84%;
+  pointer-events: none;
+}
+
 @keyframes placement-glow {
   0%, 100% { box-shadow: 0 0 0 0 rgba(138, 209, 170, 0.4); }
   50% { box-shadow: 0 0 18px 4px rgba(138, 209, 170, 0.5); }

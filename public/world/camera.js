@@ -16,6 +16,7 @@ import {
   decayVelocity,
   INERTIA_STOP_THRESHOLD,
   transformFor,
+  exceedsDragThreshold,
 } from "./camera-math.js";
 
 const PREFERS_REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -29,7 +30,11 @@ export function createSceneCamera({ container, layers }) {
   let zoom = 1;
   let minPan = 0, maxPan = 100, minZoom = 1, maxZoom = 1;
   let velocity = 0; // pan-units per second, for drag inertia
-  let dragging = false;
+  let dragging = false; // true only once real drag movement has been confirmed
+  let pointerIsDown = false; // true from pointerdown until pointerup/cancel, regardless of drag
+  let activePointerId = null;
+  let downX = 0;
+  let downY = 0;
   let lastDragX = 0;
   let lastDragT = 0;
   let rafHandle = null;
@@ -81,17 +86,39 @@ export function createSceneCamera({ container, layers }) {
     rafHandle = requestAnimationFrame((t) => stepInertia(t, timestamp));
   }
 
+  // A pointerdown alone must never claim the gesture: whatever is directly
+  // under the pointer (an interactive-object button, a placement anchor)
+  // needs its own native click to still fire if the pointer never actually
+  // moves. Capture is deferred until real drag movement crosses
+  // DRAG_THRESHOLD_PX — grabbing the pointer immediately on every press (the
+  // previous behaviour here) redirected the matching pointerup, and the
+  // synthetic click browsers dispatch after it, to this container instead
+  // of the button the visitor actually pressed, which is exactly why every
+  // in-room object silently stopped responding to a click once this camera
+  // shipped.
   function onPointerDown(e) {
     if (!enabled) return;
-    dragging = true;
+    pointerIsDown = true;
+    dragging = false;
+    activePointerId = e.pointerId;
+    downX = e.clientX;
+    downY = e.clientY;
     lastDragX = e.clientX;
     lastDragT = performance.now();
+    velocity = 0;
     stopInertia();
-    container.setPointerCapture?.(e.pointerId);
   }
 
   function onPointerMove(e) {
-    if (!dragging || !enabled) return;
+    if (!pointerIsDown || !enabled || e.pointerId !== activePointerId) return;
+    if (!dragging) {
+      if (!exceedsDragThreshold(e.clientX - downX, e.clientY - downY)) return;
+      // The threshold just tipped over into a real drag: claim the pointer
+      // now (not at pointerdown) so a genuine look-around gesture still
+      // gets inertia/out-of-bounds handling, but a plain click never does.
+      dragging = true;
+      container.setPointerCapture?.(e.pointerId);
+    }
     const now = performance.now();
     const dx = e.clientX - lastDragX;
     const dt = Math.max(1, now - lastDragT);
@@ -107,12 +134,20 @@ export function createSceneCamera({ container, layers }) {
   }
 
   function onPointerUp(e) {
-    if (!dragging) return;
+    if (!pointerIsDown) return;
+    const wasDragging = dragging;
+    pointerIsDown = false;
     dragging = false;
-    container.releasePointerCapture?.(e.pointerId);
-    if (!PREFERS_REDUCED_MOTION && Math.abs(velocity) > INERTIA_STOP_THRESHOLD) {
-      rafHandle = requestAnimationFrame((t) => stepInertia(t, null));
+    activePointerId = null;
+    if (wasDragging) {
+      container.releasePointerCapture?.(e.pointerId);
+      if (!PREFERS_REDUCED_MOTION && Math.abs(velocity) > INERTIA_STOP_THRESHOLD) {
+        rafHandle = requestAnimationFrame((t) => stepInertia(t, null));
+      }
     }
+    // If the pointer never moved past the threshold, capture was never
+    // taken — the browser's own click (fired on whatever element the
+    // pointerdown/pointerup pair actually occurred on) proceeds normally.
   }
 
   function onWheel(e) {
@@ -157,6 +192,8 @@ export function createSceneCamera({ container, layers }) {
     enabled = next;
     if (!next) {
       dragging = false;
+      pointerIsDown = false;
+      activePointerId = null;
       stopInertia();
     }
   }

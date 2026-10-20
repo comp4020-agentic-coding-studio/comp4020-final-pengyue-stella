@@ -1003,6 +1003,28 @@ function buildPlacementAnchor(slot, exhibitForm, state) {
   node.setAttribute("aria-label", `Place "${exhibitForm.title}" here`);
   if (state.chosenSlotId === slot.id) {
     node.classList.add("chosen");
+    // A real, scaled preview of the actual subtype — the same procedural
+    // model library the finished exhibit and its dossier use — rather than
+    // a bare text label, so every allowed subtype has a visible
+    // representation and a donor never confirms an empty-looking spot
+    // (CLAUDE.md: "a selected subtype must never produce an empty
+    // preview"). Rendered once as a still frame (renderArtifactPreview
+    // tears its own renderer down immediately), matching this anchor's own
+    // aspect ratio for a believable scale/perspective footprint.
+    const ghostCanvas = document.createElement("canvas");
+    ghostCanvas.className = "placement-ghost-preview";
+    ghostCanvas.width = 160;
+    ghostCanvas.height = 160;
+    node.appendChild(ghostCanvas);
+    const gallery = world.galleries.find((g) => g.id === exhibitForm.galleryId);
+    renderArtifactPreview(ghostCanvas, {
+      category: gallery?.category,
+      subtype: exhibitForm.subtype,
+      accent: gallery?.accent ?? "#88653d",
+      exhibitId: `placement-preview:${exhibitForm.subtype}`,
+      title: exhibitForm.title,
+      donorName: exhibitForm.donorName,
+    });
     const ghost = document.createElement("span");
     ghost.className = "object-label";
     ghost.textContent = exhibitForm.title;

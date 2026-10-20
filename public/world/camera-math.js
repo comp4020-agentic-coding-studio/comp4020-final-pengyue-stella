@@ -72,6 +72,17 @@ export const INERTIA_STOP_THRESHOLD = 0.02; // pan-units/second below which iner
 // scaled by the outer scale()), a pre-scale translateX of X% ends up as a
 // *visual* offset of X% * scale — so the safe pre-scale bound is
 // (scale-1) / (2*scale) * 100, not (scale-1)/2*100.
+// A pointerdown followed by a pointerup with little or no movement must
+// activate whatever is underneath (a button's native click), never be
+// swallowed by the camera's own drag handling — this is the distinction
+// between "look around the room" and "click the glowing object" the brief
+// requires. Movement is measured in real screen pixels (not pan-space) so
+// the threshold feels the same regardless of zoom.
+export const DRAG_THRESHOLD_PX = 6;
+export function exceedsDragThreshold(dx, dy, thresholdPx = DRAG_THRESHOLD_PX) {
+  return Math.hypot(dx, dy) > thresholdPx;
+}
+
 export function transformFor(pan, zoom, parallaxFactor) {
   const scale = 1 + (zoom - 1) * parallaxFactor;
   const maxOffsetPercent = scale > 1 ? ((scale - 1) / (2 * scale)) * 100 : 0;
