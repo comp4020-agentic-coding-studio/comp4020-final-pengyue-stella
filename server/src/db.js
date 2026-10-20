@@ -8,7 +8,8 @@ import { DatabaseSync } from "node:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
-import { GALLERIES } from "./world.js";
+import { GALLERIES, surfaceById, legacySlotPlacement, surfacePointFromUv } from "./world.js";
+import { pointInShape, shapeBounds } from "./geometry.js";
 import { VERDICTS } from "./constants.js";
 
 const DB_FILE = process.env.MUSEUM_DB_FILE ?? "/data/museum.db";
@@ -102,6 +103,23 @@ if (!exhibitColumns.some((c) => c.name === "subtype")) {
   db.exec("ALTER TABLE exhibits ADD COLUMN subtype TEXT");
 }
 
+// Additive migration: surface-aware free placement (replacing the old
+// fixed-box slot arc as the visitor-facing placement model — see
+// server/src/world.js's `placementSurfaces`). `slot_id` and `display_slots`
+// stay exactly as they were (still the thing the UNIQUE constraint race-
+// guards), so every exhibit donated before this shipped keeps resolving
+// normally; `surface_id`/`u`/`v`/`scale` are simply NULL on those older rows
+// and derived on read via `legacySlotPlacement` (see `placementFor` below)
+// rather than backfilled, so no migration can corrupt or lose an existing
+// row's own slot assignment.
+const exhibitColumnsAfterSubtype = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumnsAfterSubtype.some((c) => c.name === "surface_id")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN surface_id TEXT");
+  db.exec("ALTER TABLE exhibits ADD COLUMN placement_u REAL");
+  db.exec("ALTER TABLE exhibits ADD COLUMN placement_v REAL");
+  db.exec("ALTER TABLE exhibits ADD COLUMN placement_scale REAL");
+}
+
 // Seed galleries + slots from the static world layout, idempotently — this
 // is config, never written to via the public API, so re-seeding on every
 // boot (INSERT OR IGNORE) just confirms the schema matches the current
@@ -134,8 +152,51 @@ export function upsertVisitor(id, displayName) {
   ).run(id, displayName ?? "Visitor", now, now, displayName ?? null);
 }
 
-// Returns { exhibit } or { error: "slot_taken" | "not_found" }.
-export function donateExhibit({ galleryId, slotId, title, subtype, originClaim, donorName, visitorId }) {
+// Two donations on the same surface must never visually overlap — rather
+// than a database UNIQUE constraint (which can't express "far enough apart
+// in continuous u/v space" the way it can express "exactly this slot id"),
+// collision is checked inside the same BEGIN IMMEDIATE transaction that
+// performs the insert, against every other exhibit already placed on that
+// (gallery, surface) pair. 0.22 is a fraction of the surface's own
+// normalized span — comfortably wider than a relic's own footprint at
+// default scale, so two confirmed placements never render on top of each
+// other.
+const MIN_SURFACE_SEPARATION = 0.22;
+
+function surfaceCollision(galleryId, surfaceId, u, v) {
+  const rows = db
+    .prepare(
+      "SELECT placement_u AS u, placement_v AS v FROM exhibits WHERE gallery_id = ? AND surface_id = ?",
+    )
+    .all(galleryId, surfaceId);
+  return rows.some((r) => Math.hypot(r.u - u, r.v - v) < MIN_SURFACE_SEPARATION);
+}
+
+// Returns { exhibit } or an { error } naming exactly what failed validation:
+// "not_found" (unknown gallery/surface), "incompatible_surface" (this
+// relic's subtype isn't allowed on that surface type), "outside_surface"
+// (the normalized point doesn't actually fall inside the surface's own
+// authorised polygon — never trust a raw client-supplied u/v blindly),
+// "invalid_scale", or "surface_taken" (collides with an existing
+// placement). `slotId` is still accepted and still used for the gallery's
+// own fixed-capacity bookkeeping (display_slots/occupied_exhibit_id, the
+// same mechanism spec/archive.test.ts's freeSlot() already exercises) even
+// though the *visual* position a visitor sees now comes entirely from
+// surfaceId/u/v — this is what keeps "no free display spot in this
+// gallery" a real, finite constraint without needing a second counter.
+export function donateExhibit({
+  galleryId,
+  slotId,
+  surfaceId,
+  u,
+  v,
+  scale,
+  title,
+  subtype,
+  originClaim,
+  donorName,
+  visitorId,
+}) {
   const slotRow = db
     .prepare("SELECT * FROM display_slots WHERE id = ? AND gallery_id = ?")
     .get(slotId, galleryId);
@@ -143,6 +204,18 @@ export function donateExhibit({ galleryId, slotId, title, subtype, originClaim, 
 
   const galleryRow = db.prepare("SELECT * FROM galleries WHERE id = ?").get(galleryId);
   if (!galleryRow) return { error: "not_found" };
+
+  const located = surfaceById(galleryId, surfaceId);
+  if (!located) return { error: "not_found" };
+  const { surface } = located;
+
+  if (!(surface.allowedRelicTypes ?? []).includes(subtype)) return { error: "incompatible_surface" };
+
+  const point = surfacePointFromUv(surface, u, v);
+  if (!pointInShape(surface.shape, point.x, point.y)) return { error: "outside_surface" };
+
+  const appliedScale = typeof scale === "number" && Number.isFinite(scale) ? scale : 1;
+  if (appliedScale < surface.minScale || appliedScale > surface.maxScale) return { error: "invalid_scale" };
 
   const exhibitId = `exhibit_${randomUUID()}`;
   const accountId = `account_${randomUUID()}`;
@@ -162,9 +235,14 @@ export function donateExhibit({ galleryId, slotId, title, subtype, originClaim, 
       return { error: "slot_taken" };
     }
 
+    if (surfaceCollision(galleryId, surfaceId, u, v)) {
+      db.exec("ROLLBACK");
+      return { error: "surface_taken" };
+    }
+
     db.prepare(
-      "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(exhibitId, galleryId, slotId, galleryRow.category, title, donorName, now, subtype);
+      "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype, surface_id, placement_u, placement_v, placement_scale) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(exhibitId, galleryId, slotId, galleryRow.category, title, donorName, now, subtype, surfaceId, u, v, appliedScale);
 
     db.prepare("UPDATE display_slots SET occupied_exhibit_id = ? WHERE id = ?").run(
       exhibitId,
@@ -175,7 +253,7 @@ export function donateExhibit({ galleryId, slotId, title, subtype, originClaim, 
       "INSERT INTO accounts (id, exhibit_id, parent_id, kind, body, author_name, author_id, created_at) VALUES (?, ?, NULL, 'original', ?, ?, ?, ?)",
     ).run(accountId, exhibitId, originClaim, donorName, visitorId ?? "", now);
 
-    logEvent(visitorId, "exhibit.created", { exhibitId, galleryId, slotId, title });
+    logEvent(visitorId, "exhibit.created", { exhibitId, galleryId, slotId, surfaceId, title });
     db.exec("COMMIT");
   } catch (err) {
     db.exec("ROLLBACK");
@@ -183,6 +261,22 @@ export function donateExhibit({ galleryId, slotId, title, subtype, originClaim, 
   }
 
   return { exhibit: fullExhibit(exhibitId) };
+}
+
+// The normalized placement a client should actually render an exhibit at —
+// its own surface_id/u/v/scale if it was donated under the surface model,
+// or a deterministic default derived from its legacy slot if it predates
+// it (CLAUDE.md-aligned brief: "maintain backward compatibility... by
+// mapping old slots to default positions"). Never a data migration: an old
+// row's slot_id is untouched, this is purely a read-time fallback.
+export function placementFor(exhibitRow) {
+  if (exhibitRow.surface_id) {
+    return { surfaceId: exhibitRow.surface_id, u: exhibitRow.placement_u, v: exhibitRow.placement_v, scale: exhibitRow.placement_scale ?? 1 };
+  }
+  const gallery = GALLERIES.find((g) => g.id === exhibitRow.gallery_id);
+  const slot = gallery?.slots.find((s) => s.id === exhibitRow.slot_id);
+  if (!gallery || !slot) return null;
+  return legacySlotPlacement(gallery, slot, exhibitRow.subtype);
 }
 
 // Returns { account } or { error: "not_found" }.
@@ -310,6 +404,7 @@ function fullExhibit(exhibitId, visitorId) {
     createdAt: row.created_at,
     accounts,
     classification: classifyExhibit(accounts),
+    placement: placementFor(row),
   };
 }
 

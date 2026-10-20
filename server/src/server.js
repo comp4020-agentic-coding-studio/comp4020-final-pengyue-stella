@@ -166,15 +166,25 @@ const server = createServer(async (req, res) => {
         return;
       }
 
-      const { galleryId, slotId, subtype } = payload;
+      const { galleryId, slotId, surfaceId, subtype } = payload;
       const title = typeof payload.title === "string" ? payload.title.trim() : "";
       const originClaim = typeof payload.originClaim === "string" ? payload.originClaim.trim() : "";
       const donorName = typeof payload.donorName === "string" ? payload.donorName.trim() : identity.name;
+      const u = typeof payload.u === "number" && Number.isFinite(payload.u) ? payload.u : NaN;
+      const v = typeof payload.v === "number" && Number.isFinite(payload.v) ? payload.v : NaN;
+      const scale = typeof payload.scale === "number" && Number.isFinite(payload.scale) ? payload.scale : undefined;
       const gallery = galleryById(galleryId);
 
       if (
         !gallery ||
         typeof slotId !== "string" ||
+        typeof surfaceId !== "string" ||
+        Number.isNaN(u) ||
+        Number.isNaN(v) ||
+        u < 0 ||
+        u > 1 ||
+        v < 0 ||
+        v > 1 ||
         !isNonEmptyString(title, MAX_TITLE_LENGTH) ||
         !isNonEmptyString(originClaim, MAX_CLAIM_LENGTH) ||
         !isNonEmptyString(donorName, MAX_NAME_LENGTH) ||
@@ -187,6 +197,10 @@ const server = createServer(async (req, res) => {
       const result = db.donateExhibit({
         galleryId,
         slotId,
+        surfaceId,
+        u,
+        v,
+        scale,
         title,
         subtype,
         originClaim,
@@ -196,12 +210,32 @@ const server = createServer(async (req, res) => {
 
       if (result.error === "not_found") {
         logAction(identity, "donate", { gallery: galleryId, slot: slotId }, "rejected:unknown_gallery_or_slot");
-        json(res, 400, { error: "unknown gallery or slot" }, withCookies({}, identity));
+        json(res, 400, { error: "unknown gallery, slot or surface" }, withCookies({}, identity));
+        return;
+      }
+      if (result.error === "incompatible_surface") {
+        logAction(identity, "donate", { gallery: galleryId, surface: surfaceId }, "rejected:incompatible_surface");
+        json(res, 400, { error: "that relic type can't be placed on that surface" }, withCookies({}, identity));
+        return;
+      }
+      if (result.error === "outside_surface") {
+        logAction(identity, "donate", { gallery: galleryId, surface: surfaceId }, "rejected:outside_surface");
+        json(res, 400, { error: "that position is outside the chosen surface" }, withCookies({}, identity));
+        return;
+      }
+      if (result.error === "invalid_scale") {
+        logAction(identity, "donate", { gallery: galleryId, surface: surfaceId }, "rejected:invalid_scale");
+        json(res, 400, { error: "that scale is outside the surface's allowed range" }, withCookies({}, identity));
         return;
       }
       if (result.error === "slot_taken") {
         logAction(identity, "donate", { gallery: galleryId, slot: slotId }, "rejected:slot_taken");
         json(res, 409, { error: "that slot is already occupied" }, withCookies({}, identity));
+        return;
+      }
+      if (result.error === "surface_taken") {
+        logAction(identity, "donate", { gallery: galleryId, surface: surfaceId }, "rejected:surface_taken");
+        json(res, 409, { error: "that spot on the surface is already taken" }, withCookies({}, identity));
         return;
       }
 
