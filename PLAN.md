@@ -4,49 +4,52 @@ Working implementation plan for the final-project pivot. This repo
 previously carried Traces of ANU (crits 8–9, see Git history and
 `reflections/`); it was rebuilt around
 `design/The_Cursed_Museum_Project_Blueprint.pdf` as a free-roam 3D museum
-for crit 10, then pivoted again, post-crit-10, to the 2.5D fixed-scene
-presentation this plan now describes — see
-`docs/adr/0003-scene-exploration.md` for that second pivot's full decision
+for crit 10, pivoted to a 2.5D fixed-scene presentation
+(`docs/adr/0003-scene-exploration.md`), then pivoted again to the
+illustrated-scene presentation this plan now describes — see
+`docs/adr/0004-illustrated-scenes.md` for that pivot's full decision
 record. Update this file when direction materially changes; it isn't a
 changelog — `PROCESS.md` is.
 
 ## What this build needs to prove
 
-One shared museum presented as a crafted 2.5D cabinet of curiosities: a
-fixed graph of richly staged camera scenes (a four-facing Entrance Hall, a
-main shot and a close-up per gallery), moved between by clicking hotspots,
-visible to every other connected visitor through a live per-room headcount;
-exhibits are inspected and donated into specific display slots; written
-accounts contradict each other without erasing anything; votes classify
-each account; all of it survives a restart and a redeploy.
+One shared museum presented as full-bleed illustrated scenes: a fixed graph
+of scenes (a four-facing Entrance Hall, a main view and a close-up per
+gallery), moved between by clicking hotspots or a framed exhibit card,
+visible to every other connected visitor through a live cameo roster per
+scene; exhibits are inspected and donated into specific display slots via
+a persistent action reachable from anywhere; written accounts contradict
+each other without erasing anything; votes classify each account; all of
+it survives a restart and a redeploy.
 
 ## Build order (checkpoints, each a commit)
 
-The first six checkpoints below shipped the crit-10 free-roam version
-(`docs/adr/0002-transport.md`, world/archive/interaction/multiplayer/finish
-in that order). The scene-exploration pivot (this plan's current state)
-replaced the exploration/presentation layer afterward, in its own
+The first six checkpoints shipped the crit-10 free-roam version
+(`docs/adr/0002-transport.md`). The scene-exploration pivot
+(`docs/adr/0003-scene-exploration.md`) replaced the exploration layer with
+fixed camera vantages in its own checkpoints. The illustrated-scene pivot
+(this plan's current state, `docs/adr/0004-illustrated-scenes.md`) replaced
+that live-3D-room presentation with illustrated scenes, in four further
 checkpoints:
 
-1. **Exploration model** — `server/src/world.js`'s `SCENES` (hub facings,
-   main shots, close-ups, hotspots), `public/world/exploration.js` (the
-   scene-cut/turn controller), `docs/adr/0003-scene-exploration.md`.
-2. **Hotspot + scene system** — the hotspot overlay in `public/app.js`
-   (positioned every frame via `projectToScreen`), the fade/turn UI in
-   `index.html`/`styles.css`, removal of the old movement/camera-rig/avatar
-   modules.
-3. **Dynamic exhibit integration** — every donated exhibit in a gallery's
-   main scene gets its own hotspot; verified every hotspot and display slot
-   actually falls inside its scene's camera frustum (not just assumed from
-   the geometry), including at narrow/phone-portrait aspect ratios.
-4. **Dossier/voting adaptation** — unchanged data/API, re-wired entry
-   points ("View My Relic" is now a scene cut, not a guided walk).
-5. **Multiplayer presence redesign** — scene-scoped presence (`POST
-   /api/presence`, `scene-presence` SSE event) replacing continuous
-   position broadcast; no embodied avatars.
-6. **Final polish** — hotspot declutter (`declutterHotspots`, so
-   overlapping anchors never stack unclickable), reduced-motion for
-   scene-cuts/turns, doc updates, redeploy.
+1. **Illustrated scenes and navigation** — full-bleed scene images
+   (`public/assets/gallery-scenes/`), the percentage-anchor world model
+   (`server/src/world.js`), the cross-slide/page-turn controller
+   (`public/world/illustration.js`), removal of the live Three.js room
+   (`scene.js`, `exploration.js`) and its room-only furniture/texture code.
+2. **Visible visitor presence** — a non-reversible per-visitor public key
+   (`identity.js`'s `publicKeyFor`), a per-scene visitor roster
+   (`sse.js`'s `visitorsInScene`), and cameo medallions in the client
+   (`public/app.js`'s cameo rendering) with an activity pulse on
+   donate/account/vote (`activity` SSE event).
+3. **Discoverable donation** — a persistent "Donate a Relic" action in
+   every main scene, with the in-world donor counter kept as a secondary
+   entrance; new exhibits render as dimensional Gothic display cards.
+4. **Discoverable dossiers and voting** — every real exhibit as an
+   interactive framed card with hover/focus lift; a persistent "Archive"
+   action listing every exhibit by gallery; an idempotent founding seed
+   (`db.js`'s `seedFoundingCollection`) so a fresh deploy's galleries are
+   never empty.
 
 ## Original build order (crit-10 free-roam version, for reference)
 
@@ -81,8 +84,7 @@ doesn't duplicate it; keep that section authoritative.
 - `GET /readme/` — README.md rendered in full (spec requirement, unchanged
   mechanism from the prior project)
 - `GET /api/world` — galleries, display slots (occupied/free), the fixed
-  scene graph (`scenes`, each with its vantage and hotspots), and static
-  geometry config the client needs to build the world
+  scene graph (`scenes`, each with its illustration and hotspot anchors)
 - `GET /api/exhibits` — every exhibit with its slot, gallery, donor, and
   nested accounts + vote tallies (full archive snapshot, used on load and
   on reconnect)
@@ -91,25 +93,22 @@ doesn't duplicate it; keep that section authoritative.
 - `POST /api/accounts/:id/vote` — cast or change a vote
 - `GET /api/me` — visitor identity (cookie-backed, unchanged mechanism)
 - `POST /api/presence` — report which fixed scene this visitor is
-  currently viewing (rate-limited; not persisted — see
-  `docs/adr/0003-scene-exploration.md`; replaces the retired
-  `POST /api/presence/move`)
-- `GET /api/events` — SSE stream: `scene-presence`, `exhibit`, `account`,
-  `vote` events
+  currently viewing (rate-limited; not persisted)
+- `GET /api/events` — SSE stream: `scene-presence` (count + visible cameo
+  roster), `exhibit`, `account`, `vote`, `activity` events
 
 ## Explicitly out of scope for this version
 
 User-uploaded exhibit images, spatial audio, a moderation queue beyond
 length caps/rate limits, more than four galleries, account/login system,
-editing or deleting a published account or vote's history, unrestricted
-free-roam movement (deliberately retired — see
-`docs/adr/0003-scene-exploration.md`), embodied third-person avatars for
-other visitors.
+editing or deleting a published account or vote's history, free-roam
+movement, and embodied third-person avatars for other visitors (presence
+is a cameo medallion, never a walking character).
 
 ## Status
 
-The scene-exploration pivot (checkpoints 1-6 above) is complete: fixed
-scenes, hotspot overlay, dynamic exhibit hotspots, dossier/voting
-unchanged, scene-scoped presence, declutter/reduced-motion polish. See
-`docs/adr/0003-scene-exploration.md`'s own verification section for what
-was checked before calling it done.
+The illustrated-scene pivot (checkpoints 1-4 above) is complete: illustrated
+scenes with page-turn/cross-slide navigation, visible visitor cameos,
+discoverable donation, and discoverable dossiers/voting with a founding
+seed. See `docs/adr/0004-illustrated-scenes.md`'s own verification section
+for what was checked before calling it done.

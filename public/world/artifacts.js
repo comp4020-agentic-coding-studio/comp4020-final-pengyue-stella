@@ -384,3 +384,61 @@ export function buildArtifactMesh({ category, subtype, accent, exhibitId, title,
 
   return { group, interactY: interactY * scale };
 }
+
+// A one-shot (not continuously rendered) preview of a single artifact mesh
+// on its own canvas — the small subtype/category image every exhibit card
+// and dossier header shows, rebuilding the same procedural model the
+// exhibit itself is keyed to rather than a static icon, so the preview is
+// always specific to that donation's own category/subtype/seed. `canvas` is
+// caller-owned so each UI surface can size its own; this function tears its
+// renderer/scene down immediately after the single frame is drawn, leaving
+// nothing running in the background — there is no live 3D viewport in this
+// presentation any more (see docs/adr/0003-scene-exploration.md), only this
+// still-frame thumbnail generator.
+export function renderArtifactPreview(canvas, { category, subtype, accent, exhibitId, title, donorName }) {
+  // A WebGL context can fail to create (headless/software-rendering
+  // environments, a browser with WebGL disabled, a context-lost GPU
+  // process) — this is a decorative still-frame thumbnail, not a load-
+  // bearing interaction, so a failure here must never throw past this
+  // function and break whatever called it (refreshHotspots rebuilding the
+  // entire hotspot layer, mid-loop, is exactly the kind of caller a thrown
+  // error here would otherwise leave half-finished).
+  try {
+    const scene = new THREE.Scene();
+    scene.background = null;
+    scene.add(new THREE.AmbientLight("#5a4a36", 3));
+    const key = new THREE.PointLight("#ffcf8a", 60, 0, 2);
+    key.position.set(0.6, 1.2, 1.0);
+    scene.add(key);
+
+    const { group, interactY } = buildArtifactMesh({ category, subtype, accent, exhibitId, title, donorName });
+    group.position.set(0, 0, 0);
+    scene.add(group);
+
+    const camera = new THREE.PerspectiveCamera(42, canvas.width / canvas.height, 0.05, 20);
+    const focusHeight = Math.max(0.3, interactY);
+    camera.position.set(0.55, focusHeight + 0.35, 0.85);
+    camera.lookAt(0, focusHeight * 0.6, 0);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    renderer.setSize(canvas.width, canvas.height, false);
+    renderer.render(scene, camera);
+
+    // Nothing here is kept running: dispose the renderer immediately since
+    // this is a single still frame, not a live viewport.
+    renderer.dispose();
+  } catch (err) {
+    console.error("artifact preview render failed, leaving a plain placeholder:", err);
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.fillStyle = accent ?? "#88653d";
+      ctx.globalAlpha = 0.25;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1;
+    }
+  }
+}

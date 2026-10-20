@@ -49,6 +49,19 @@ export function colorFor(visitorId) {
   return `hsl(${hue}, 70%, 42%)`;
 }
 
+// A stable but non-reversible-to-the-cookie presentation key, used wherever
+// a visitor needs to be identifiable to OTHER visitors (scene-presence
+// cameos, activity cues) without ever putting the actual visitor cookie
+// value on the wire to a browser that isn't that visitor's own. Two
+// different visitor ids always hash to (practically) different keys, and
+// the same id always hashes to the same key, which is all "which of these
+// cameos is the same person across a reconnect" needs — it is deliberately
+// NOT the cookie value itself, the same reasoning nameFor/colorFor already
+// apply to deriving a display name/colour instead of exposing the id raw.
+export function publicKeyFor(visitorId) {
+  return hashString(`presence-key:${visitorId}`).toString(36);
+}
+
 function parseCookies(header) {
   const out = new Map();
   if (!header) return out;

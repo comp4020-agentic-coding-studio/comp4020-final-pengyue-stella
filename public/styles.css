@@ -38,57 +38,205 @@ a {
   overflow: hidden;
   background: var(--obsidian);
   outline-offset: -3px;
+  perspective: 1800px;
 }
 
 .viewport:focus-visible {
   outline: 3px solid var(--gold);
 }
 
-#scene-canvas {
+/* --- illustrated scene stack --------------------------------------------- */
+/* Two layers ping-pong (see illustration.js) so a page-turn / cabinet-door
+   transition can animate the incoming scene over the outgoing one. Each
+   layer stacks art -> vignette -> ornamental frame -> dust, full-bleed. */
+
+.scene-stack {
   position: absolute;
   inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  touch-action: none;
+  transform-style: preserve-3d;
 }
 
-/* Scene-cut transition cover: opacity driven by exploration.js's fade
-   phases. Fixed, full-bleed, above the canvas but below every UI layer, so
-   a scene swap (vantage jump) is never visible mid-motion. */
-.scene-fade {
+.scene-layer {
   position: absolute;
   inset: 0;
-  z-index: 5;
-  background: var(--obsidian);
-  opacity: 0;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.scene-art {
+  position: absolute;
+  inset: 0;
+  background-color: #0a0908;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Deep vignette + warm gradient layers so UI text stays readable over a
+   busy, cluttered illustration regardless of its own local contrast. */
+.scene-vignette {
+  position: absolute;
+  inset: 0;
   pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(10, 8, 6, 0) 35%, rgba(8, 6, 4, 0.55) 100%),
+    linear-gradient(to bottom, rgba(10, 8, 6, 0.55) 0%, rgba(10, 8, 6, 0) 22%, rgba(10, 8, 6, 0) 68%, rgba(10, 8, 6, 0.65) 100%);
 }
 
-/* Hotspot overlay: real, focusable <button>s positioned every frame over
-   their matching 3D point (see exploration.js's projectToScreen). This is
-   the entire interaction surface now — door/closeup/back/donate/lore
-   hotspots and every exhibit in view — so mouse, touch and Tab/Enter all
-   reach the same thing the same way. */
-/* The layer itself must never intercept clicks over its own empty space —
-   only an actual .hotspot button (which opts back in below) should be
-   clickable. Without this, the layer's full-viewport box (sized to sit
-   above the turn-controls/scene-caption z-index) silently ate every click
-   meant for whatever sits underneath it, hub turn arrows included —
-   caught by actually clicking through the app, not by reading the CSS. */
+/* Ornamental foreground framing: a dark gilt-edge border treatment so every
+   illustrated scene reads as viewed through the museum's own archway/frame,
+   not a flat photograph filling the screen. */
+.scene-frame {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 2px rgba(198, 161, 107, 0.22),
+    inset 0 0 90px 30px rgba(5, 4, 3, 0.75);
+}
+
+/* Restrained drifting dust/light motes — a CSS-only approximation of the
+   old Three.js particle field, skipped entirely under reduced motion. */
+.scene-dust {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    radial-gradient(2px 2px at 20% 30%, rgba(198, 161, 107, 0.55), transparent 60%),
+    radial-gradient(1.5px 1.5px at 70% 60%, rgba(198, 161, 107, 0.4), transparent 60%),
+    radial-gradient(1.5px 1.5px at 40% 80%, rgba(198, 161, 107, 0.35), transparent 60%),
+    radial-gradient(2px 2px at 85% 20%, rgba(198, 161, 107, 0.45), transparent 60%),
+    radial-gradient(1px 1px at 55% 45%, rgba(198, 161, 107, 0.3), transparent 60%);
+  animation: dust-drift 18s ease-in-out infinite alternate;
+}
+
+@keyframes dust-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-1.5%, -2%, 0); }
+}
+
+/* Hub-turn cross-slide: incoming layer slides/fades in from the pressed
+   arrow's side, outgoing layer slides the opposite way — "turning your head
+   in the same room," never a full-page cut. */
+.scene-layer-incoming-turn {
+  opacity: 0;
+  transform: translateX(6%) scale(1.02);
+}
+.scene-layer-outgoing-turn {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+.scene-layer-exited-turn {
+  opacity: 0;
+  transform: translateX(-6%) scale(0.99);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.scene-layer-settled {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+/* Page-turn / cabinet-door cut: the incoming scene rotates in on the Y axis
+   from one hinge edge (transform-origin at that edge) over the outgoing
+   scene, which rotates slightly away and darkens — approximating a heavy
+   illustrated page turning or a cabinet door opening. `forward` hinges from
+   the right edge (as if turning a page left-to-right, the "proceeding
+   deeper" direction); `back` hinges from the left edge, so retracing a step
+   visually reverses the same motion rather than reusing an unrelated one. */
+.scene-layer-page-in-forward {
+  transform-origin: left center;
+  transform: rotateY(-100deg) translateZ(0);
+  opacity: 0.55;
+  filter: brightness(0.5);
+  box-shadow: 40px 0 80px rgba(0, 0, 0, 0.6);
+}
+.scene-layer-page-out-forward {
+  transform-origin: right center;
+  transform: rotateY(0deg);
+  opacity: 1;
+  filter: brightness(1);
+}
+.scene-layer-page-out-forward-exit {
+  transform-origin: right center;
+  transform: rotateY(85deg);
+  opacity: 0.3;
+  filter: brightness(0.4);
+  transition: transform 0.6s cubic-bezier(0.45, 0, 0.2, 1), opacity 0.6s ease, filter 0.6s ease;
+}
+
+.scene-layer-page-in-back {
+  transform-origin: right center;
+  transform: rotateY(100deg) translateZ(0);
+  opacity: 0.55;
+  filter: brightness(0.5);
+  box-shadow: -40px 0 80px rgba(0, 0, 0, 0.6);
+}
+.scene-layer-page-out-back {
+  transform-origin: left center;
+  transform: rotateY(0deg);
+  opacity: 1;
+  filter: brightness(1);
+}
+.scene-layer-page-out-back-exit {
+  transform-origin: left center;
+  transform: rotateY(-85deg);
+  opacity: 0.3;
+  filter: brightness(0.4);
+  transition: transform 0.6s cubic-bezier(0.45, 0, 0.2, 1), opacity 0.6s ease, filter 0.6s ease;
+}
+
+.scene-layer-settled {
+  transform: rotateY(0deg) translateX(0) scale(1);
+  opacity: 1;
+  filter: brightness(1);
+  box-shadow: none;
+  transition: transform 0.6s cubic-bezier(0.2, 0.6, 0.3, 1), opacity 0.5s ease, filter 0.5s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-dust {
+    animation: none;
+  }
+  .scene-layer-incoming-turn,
+  .scene-layer-outgoing-turn,
+  .scene-layer-exited-turn,
+  .scene-layer-settled,
+  .scene-layer-page-in-forward,
+  .scene-layer-page-out-forward,
+  .scene-layer-page-out-forward-exit,
+  .scene-layer-page-in-back,
+  .scene-layer-page-out-back,
+  .scene-layer-page-out-back-exit {
+    transition: none !important;
+    transform: none !important;
+    filter: none !important;
+    box-shadow: none !important;
+  }
+}
+
+/* --- hotspot overlay: plain percentage-anchored buttons ------------------ */
+/* Positioned directly from a hotspot's {x, z} percentage anchor (see
+   app.js's refreshHotspots) — no 3D projection, since there is no camera any
+   more. The layer itself must never intercept clicks over its own empty
+   space, only an actual .hotspot button opts back in. */
 .hotspot-layer {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 4;
   pointer-events: none;
 }
 
 .hotspot {
   position: absolute;
+  max-width: min(72vw, 260px);
   transform: translate(-50%, -50%);
   font: inherit;
   font-size: 0.8rem;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
   padding: 0.4rem 0.85rem;
   border-radius: 999px;
   border: 1px solid var(--brass);
@@ -113,17 +261,182 @@ a {
   50% { box-shadow: 0 0 0 6px rgba(198, 161, 107, 0); }
 }
 
-.hotspot-exhibit {
-  border-color: var(--gold);
-  color: var(--parchment);
-}
-
 .hotspot-donate {
   border-color: var(--rose);
 }
 
-/* Hub-only look-turn controls — the one place scene navigation is a smooth
-   turn rather than a cut (see exploration.js's turnLeft/turnRight). */
+/* --- exhibit cards: dimensional Gothic display cards --------------------- */
+/* Each real persisted exhibit renders as a card with perspective tilt,
+   layered shadow and a small 3D preview — not a tiny distant mesh, not a
+   plain pill button. Hovering/focusing one brightens and lifts it while
+   `.exhibit-card.quiet` (applied to every OTHER card in the same scene)
+   recedes, per CLAUDE.md's "quiet surrounding exhibits" requirement. */
+.exhibit-card {
+  position: absolute;
+  width: clamp(104px, 11vw, 148px);
+  transform: translate(-50%, -100%) rotateX(2deg) rotateZ(var(--card-tilt, 0deg));
+  transform-style: preserve-3d;
+  background: linear-gradient(160deg, #2a1f17 0%, #1a130e 100%);
+  border: 2px solid var(--brass);
+  border-radius: 8px;
+  padding: 0.4rem 0.45rem 0.5rem;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.55), 0 2px 0 rgba(198, 161, 107, 0.15) inset;
+  color: var(--parchment);
+  cursor: pointer;
+  text-align: center;
+  font: inherit;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, opacity 0.22s ease, filter 0.22s ease;
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.exhibit-card .card-preview {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 4px;
+  background: radial-gradient(circle at 50% 35%, #241a12, #0f0b08);
+  display: block;
+  margin-bottom: 0.3rem;
+  border: 1px solid rgba(198, 161, 107, 0.4);
+}
+
+.exhibit-card .card-title {
+  display: block;
+  font-family: Georgia, "Cormorant Garamond", serif;
+  font-size: 0.76rem;
+  line-height: 1.15;
+  color: var(--gold);
+  margin-bottom: 0.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exhibit-card .card-donor {
+  display: block;
+  font-size: 0.62rem;
+  color: rgba(233, 221, 197, 0.75);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exhibit-card .card-affordance {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(198, 161, 107, 0.9);
+}
+
+.exhibit-card:hover,
+.exhibit-card:focus-visible {
+  transform: translate(-50%, -112%) scale(1.12) rotateX(0deg) rotateZ(0deg);
+  box-shadow: 0 0 0 2px var(--gold), 0 18px 34px rgba(0, 0, 0, 0.65);
+  outline: none;
+  z-index: 7;
+}
+
+.exhibit-card.quiet {
+  opacity: 0.62;
+  filter: saturate(0.7) brightness(0.85);
+}
+
+/* A seeded decorative placeholder, clearly non-interactive — establishes
+   density in a gallery with few real donations without pretending to be a
+   persisted exhibit (CLAUDE.md: never fake a dossier for decorative
+   content). */
+.decorative-frame {
+  position: absolute;
+  width: clamp(48px, 5.5vw, 76px);
+  aspect-ratio: 3 / 4;
+  transform: translate(-50%, -100%);
+  border: 2px solid rgba(136, 101, 61, 0.45);
+  border-radius: 4px;
+  background: rgba(20, 15, 11, 0.35);
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+/* --- visitor cameos -------------------------------------------------------*/
+/* A small Gothic silhouette/medallion per OTHER visitor sharing this scene
+   (see docs/adr/0003-scene-exploration.md's visible-presence restoration) —
+   not an embodied 3D avatar, not free-roam movement; just a stable,
+   per-visitor visual anchored at a scene-relative spot that drifts slightly
+   for restrained idle motion. */
+.cameo-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.cameo {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  animation: cameo-idle 5s ease-in-out infinite;
+  animation-delay: var(--cameo-delay, 0s);
+}
+
+.cameo-medallion {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  border: 2px solid var(--cameo-color, var(--gold));
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.12), rgba(10, 8, 6, 0.85));
+  box-shadow: 0 0 10px 1px color-mix(in srgb, var(--cameo-color, var(--gold)) 55%, transparent), 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.cameo-name {
+  font-size: 0.66rem;
+  color: var(--parchment);
+  background: rgba(17, 16, 15, 0.7);
+  padding: 0.08rem 0.4rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* "You" render distinctly from every other visible cameo — a filled gold
+   medallion rather than the hollow-ring treatment everyone else gets. */
+.cameo.is-you .cameo-medallion {
+  background: radial-gradient(circle at 35% 30%, rgba(255, 244, 214, 0.5), var(--cameo-color, var(--gold)));
+}
+
+@keyframes cameo-idle {
+  0%, 100% { transform: translate(-50%, -100%) translateY(0); }
+  50% { transform: translate(-50%, -100%) translateY(-5px); }
+}
+
+/* A restrained activity ring pulsing around a cameo when that visitor just
+   donated/published/shifted a classification — connecting the live archive
+   event to the specific visible presence that caused it. */
+.cameo.activity .cameo-medallion {
+  animation: cameo-activity 1.4s ease-out 1;
+}
+
+@keyframes cameo-activity {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cameo-color, var(--gold)) 70%, transparent); }
+  100% { box-shadow: 0 0 0 14px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cameo {
+    animation: none;
+  }
+  .cameo.activity .cameo-medallion {
+    animation: none;
+  }
+}
+
+/* --- hub-only look-turn controls ------------------------------------------*/
 .turn-controls {
   position: absolute;
   inset: 0;
@@ -160,8 +473,7 @@ a {
   right: 1rem;
 }
 
-/* Short environmental-lore popover — a hotspot that isn't a full archival
-   exhibit, just a line or two of in-world storytelling. */
+/* --- lore popover ---------------------------------------------------------*/
 .lore-card {
   position: absolute;
   left: 50%;
@@ -195,7 +507,7 @@ a {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 3;
+  z-index: 6;
   padding: calc(0.75rem + env(safe-area-inset-top, 0px)) 1.1rem 2.2rem 1.1rem;
   background: linear-gradient(to bottom, rgba(17, 16, 15, 0.8), rgba(17, 16, 15, 0) 100%);
   display: flex;
@@ -246,12 +558,104 @@ a {
   background: rgba(53, 37, 28, 0.8);
 }
 
+/* --- persistent actions: always-reachable Donate + Archive --------------- */
+/* Fixed top-right, below the topbar text, so they never cover the artwork's
+   centre or collide with the bottom bar — reachable from every main scene
+   without requiring one specific hall orientation. */
+.persistent-actions {
+  position: absolute;
+  top: calc(0.9rem + env(safe-area-inset-top, 0px));
+  right: 1.1rem;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.persistent-action {
+  pointer-events: auto;
+  font: inherit;
+  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--gold);
+  background: rgba(53, 37, 28, 0.82);
+  color: var(--parchment);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.persistent-action:hover,
+.persistent-action:focus-visible {
+  background: rgba(102, 61, 67, 0.9);
+  outline: none;
+}
+
+.donate-action {
+  border-color: var(--rose);
+  background: rgba(102, 61, 67, 0.75);
+}
+
+.archive-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding-top: 0.3rem;
+}
+
+.archive-gallery-group h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  color: var(--mahogany);
+  font-family: Georgia, "Cormorant Garamond", serif;
+}
+
+.archive-exhibit-row {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.35rem 0.1rem;
+  font: inherit;
+  font-size: 0.85rem;
+  background: none;
+  border: none;
+  border-bottom: 1px dashed rgba(136, 101, 61, 0.4);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.archive-exhibit-row:hover,
+.archive-exhibit-row:focus-visible {
+  background: rgba(198, 161, 107, 0.15);
+  outline: none;
+}
+
+.archive-exhibit-row .row-title {
+  font-weight: 600;
+}
+
+.archive-exhibit-row .row-meta {
+  font-size: 0.76rem;
+  color: #6b5d47;
+  flex-shrink: 0;
+}
+
 .bottom-bar {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 3;
+  z-index: 6;
   padding: 1.6rem 1.1rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
   background: linear-gradient(to top, rgba(17, 16, 15, 0.85), rgba(17, 16, 15, 0.5) 60%, rgba(17, 16, 15, 0) 100%);
   display: flex;
@@ -282,7 +686,7 @@ a {
   color: rgba(233, 221, 197, 0.8);
 }
 
-/* --- overlay gates (name entry, donation form, dossier) ------------------ */
+/* --- overlay gates (name entry, donation form, dossier, archive) --------- */
 
 .overlay-gate {
   position: absolute;
@@ -298,8 +702,8 @@ a {
 /* `hidden` is only the default UA display:none — a plain class rule like
    `.overlay-gate { display: flex }` would otherwise outrank it and the gate
    would render even while hidden (caught by actually loading the page: all
-   three gates appeared stacked on first paint). display is set only when
-   NOT hidden, so the attribute always wins when present. */
+   gates appeared stacked on first paint). display is set only when NOT
+   hidden, so the attribute always wins when present. */
 .overlay-gate:not([hidden]) {
   display: flex;
 }
@@ -412,10 +816,6 @@ a {
   position: relative;
 }
 
-/* Brass corner accents — a small archival-record touch beyond the shared
-   gate-card border every overlay already has. Drawn as four pseudo-element
-   triangles rather than a background-image so they sit visibly inset from
-   the card's own rounded border instead of fighting it at the very edge. */
 .dossier-card::before,
 .dossier-card::after {
   content: "";
@@ -448,10 +848,6 @@ a {
   font-size: 1.3rem;
   line-height: 1;
   cursor: pointer;
-  /* The × glyph's own font metrics don't sit on the exact vertical centre
-     of its line box, so a plain centred-text button reads as visibly off
-     from the circle it sits in — flex centering the glyph itself (not just
-     the text) fixes this regardless of font/glyph quirks. */
   padding: 0;
   display: flex;
   align-items: center;
@@ -486,9 +882,6 @@ a {
   padding-left: 0.65rem;
 }
 
-/* A disputed account (a tied verdict) reads differently at a glance, not
-   just via its text badge — a dashed rose border instead of the settled
-   solid brass one. */
 .account-block.disputed {
   border-left: 3px dashed var(--rose);
   background: rgba(102, 61, 67, 0.06);
@@ -663,13 +1056,58 @@ a {
   color: #5b4f3d;
 }
 
+/* --- phone-portrait layout ------------------------------------------------ */
+/* Checked at 390x844 (an iPhone's CSS viewport): the persistent actions
+   collapse to icon-only chips and move clear of the topbar text; hotspots,
+   cameos and exhibit cards are already percentage-anchored so they scale
+   with the viewport, but cards shrink further and the bottom bar/topbar
+   text sizes come down so nothing overlaps on a short, narrow screen. */
 @media (max-width: 480px) {
+  .topbar {
+    padding: calc(0.6rem + env(safe-area-inset-top, 0px)) 0.8rem 1.6rem 0.8rem;
+  }
   .topbar h1 {
     font-size: 1rem;
   }
   .about-link {
     font-size: 0.76rem;
     padding: 0.25rem 0.55rem;
+  }
+  .persistent-actions {
+    top: calc(3.6rem + env(safe-area-inset-top, 0px));
+    gap: 0.35rem;
+  }
+  .persistent-action {
+    font-size: 0.72rem;
+    padding: 0.35rem 0.6rem;
+  }
+  .exhibit-card {
+    width: clamp(64px, 19vw, 86px);
+    padding: 0.28rem 0.32rem 0.36rem;
+  }
+  .exhibit-card .card-title {
+    font-size: 0.62rem;
+  }
+  .exhibit-card .card-donor {
+    font-size: 0.52rem;
+  }
+  .exhibit-card .card-affordance {
+    font-size: 0.5rem;
+    margin-top: 0.1rem;
+  }
+  .decorative-frame {
+    width: clamp(34px, 4vw, 54px);
+  }
+  .cameo-medallion {
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+  .cameo-name {
+    font-size: 0.58rem;
+    max-width: 5rem;
+  }
+  .bottom-bar {
+    padding: 1.1rem 0.8rem calc(0.6rem + env(safe-area-inset-bottom, 0px));
   }
   .gate-card {
     padding: 1.2rem 1.1rem;

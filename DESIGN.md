@@ -31,49 +31,45 @@ Lighting in the 3D world is a handful of warm point lights per room (per-room
 colour-graded ambient + 2–4 lamps), not one flat scene light, so the rooms
 read as distinct even built from the same modular geometry kit.
 
-## World model — one shared space, a fixed scene graph
+## World model — one shared graph, illustrated scenes
 
-Everything still lives in one Three.js scene graph and one coordinate
-system (same world geometry, furniture, lighting and artifact library as
-before) — but there is no avatar position any more, and no continuous
-movement. See `docs/adr/0003-scene-exploration.md` for the full decision
-record on this pivot from the earlier free-roam version.
+The museum is a small, server-defined graph of **scenes**
+(`server/src/world.js`'s `GALLERY_LAYOUT`/`buildHallScenes`/
+`buildGalleryScenes`): the Entrance Hall (one of four "facings," turned
+between — see below), a main establishing view per gallery, and a close-up
+view per gallery aimed at its own hero display. Each scene carries a
+full-bleed illustration (`public/assets/gallery-scenes/`) and a list of
+**hotspots** — door, closeup, back, donate, lore, and every donated
+exhibit currently displayed there. See
+`docs/adr/0004-illustrated-scenes.md` for the decision to present scenes
+this way instead of as a live Three.js room (ADR 0003's version), and
+`docs/adr/0003-scene-exploration.md` for the earlier decision this
+extends: click-driven navigation between fixed vantages, not free-roam.
 
-A visitor is always exactly "at" one of a small, server-defined set of
-**scenes** (`server/src/world.js`'s `SCENES`): the Entrance Hall (one of
-four "facings," turned between — see below), a main establishing shot per
-gallery, and a close-up vantage per gallery aimed at its own hero display.
-Each scene carries a fixed camera vantage (`{ pos, lookAt, fov }`) and a
-list of **hotspots** — door, closeup, back, donate, lore, and every
-donated exhibit currently visible from that vantage.
+- **Turning** (the hub's only multi-exit case) is a cross-slide between
+  two illustrations — standing in place, turning to face a different
+  doorway.
+- **Every other navigation** (entering a gallery, looking closer, going
+  back) is a page-turn/cabinet-door cut: the incoming scene rotates in
+  from a hinge edge over the outgoing one.
 
-- **Turning** (the hub's only multi-exit case) is a smooth look-only tween
-  at a fixed position — the visitor hasn't moved, only turned to face a
-  different doorway.
-- **Every other navigation** (entering a gallery, looking closer at a
-  display, going back, returning to the hub) is a brief fade-to-opaque cut:
-  the vantage swaps instantly while the screen is covered, then fades back
-  in — "stepping through a doorway" or "focusing into a display."
-
-There is no collision model: a fixed vantage is, by construction, always a
-position someone decided was a good shot, so nothing needs clamping against
-wall segments any more.
+Both transitions collapse to a near-instant swap under
+`prefers-reduced-motion`. There is no collision model and no camera a
+visitor steers — a scene is, by construction, always the exact view
+someone illustrated.
 
 Floors, doors, and the four galleries are still static server-side config
 (not donated/user content), each with a stable `galleryId`. Each gallery
-still exposes a small number of **display slots** — predefined `{x, z,
-rotationY}` anchors where a donated exhibit's mesh is placed — enough per
-gallery that the opening room never looks sparse, with a documented
-behaviour for when a gallery's slots are all full (see Interaction below).
+still exposes a small number of **display slots** — predefined `{x, z}`
+percentage anchors (of the illustration's width/height) where a donated
+exhibit's card is positioned — enough per gallery that the opening room
+never looks sparse, with a documented behaviour for when a gallery's slots
+are all full (see Interaction below).
 
-Hotspots are real, always-visible, focusable `<button>` elements, positioned
-every frame by projecting their 3D anchor to screen space over the current
-vantage (`public/world/exploration.js`'s `projectToScreen`) — the same
-button a mouse clicks, a finger taps, or Tab+Enter reaches, with no separate
-raycast-under-cursor path to keep in sync. Every hotspot and every display
-slot's world position is checked (not just assumed) to fall within its
-scene's actual camera frustum, at multiple aspect ratios — see the ADR for
-three real placement bugs this caught.
+Hotspots and exhibit cards are real, always-visible, focusable elements,
+positioned from their server-given percentage anchor — the same control a
+mouse clicks, a finger taps, or Tab+Enter reaches, with no separate
+raycast-under-cursor path to keep in sync.
 
 ## Exhibition architecture
 
@@ -101,26 +97,31 @@ visitors too. A gallery's own close-up hotspot cuts to a tighter shot of its
 hero display, with a short environmental-lore popover, before a "back"
 hotspot returns to the main shot.
 
-**Donate a relic.** At the donor counter (a hotspot visible from one of the
-Entrance Hall's four facings), a form collects: gallery, category (portrait /
-memento / specimen / toy — one per gallery, keeping the gallery-category
-mapping simple and always valid), title, one-sentence origin claim, donor
-display name, and a specific open display slot in that gallery (occupied
-slots are not offered). The server validates the gallery/category/slot
-combination inside one transaction, creates the exhibit, and broadcasts
-`exhibit.created` to every connected client, who instantiate its mesh at
-that slot without a page reload. A receipt overlay with a live rendered
-preview follows, offering "View My Relic" — a scene cut straight to the
-donated exhibit's gallery, landing on its dossier.
+**Donate a relic.** A persistent "Donate a Relic" action is reachable from
+every main scene, not only the in-world donor counter (kept as an
+atmospheric secondary entrance). The form collects: gallery, category
+(portrait / memento / specimen / toy — one per gallery), title,
+one-sentence origin claim, donor display name, and a specific open display
+slot in that gallery (occupied slots are not offered). The server validates
+the gallery/category/slot combination inside one transaction, creates the
+exhibit, and broadcasts `exhibit.created` to every connected client, who
+render its dimensional display card at that slot without a page reload. A
+receipt overlay with a live rendered preview follows, offering "View My
+Relic" — a scene cut straight to the donated exhibit's gallery, landing on
+its dossier.
 
-**Inspect a relic.** The dossier is a parchment/brass-styled overlay over the
-(paused but not hidden) world: exhibit number, a live rendered preview of
-the exhibit's own 3D model, title, gallery, donor, every account in
-chronological order each tagged
-*Original Account / New Testimony / Contradiction / Proposed Revision /
-Counter-Evidence*, each account's own vote tally and the visitor's own current
-vote on it, and an "Add Counter-Evidence" action. Esc returns to the world
-at the exact same position/facing. The overlay is reachable and operable by
+**Find and inspect a relic.** A persistent "Archive" action lists every
+exhibit grouped by gallery, each with its number and current classification,
+so a visitor can find one without knowing which room it's in; selecting one
+navigates there and opens its dossier directly. Every real exhibit also
+renders in its gallery as a framed, dimensional display card (a small live
+preview of its 3D model, title, donor), with hover/focus lifting it and
+dimming its neighbours. Clicking a card opens the dossier: exhibit number,
+the same live preview, title, gallery, donor, every account in chronological
+order each tagged *Original Account / New Testimony / Contradiction /
+Proposed Revision / Counter-Evidence*, each account's own vote tally and the
+visitor's own current vote, and an "Add Counter-Evidence" action. Esc
+returns to the scene underneath. The overlay is reachable and operable by
 Tab/Enter alone.
 
 **Rewrite history.** Publishing a new account never mutates or removes an
@@ -170,14 +171,17 @@ held in memory per connected visitor (see
 **Transport.** One shared Server-Sent Events hub (`GET /api/events`),
 reused from the prior project's proven architecture: every connected browser
 holds one open stream; the server writes `scene-presence`, `exhibit`,
-`account`, and `vote` events to all of them. Presence is scene-scoped, not
-a continuous position: a visitor reports which fixed scene they're currently
-viewing over a plain rate-limited `POST /api/presence` whenever they
-navigate (see `docs/adr/0003-scene-exploration.md`), and the server
-rebroadcasts a live per-scene headcount. See `docs/adr/0002-transport.md`
-for the original transport decision (SSE, not WebSockets) and
-`docs/adr/0003-scene-exploration.md` for how presence itself changed shape
-once continuous movement was removed.
+`account`, `vote`, and `activity` events to all of them. Presence is
+scene-scoped, not a continuous position: a visitor reports which fixed scene
+they're currently viewing over a plain rate-limited `POST /api/presence`
+whenever they navigate, and the server rebroadcasts a live per-scene
+headcount plus a roster of that scene's visible cameos — each only a
+stable, non-reversible public key and display name, never the raw visitor
+cookie (`identity.js`'s `publicKeyFor`, `sse.js`'s `visitorsInScene`). See
+`docs/adr/0002-transport.md` for the original transport decision,
+`docs/adr/0003-scene-exploration.md` for scene-scoped presence, and
+`docs/adr/0004-illustrated-scenes.md` for restoring visible cameos on top
+of it.
 
 **Persistence.** SQLite via Node's built-in `node:sqlite` (stable, unflagged,
 in Node 24 — confirmed in this environment), at `/data/museum.db` on the Fly

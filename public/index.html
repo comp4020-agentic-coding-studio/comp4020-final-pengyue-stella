@@ -13,14 +13,35 @@
   <body class="app-page">
     <div id="viewport" class="viewport" tabindex="0" role="application"
       aria-label="The Cursed Museum. Click a glowing sign or exhibit to move and inspect; Tab and Enter work the same way.">
-      <canvas id="scene-canvas"></canvas>
-      <div id="scene-fade" class="scene-fade" aria-hidden="true"></div>
 
-      <!-- Hotspot overlay: real, focusable buttons positioned over their
-           matching 3D point every frame (see exploration.js's
-           projectToScreen) — this is what makes every interaction reachable
-           by mouse, touch AND Tab/Enter, not just a raycast under a cursor. -->
+      <!-- The illustrated scene stack: two layers so a page-turn/cabinet-door
+           transition can cross-fade/rotate the incoming scene over the
+           outgoing one, rather than cutting through a single shared element. -->
+      <div id="scene-stack" class="scene-stack">
+        <div class="scene-layer scene-layer-a" id="scene-layer-a">
+          <div class="scene-art"></div>
+          <div class="scene-vignette"></div>
+          <div class="scene-frame" aria-hidden="true"></div>
+          <div class="scene-dust" aria-hidden="true"></div>
+        </div>
+        <div class="scene-layer scene-layer-b" id="scene-layer-b" hidden>
+          <div class="scene-art"></div>
+          <div class="scene-vignette"></div>
+          <div class="scene-frame" aria-hidden="true"></div>
+          <div class="scene-dust" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <!-- Hotspot overlay: real, focusable buttons positioned as plain
+           percentage-anchored CSS over the current illustrated scene — no
+           3D projection, since there is no camera any more. -->
       <div id="hotspot-layer" class="hotspot-layer" aria-hidden="false"></div>
+
+      <!-- Visitor cameo layer: a small silhouette/medallion per OTHER
+           visitor currently in this scene (see docs/adr/0003-scene-
+           exploration.md's visible-presence addendum) — restored visible
+           presence without free-roam movement or an embodied 3D avatar. -->
+      <div id="cameo-layer" class="cameo-layer" aria-hidden="true"></div>
 
       <!-- Hub-only turn controls: the one place scene navigation is a look,
            not a cut — turning to face a different doorway in the Entrance
@@ -30,7 +51,7 @@
         <button type="button" id="turn-right" class="turn-arrow turn-right" aria-label="Turn right">&#10095;</button>
       </div>
 
-      <!-- Everything below floats above the full-bleed 3D canvas. -->
+      <!-- Everything below floats above the scene layers. -->
       <header class="topbar">
         <div class="topbar-text">
           <h1>The Cursed Museum</h1>
@@ -39,6 +60,18 @@
         </div>
         <a class="about-link" href="/readme/">What is this?</a>
       </header>
+
+      <!-- Always-reachable actions: donation must never require discovering
+           one specific hall orientation, and the archive must be findable
+           without already knowing which gallery holds an exhibit. -->
+      <div class="persistent-actions">
+        <button type="button" id="open-archive" class="persistent-action archive-action">
+          <span aria-hidden="true">&#128214;</span> Archive
+        </button>
+        <button type="button" id="open-donate" class="persistent-action donate-action">
+          <span aria-hidden="true">&#10022;</span> Donate a Relic
+        </button>
+      </div>
 
       <footer class="bottom-bar">
         <div class="scene-caption">
@@ -69,6 +102,17 @@
             placeholder="e.g. The Quiet Curator" />
           <button type="submit">Enter the museum</button>
         </form>
+      </div>
+
+      <!-- Archive index: find an existing exhibit without already knowing
+           which gallery holds it. -->
+      <div id="archive-gate" class="overlay-gate" hidden>
+        <div class="gate-card dossier-card" role="dialog" aria-labelledby="archive-title">
+          <button type="button" id="archive-close" class="dossier-close" aria-label="Close">&times;</button>
+          <p class="dossier-kicker">The Collection</p>
+          <h2 id="archive-title">Every Exhibit, By Gallery</h2>
+          <div id="archive-list" class="archive-list"></div>
+        </div>
       </div>
 
       <!-- Donation form overlay. -->
@@ -157,7 +201,9 @@
     <div id="toasts" class="toasts" aria-live="polite"></div>
 
     <!-- three.js is vendored as a static file, not an npm dependency — see
-         public/vendor/README.md. -->
+         public/vendor/README.md. Used only for the small, non-interactive
+         exhibit-preview thumbnails (a still frame per card/dossier), never
+         for a live walkable scene any more. -->
     <script type="importmap">
       { "imports": { "three": "/vendor/three.module.min.js" } }
     </script>

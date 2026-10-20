@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { identify, nameCookieFor } from "./identity.js";
+import { identify, nameCookieFor, publicKeyFor } from "./identity.js";
 import { galleryById, publicWorld, SCENE_IDS, DEFAULT_SCENE_ID } from "./world.js";
 import * as db from "./db.js";
 import * as sse from "./sse.js";
@@ -19,6 +19,12 @@ import {
 } from "./constants.js";
 
 const PORT = Number(process.env.PORT ?? 8080);
+
+// A freshly-created database starts with a small, honestly-identified
+// Founding Collection rather than an empty archive — see db.js's own
+// comment for why this is safe against the free-slot tests and real donors
+// alike (it only ever claims each gallery's first slot).
+db.seedFoundingCollection();
 
 const lastDonateAt = new Map(); // visitorId -> epoch ms
 const lastAccountAt = new Map();
@@ -49,6 +55,18 @@ async function readJsonBody(req, limit = 8192) {
 
 function isNonEmptyString(v, max) {
   return typeof v === "string" && v.trim().length > 0 && v.trim().length <= max;
+}
+
+// Structured, legible action logs — "who did what, to which thing, with what
+// outcome" — the shape a crit-10 demonstration narrates from, without ever
+// printing a cookie, a full header, or an account's actual body text (see
+// CLAUDE.md). `identity.id` is a full UUID; only its first 8 hex characters
+// are logged, which is already enough to distinguish visitors in a live demo
+// without printing the literal cookie value.
+function logAction(identity, action, detail, outcome = "ok") {
+  const shortId = identity.id.slice(0, 8);
+  const extra = detail ? ` ${Object.entries(detail).map(([k, v]) => `${k}=${v}`).join(" ")}` : "";
+  console.log(`[action] visitor=${shortId} name="${identity.name}" action=${action}${extra} outcome=${outcome}`);
 }
 
 const server = createServer(async (req, res) => {
@@ -166,16 +184,20 @@ const server = createServer(async (req, res) => {
       });
 
       if (result.error === "not_found") {
+        logAction(identity, "donate", { gallery: galleryId, slot: slotId }, "rejected:unknown_gallery_or_slot");
         json(res, 400, { error: "unknown gallery or slot" }, withCookies({}, identity));
         return;
       }
       if (result.error === "slot_taken") {
+        logAction(identity, "donate", { gallery: galleryId, slot: slotId }, "rejected:slot_taken");
         json(res, 409, { error: "that slot is already occupied" }, withCookies({}, identity));
         return;
       }
 
       sse.broadcast("exhibit", result.exhibit);
+      sse.broadcast("activity", { publicKey: publicKeyFor(identity.id), kind: "donate", exhibitTitle: result.exhibit.title });
       lastDonateAt.set(identity.id, now);
+      logAction(identity, "donate", { gallery: galleryId, exhibit: result.exhibit.id.slice(0, 14) });
       json(res, 201, { exhibit: result.exhibit }, withCookies({}, identity));
       return;
     }
@@ -222,12 +244,15 @@ const server = createServer(async (req, res) => {
       });
 
       if (result.error === "not_found") {
+        logAction(identity, "account.create", { exhibit: accountsMatch[1].slice(0, 14), kind }, "rejected:not_found");
         json(res, 404, { error: "no such exhibit or challenged account" }, withCookies({}, identity));
         return;
       }
 
       sse.broadcast("account", { ...result.account, exhibitClassification: result.exhibitClassification });
+      sse.broadcast("activity", { publicKey: publicKeyFor(identity.id), kind: "account", accountKind: kind });
       lastAccountAt.set(identity.id, now);
+      logAction(identity, "account.create", { exhibit: accountsMatch[1].slice(0, 14), kind, account: result.account.id.slice(0, 14) });
       json(res, 201, { account: result.account }, withCookies({}, identity));
       return;
     }
@@ -250,6 +275,7 @@ const server = createServer(async (req, res) => {
       }
 
       if (!VERDICT_SET.has(payload.verdict)) {
+        logAction(identity, "vote", { account: voteMatch[1].slice(0, 14) }, "rejected:invalid_verdict");
         json(res, 400, { error: "invalid verdict" }, withCookies({}, identity));
         return;
       }
@@ -261,11 +287,16 @@ const server = createServer(async (req, res) => {
       });
 
       if (result.error === "not_found") {
+        logAction(identity, "vote", { account: voteMatch[1].slice(0, 14) }, "rejected:not_found");
         json(res, 404, { error: "no such account" }, withCookies({}, identity));
         return;
       }
 
       sse.broadcast("vote", { ...result.account, exhibitClassification: result.exhibitClassification });
+      if (result.exhibitClassification && result.previousClassification !== result.exhibitClassification) {
+        sse.broadcast("activity", { publicKey: publicKeyFor(identity.id), kind: "classification", classification: result.exhibitClassification });
+      }
+      logAction(identity, "vote", { account: voteMatch[1].slice(0, 14), verdict: payload.verdict });
       json(res, 200, { account: result.account }, withCookies({}, identity));
       return;
     }
@@ -292,12 +323,13 @@ const server = createServer(async (req, res) => {
       }
 
       if (typeof payload.sceneId !== "string" || !SCENE_IDS.has(payload.sceneId)) {
+        logAction(identity, "presence.move", { scene: String(payload.sceneId) }, "rejected:invalid_scene");
         json(res, 400, { error: "invalid scene" }, withCookies({}, identity));
         return;
       }
 
       lastPresenceAt.set(identity.id, now);
-      sse.setVisitorScene(identity.id, payload.sceneId);
+      sse.setVisitorScene(identity.id, payload.sceneId, publicKeyFor(identity.id), identity.name);
       json(res, 200, { ok: true }, withCookies({}, identity));
       return;
     }
@@ -315,20 +347,30 @@ const server = createServer(async (req, res) => {
       });
       res.write(`retry: 2000\n\n`);
 
-      sse.addClient(res, identity.id, initialSceneId);
+      const myPublicKey = publicKeyFor(identity.id);
+      sse.addClient(res, identity.id, initialSceneId, myPublicKey, identity.name);
 
-      // Hydrate the new connection with current per-scene headcounts, so it
-      // doesn't wait for someone else to navigate before it draws them.
+      // Hydrate the new connection with current per-scene headcounts and its
+      // own public key (so the client can tell its own cameo apart from
+      // everyone else's — CLAUDE.md's "never share a set across concerns"
+      // lesson applies here too: "which cameo is me" and "which cameo is
+      // that other visitor" are two different questions, so the client gets
+      // its own key explicitly rather than inferring it), so it doesn't wait
+      // for someone else to navigate before it draws them.
       res.write(
         `event: hello\ndata: ${JSON.stringify({
           you: identity.id,
+          yourPublicKey: myPublicKey,
           sceneCounts: sse.sceneCounts(),
+          visitors: sse.visitorsInScene(initialSceneId),
         })}\n\n`,
       );
       // Announce this arrival to everyone else immediately, same reasoning
       // as the old spawn-announce: a visitor present at boot must be
-      // visible in the headcount right away, not only once they navigate.
-      sse.setVisitorScene(identity.id, initialSceneId);
+      // visible in the headcount/cameo roster right away, not only once
+      // they navigate.
+      sse.setVisitorScene(identity.id, initialSceneId, myPublicKey, identity.name);
+      logAction(identity, "presence.connect", { scene: initialSceneId });
 
       req.on("close", () => {
         const { visitorId, sceneId, stillConnected } = sse.removeClient(res);

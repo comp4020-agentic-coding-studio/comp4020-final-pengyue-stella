@@ -1,9 +1,12 @@
 // Original procedural textures, generated on canvas at load time rather
 // than fetched image files — there is nothing here to credit a third party
-// for (see ASSETS.md), and it keeps the zero-asset-pipeline stack: no image
-// files to source, license-check, or ship. Each is built once and reused
-// (repeat-tiled) across every mesh that wants it, so the cost is one canvas
-// render per texture type, not per mesh instance.
+// for (see ASSETS.md). Only the exhibit-preview subset remains: wood grain
+// (for the small staging furniture artifacts.js builds), the portrait canvas
+// (for painting/sketch donations), and the brass nameplate every donated
+// relic's card carries. The room-scale textures (carpet, wallpaper, a
+// generic bordered label) this file used to carry were retired along with
+// the live Three.js room itself — see docs/adr/0003-scene-exploration.md
+// and ASSETS.md.
 import * as THREE from "three";
 
 function canvas(size) {
@@ -23,35 +26,6 @@ function toTexture(c, { repeat = [1, 1] } = {}) {
   return tex;
 }
 
-// A patterned carpet: a deep base colour, a border, and a repeating diamond
-// motif — the dense Victorian-rug read from the reference boards, without
-// needing a real fabric photograph.
-export function buildCarpetTexture(base = "#5a1f22", accent = "#caa15a") {
-  const { c, ctx } = canvas(256);
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, 256, 256);
-  ctx.strokeStyle = accent;
-  ctx.globalAlpha = 0.55;
-  ctx.lineWidth = 6;
-  ctx.strokeRect(10, 10, 236, 236);
-  ctx.lineWidth = 2;
-  ctx.strokeRect(22, 22, 212, 212);
-  ctx.globalAlpha = 0.4;
-  for (let y = 0; y < 256; y += 32) {
-    for (let x = 0; x < 256; x += 32) {
-      ctx.beginPath();
-      ctx.moveTo(x + 16, y);
-      ctx.lineTo(x + 32, y + 16);
-      ctx.lineTo(x + 16, y + 32);
-      ctx.lineTo(x, y + 16);
-      ctx.closePath();
-      ctx.stroke();
-    }
-  }
-  ctx.globalAlpha = 1;
-  return toTexture(c);
-}
-
 // Wood grain: vertical streaks over a warm brown base, for panelling and
 // furniture carcasses.
 export function buildWoodTexture(base = "#2a1c14", grain = "#1c1109") {
@@ -68,30 +42,6 @@ export function buildWoodTexture(base = "#2a1c14", grain = "#1c1109") {
     ctx.bezierCurveTo(x + 4, 40, x - 4, 80, x + (Math.random() - 0.5) * 6, 128);
     ctx.stroke();
   }
-  ctx.globalAlpha = 1;
-  return toTexture(c);
-}
-
-// Damask-style wallpaper: a muted ground with a repeating diamond-and-dot
-// motif in a slightly darker tone, read from a distance as "patterned", not
-// a flat colour wash.
-export function buildWallpaperTexture(base = "#3a2a22", motif = "#2e2019") {
-  const { c, ctx } = canvas(128);
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, 128, 128);
-  ctx.fillStyle = motif;
-  ctx.globalAlpha = 0.45;
-  ctx.save();
-  ctx.translate(64, 64);
-  ctx.rotate(Math.PI / 4);
-  ctx.fillRect(-18, -18, 36, 36);
-  ctx.restore();
-  ctx.beginPath();
-  ctx.arc(0, 0, 5, 0, Math.PI * 2);
-  ctx.arc(128, 0, 5, 0, Math.PI * 2);
-  ctx.arc(0, 128, 5, 0, Math.PI * 2);
-  ctx.arc(128, 128, 5, 0, Math.PI * 2);
-  ctx.fill();
   ctx.globalAlpha = 1;
   return toTexture(c);
 }
@@ -148,30 +98,6 @@ export function buildPortraitTexture(accent = "#663D43") {
   return toTexture(c, { repeat: [1, 1] });
 }
 
-// A short bordered label on a dark ground — gallery signs and the donor
-// counter's "DONATIONS" plate both want this; moved here from scene.js so
-// artifacts.js's nameplates can reuse the same bordered-plaque look rather
-// than inventing a second one.
-export function buildLabelTexture(text, { bg = "#11100f", fg = "#c6a16b", size = [512, 128] } = {}) {
-  const c = document.createElement("canvas");
-  c.width = size[0];
-  c.height = size[1];
-  const ctx = c.getContext("2d");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, size[0], size[1]);
-  ctx.strokeStyle = fg;
-  ctx.lineWidth = 6;
-  ctx.strokeRect(8, 8, size[0] - 16, size[1] - 16);
-  ctx.fillStyle = fg;
-  ctx.font = `600 ${Math.floor(size[1] * 0.3)}px Georgia, serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, size[0] / 2, size[1] / 2);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
 // A worn brass museum nameplate: title on top, "Donated by ..." smaller
 // beneath — the exhibit library's one shared label style, so every donated
 // relic (whatever its procedural model family) carries the same archival
@@ -207,19 +133,4 @@ export function buildNameplateTexture(title, donorName) {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
-}
-
-// A ceiling/ornament gilt-on-dark pattern for crown moulding trims.
-export function buildTrimTexture(base = "#1c1109", gold = "#c6a16b") {
-  const { c, ctx } = canvas(64);
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, 64, 64);
-  ctx.strokeStyle = gold;
-  ctx.globalAlpha = 0.7;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(32, 0, 16, 0, Math.PI);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-  return toTexture(c);
 }

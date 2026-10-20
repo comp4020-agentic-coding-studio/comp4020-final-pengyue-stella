@@ -24,22 +24,28 @@ deliberately and say why in `PROCESS.md`; don't reach for one by habit.
   a scratch dir locally), `journal_mode = WAL`. Every exhibit, account and
   vote write is a transaction, committed before its event is broadcast —
   never announce a change to other visitors before it's durable.
-- High-frequency avatar movement is **never** persisted to SQLite — only
-  relayed live (see `docs/adr/0002-transport.md`). Persisting every movement
-  sample would make the one volume the bottleneck for something that isn't
-  archive content.
+- Visitor presence is scene-scoped, never a continuous position, and
+  **never** persisted to SQLite — only relayed live (see
+  `docs/adr/0003-scene-exploration.md`). A visitor reports which fixed
+  scene they're currently viewing over a rate-limited `POST /api/presence`;
+  the server never accepts or relays a free-form position.
 - Real-time is one shared Server-Sent Events hub over `GET /api/events`,
-  reused unchanged in spirit from the prior project. Client→server movement
-  is a rate-limited `POST /api/presence/move`, relayed server-side over the
-  same SSE hub — see `docs/adr/0002-transport.md` for why this is one
-  channel, not a second WebSocket layer, and don't add one without updating
-  that ADR first.
-- The world is **one Three.js scene graph, one coordinate system, two camera
-  rigs**. A camera rig is a pure rendering choice over the avatar's existing
-  `{x, z, yaw}` — switching rigs (the `V` key) must never touch position,
-  facing, collision state, or trigger a network round-trip. If a feature
-  needs "where is the avatar," read the one shared transform; never maintain
-  a second position for either camera mode.
+  reused unchanged in spirit from the prior project — see
+  `docs/adr/0002-transport.md` for why this is one channel, not a second
+  WebSocket layer, and don't add one without updating that ADR first.
+- The world is a fixed **scene graph**, not a live-steered camera: a small,
+  server-defined set of illustrated scenes (`server/src/world.js`), each
+  with hotspots and display slots placed as a `{x, z}` percentage anchor
+  of that scene's image, not a 3D world coordinate (see
+  `docs/adr/0004-illustrated-scenes.md`). There is no camera a visitor
+  steers and no collision; moving between scenes is a click/tap on a
+  hotspot or exhibit card, never a movement key. Three.js is kept only for
+  small, disposable, non-interactive still-frame previews of a donated
+  exhibit's procedural model (`public/world/artifacts.js`'s
+  `renderArtifactPreview`) — never a live render loop. A visitor's visible
+  cameo (medallion + display name) is derived from their scene presence and
+  a stable, non-reversible per-visitor key (`identity.js`'s
+  `publicKeyFor`), never their raw cookie or visitor id.
 
 ## Conventions that matter here
 
@@ -66,12 +72,11 @@ deliberately and say why in `PROCESS.md`; don't reach for one by habit.
   kind of invariant a unique constraint (`display_slots.occupied_exhibit_id`
   claimed once) should enforce, not a check-then-write in application code.
 - **Every interaction works with a mouse, a touchscreen and a keyboard.**
-  WASD/arrows move in both camera rigs; E and mouse-click both resolve to
-  the same `exhibitId`; the dossier and donation/account forms are reachable
-  and operable by Tab/Enter alone; movement keys are ignored while focus is
-  inside a form field, so typing a dispute never walks the avatar into a
-  wall. This is checked live at crits — don't let it regress silently
-  behind a mouse-only feature.
+  Every hotspot and exhibit card is a real focusable element mouse-click,
+  tap, and Tab+Enter all resolve the same way; the dossier, donation/account
+  forms, archive, and hub-turn controls are reachable and operable by
+  Tab/Enter alone. This is checked live at crits — don't let it regress
+  silently behind a mouse-only feature.
 - Keep the four galleries visually distinct (lighting colour-grade, prop
   density, palette accent) so "which gallery am I in" never relies on
   reading the sign text alone.
@@ -88,8 +93,8 @@ firing twice, and one path's bookkeeping silently corrupted the other's.
 Fixed by giving the render-dedupe set exactly one job. The general rule:
 **a dedupe/seen-set is scoped to one concern.** If two code paths both want
 "have I handled this id before," that's two sets, not one. This applies
-directly here: avatar presence dedup and archive-event dedup (if any) must
-not share a set either.
+directly here: cameo-presence dedup (by `publicKey`, in `sse.js`'s
+`visitorsInScene`) and archive-event dedup must not share a set either.
 
 ## Process discipline
 

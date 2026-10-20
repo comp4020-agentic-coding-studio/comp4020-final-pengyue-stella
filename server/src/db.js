@@ -212,6 +212,8 @@ export function castVote({ accountId, visitorId, verdict }) {
   const accountRow = db.prepare("SELECT id, exhibit_id FROM accounts WHERE id = ?").get(accountId);
   if (!accountRow) return { error: "not_found" };
 
+  const previousClassification = classifyExhibit(fullExhibit(accountRow.exhibit_id).accounts);
+
   const now = new Date().toISOString();
   db.prepare(
     `INSERT INTO votes (id, account_id, visitor_id, verdict, updated_at) VALUES (?, ?, ?, ?, ?)
@@ -222,6 +224,7 @@ export function castVote({ accountId, visitorId, verdict }) {
   return {
     exhibitId: accountRow.exhibit_id,
     account: fullAccount(accountId),
+    previousClassification,
     exhibitClassification: classifyExhibit(fullExhibit(accountRow.exhibit_id).accounts),
   };
 }
@@ -324,4 +327,70 @@ export function occupiedSlotIds() {
     .prepare("SELECT id FROM display_slots WHERE occupied_exhibit_id IS NOT NULL")
     .all();
   return new Set(rows.map((r) => r.id));
+}
+
+// A small, honestly-identified "Founding Collection": one real, persisted
+// exhibit (plus its original account, same model as a donated one — the
+// database doesn't distinguish "seeded" from "donated" by row shape, only by
+// donor name) per gallery, so a freshly-created database never shows an
+// empty archive before anyone has donated anything. Idempotent via a fixed
+// id per gallery (`exhibit_founding_<galleryId>`) — re-running this on every
+// boot is a no-op once seeded, the same pattern the gallery/slot seed above
+// already uses. Deliberately claims only the gallery's FIRST slot, leaving
+// every other slot free — spec/archive.test.ts's freeSlot() helper (and any
+// real donor) must always find room.
+const FOUNDING_COLLECTION = {
+  portraits: {
+    subtype: "painting",
+    title: "The Unfinished Sitter",
+    originClaim: "Commissioned in 1884; the sitter's face was never completed. The museum acquired it exactly as left on the easel.",
+  },
+  memento: {
+    subtype: "clock",
+    title: "The Clock That Keeps No Hour",
+    originClaim: "Found stopped at no particular time in an estate clearance. It has never been wound since arriving, yet it is never found at the same hour twice.",
+  },
+  specimen: {
+    subtype: "biological",
+    title: "The Cataloguer's Specimen",
+    originClaim: "Logged by the museum's first curator in 1901 as 'pending identification.' It remains pending.",
+  },
+  childhood: {
+    subtype: "doll",
+    title: "The Nursery's First Doll",
+    originClaim: "The founding donation to this gallery — present, by the ledger's account, before the nursery it depicts was ever furnished.",
+  },
+};
+
+export function seedFoundingCollection() {
+  const now = new Date().toISOString();
+  for (const gallery of GALLERIES) {
+    const piece = FOUNDING_COLLECTION[gallery.id];
+    if (!piece) continue;
+    const exhibitId = `exhibit_founding_${gallery.id}`;
+    const existing = db.prepare("SELECT id FROM exhibits WHERE id = ?").get(exhibitId);
+    if (existing) continue;
+
+    const slot = gallery.slots[0];
+    const accountId = `account_founding_${gallery.id}`;
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const stillFree = db.prepare("SELECT occupied_exhibit_id FROM display_slots WHERE id = ?").get(slot.id);
+      if (stillFree?.occupied_exhibit_id) {
+        db.exec("ROLLBACK");
+        continue;
+      }
+      db.prepare(
+        "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(exhibitId, gallery.id, slot.id, gallery.category, piece.title, "The Founding Collection", now, piece.subtype);
+      db.prepare("UPDATE display_slots SET occupied_exhibit_id = ? WHERE id = ?").run(exhibitId, slot.id);
+      db.prepare(
+        "INSERT INTO accounts (id, exhibit_id, parent_id, kind, body, author_name, author_id, created_at) VALUES (?, ?, NULL, 'original', ?, ?, ?, ?)",
+      ).run(accountId, exhibitId, piece.originClaim, "The Founding Collection", "", now);
+      db.exec("COMMIT");
+    } catch (err) {
+      db.exec("ROLLBACK");
+      throw err;
+    }
+  }
 }
