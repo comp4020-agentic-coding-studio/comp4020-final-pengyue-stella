@@ -1,5 +1,6 @@
 import { renderArtifactPreview } from "./world/artifacts.js";
 import { createIllustrationController } from "./world/illustration.js";
+import { createAmbientSoundscape } from "./world/ambient.js";
 
 const NAME_STORAGE_KEY = "cursedMuseumNamed";
 
@@ -39,6 +40,7 @@ function goToSceneThen(sceneId, then) {
 }
 let focusedObjectId = null; // the interactive object currently illuminated (hover/focus/open)
 let placement = null; // { exhibitForm, galleryId } while choosing/confirming a relic's spot — see "Spatial relic placement"
+const ambient = createAmbientSoundscape(); // see world/ambient.js — never started before a real click
 
 function toast(message) {
   const div = document.createElement("div");
@@ -361,6 +363,28 @@ function closeArchive() {
 }
 el("open-archive").addEventListener("click", openArchive);
 el("archive-close").addEventListener("click", closeArchive);
+
+// ---------------------------------------------------------------------------
+// Ambient sound: a small procedural soundscape (world/ambient.js), gated
+// strictly behind this click so the AudioContext is never constructed
+// before a real user gesture — a visitor who had it on in a previous visit
+// is not resumed automatically on load (that would mean starting audio
+// without a fresh gesture); the toggle's visual state always matches
+// whether audio is actually playing right now, never a stale preference,
+// so a screen reader never announces "on" for silence. The preference is
+// still remembered (ambient.wasPreferredOn) purely so a future on/off
+// default could use it without ever auto-playing.
+function updateSoundToggleUi(on) {
+  const btn = el("sound-toggle");
+  btn.setAttribute("aria-pressed", String(on));
+  btn.setAttribute("aria-label", on ? "Ambient sound is on. Click to turn off." : "Ambient sound is off. Click to turn on.");
+  btn.querySelector("span").textContent = on ? "\u{1F50A}" : "\u{1F507}";
+}
+el("sound-toggle").addEventListener("click", () => {
+  const on = ambient.toggle();
+  updateSoundToggleUi(on);
+  if (on) ambient.setGallery(illustrator?.currentScene()?.galleryId ?? null);
+});
 
 // ---------------------------------------------------------------------------
 // Dossier
@@ -1110,6 +1134,7 @@ function onSceneChange(scene) {
   updatePresenceLabel();
   renderCameos();
   renderVisitorList();
+  if (ambient.isOn) ambient.setGallery(scene.galleryId ?? null);
   if (scene.kind === "closeup" && scene.lore) openLoreCard(scene.caption, scene.lore, null);
   if (pendingAfterArrival) {
     const run = pendingAfterArrival;

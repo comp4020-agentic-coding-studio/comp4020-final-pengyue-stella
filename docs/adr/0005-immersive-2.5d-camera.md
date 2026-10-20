@@ -159,6 +159,36 @@ never fires a native DOM `focus` event the way Tab navigation does, and
 `illustrator.goToScene`. Fixed by calling `setFocusedObject` explicitly
 before the scene cut.
 
+## Addendum: procedural ambient audio
+
+A small, original Web Audio soundscape (`public/world/ambient.js`) — a low
+sine/triangle drone plus occasional distant chime tones and filtered-noise
+creaks, entirely synthesized, never a decoded audio file — gives each
+gallery a restrained tonal identity without adding any copyrighted audio
+asset or a new runtime dependency (CLAUDE.md's zero-dependency stance
+extends naturally to audio here). Per-gallery variation (drone pitch, chime
+timbre) is derived deterministically from the gallery's own id via a small
+hash, so no new server field or audio asset is needed per room; changing
+gallery glides the drone to its new pitch rather than cutting.
+
+The `AudioContext` is constructed only inside the `#sound-toggle` button's
+own click handler — never on page load, never from a restored preference —
+so audio can never start without a real user gesture. The toggle's visual
+state always reflects whether audio is actually playing, never a stale
+`localStorage` preference, so it can never read "on" to a screen reader
+while silent; the preference is still persisted for a possible future
+default, but restoring it never itself triggers playback. The whole graph
+suspends on `visibilitychange` (not just mutes) while the tab is hidden, so
+no oscillator/scheduling work runs on an unseen page, and resumes only if
+the visitor had actually turned it on.
+
+Verified: toggling on/off updates `aria-pressed`/the stored preference
+correctly; a full walkthrough (toggle on, navigate hub → gallery → close-up
+→ back → back, simulate a hide/show visibility cycle, toggle off) produces
+no console errors; Tab order naturally includes the toggle alongside the
+other topbar controls, so it participates in the existing keyboard pass
+without any new handling.
+
 ## Verification
 
 Checked directly against the running app (headless Chrome over the Chrome
