@@ -16,6 +16,7 @@ import {
   DONATE_COOLDOWN_MS,
   ACCOUNT_COOLDOWN_MS,
   PRESENCE_MIN_INTERVAL_MS,
+  FOCUS_MIN_INTERVAL_MS,
 } from "./constants.js";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -29,6 +30,16 @@ db.seedFoundingCollection();
 const lastDonateAt = new Map(); // visitorId -> epoch ms
 const lastAccountAt = new Map();
 const lastPresenceAt = new Map();
+const lastFocusAt = new Map();
+
+// A focus object id is always rendered via textContent/attribute, never
+// HTML, on the client, and is only ever one of the fixed, server-authored
+// `object:<id>` / `exhibit:<id>` strings the world graph or an exhibit
+// record already produced — but the server still bounds its length and
+// shape before relaying it to every other visitor in the room, the same
+// "never trust a client-supplied value past a sanity check" discipline the
+// rest of this file applies to every other write.
+const FOCUS_OBJECT_ID_PATTERN = /^(object|exhibit):[A-Za-z0-9_-]{1,80}$/;
 
 function json(res, status, body, extraHeaders = {}) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...extraHeaders });
@@ -330,6 +341,55 @@ const server = createServer(async (req, res) => {
 
       lastPresenceAt.set(identity.id, now);
       sse.setVisitorScene(identity.id, payload.sceneId, publicKeyFor(identity.id), identity.name);
+      json(res, 200, { ok: true }, withCookies({}, identity));
+      return;
+    }
+
+    // Ephemeral "I'm looking at this" signal (CLAUDE.md-adjacent brief: a
+    // lightweight interaction cue, never persisted, never a position). A
+    // visitor opening/focusing an interactive object reports its id; the
+    // server relays it only to other visitors already tagged with that same
+    // visitor's own current scene (never a client-asserted scene — see
+    // sse.sceneIdForVisitor), so a client can never announce a focus event
+    // into a room it isn't actually in.
+    if (req.method === "POST" && pathname === "/api/presence/focus") {
+      const identity = identify(req);
+      const last = lastFocusAt.get(identity.id) ?? 0;
+      const now = Date.now();
+      if (now - last < FOCUS_MIN_INTERVAL_MS) {
+        json(res, 204, {});
+        return;
+      }
+
+      let payload;
+      try {
+        payload = await readJsonBody(req, 256);
+      } catch {
+        json(res, 400, { error: "bad request body" }, withCookies({}, identity));
+        return;
+      }
+
+      // objectId is nullable — "I stopped looking at anything" is a real,
+      // intentional state (closing a lore drawer/dossier), not an error.
+      const objectId = payload.objectId === null ? null : payload.objectId;
+      if (objectId !== null && (typeof objectId !== "string" || !FOCUS_OBJECT_ID_PATTERN.test(objectId))) {
+        json(res, 400, { error: "invalid objectId" }, withCookies({}, identity));
+        return;
+      }
+
+      const sceneId = sse.sceneIdForVisitor(identity.id);
+      if (!sceneId) {
+        json(res, 204, {});
+        return;
+      }
+
+      lastFocusAt.set(identity.id, now);
+      sse.broadcastToScene(
+        sceneId,
+        "focus",
+        { publicKey: publicKeyFor(identity.id), objectId },
+        { exceptVisitorId: identity.id },
+      );
       json(res, 200, { ok: true }, withCookies({}, identity));
       return;
     }

@@ -77,6 +77,18 @@ export function visitorsInScene(sceneId) {
   return [...byKey.values()].map(({ publicKey, displayName }) => ({ publicKey, displayName }));
 }
 
+// The scene a visitor is currently tagged with (their most recent
+// `/api/presence` report), used to scope a focus broadcast to the right
+// room without the client having to re-assert its own scene on every
+// focus event. A visitor open in two tabs on different scenes is an edge
+// case not worth resolving precisely — the first matching connection wins.
+export function sceneIdForVisitor(visitorId) {
+  for (const entry of clients.values()) {
+    if (entry.visitorId === visitorId) return entry.sceneId ?? null;
+  }
+  return null;
+}
+
 export function connectedCount() {
   return new Set([...clients.values()].map((c) => c.visitorId)).size;
 }
@@ -102,6 +114,24 @@ export function setVisitorScene(visitorId, sceneId, publicKey, displayName) {
     });
   }
   broadcast("scene-presence", { sceneId, count: counts[sceneId] ?? 0, visitors: visitorsInScene(sceneId) });
+}
+
+// Broadcasts an event only to clients currently tagged with `sceneId` — used
+// for the focus signal (a visitor turning to look at an object), which is
+// only meaningful to other visitors sharing that same room; broadcasting it
+// globally would mean every client re-filters by scene itself for no
+// benefit, and would leak "who is looking at what" to rooms that can't even
+// see that visitor's cameo.
+export function broadcastToScene(sceneId, event, data, { exceptVisitorId } = {}) {
+  for (const [res, entry] of clients.entries()) {
+    if (entry.sceneId !== sceneId) continue;
+    if (exceptVisitorId && entry.visitorId === exceptVisitorId) continue;
+    try {
+      write(res, event, data);
+    } catch {
+      clients.delete(res);
+    }
+  }
 }
 
 export function broadcastDeparture(visitorId, sceneId) {

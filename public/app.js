@@ -779,6 +779,30 @@ function connectEvents() {
     renderVisitorList();
   });
 
+  // Ephemeral focus broadcast: another visitor in this same room opened or
+  // closed an object's lore/dossier. Their cameo pulses/turns ("attending")
+  // and the corresponding object briefly glows — a lightweight presence cue,
+  // never a chat message, never a stored record (CLAUDE.md-adjacent brief:
+  // no new personal information, nothing persisted). The server already
+  // scopes this to visitors sharing the sender's own scene, so every event
+  // that reaches this client is relevant to the room it's currently in.
+  eventSource.addEventListener("focus", (e) => {
+    const { publicKey, objectId } = JSON.parse(e.data);
+    if (!publicKey || publicKey === myPublicKey) return;
+    if (objectId) recentFocusByKey.set(publicKey, objectId);
+    else recentFocusByKey.delete(publicKey);
+    renderCameos();
+    if (objectId) {
+      const node = illustrator
+        .activeLayers()
+        .objectLayer?.querySelector(`[data-object-id="${CSS.escape(objectId)}"]`);
+      if (node) {
+        node.classList.add("peer-glance");
+        window.setTimeout(() => node.classList.remove("peer-glance"), 1400);
+      }
+    }
+  });
+
   eventSource.onerror = () => {
     // EventSource auto-reconnects; on reconnect the server resends `hello`
     // with current scene counts, and a fresh GET /api/exhibits hydrates
@@ -801,6 +825,24 @@ async function postPresence(sceneId) {
   } catch {
     // transient network blip — the next navigation retries with a fresh value
   }
+}
+
+// Reports this visitor's own focus change to the server so other visitors
+// in the same room see a cue — debounced client-side on top of the
+// server's own rate limit, since a fast hover sweep across several objects
+// shouldn't fire one request per object.
+let focusPostTimer = null;
+function postFocus(objectId) {
+  if (focusPostTimer) clearTimeout(focusPostTimer);
+  focusPostTimer = setTimeout(() => {
+    fetch("/api/presence/focus", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ objectId }),
+    }).catch(() => {
+      // transient network blip — this is a purely ephemeral cue, nothing to retry
+    });
+  }, 150);
 }
 
 // ---------------------------------------------------------------------------
@@ -830,12 +872,15 @@ function anyOverlayOpen() {
 // open"). `objectId` is a stable per-render key ("object:<id>" for a
 // server-defined interactive object, "exhibit:<id>" for an exhibit card).
 function setFocusedObject(objectId) {
+  if (objectId === focusedObjectId) return;
   focusedObjectId = objectId;
   const { objectLayer } = illustrator.activeLayers();
-  if (!objectLayer) return;
-  for (const node of objectLayer.querySelectorAll("[data-object-id]")) {
-    node.classList.toggle("lit", node.dataset.objectId === objectId);
+  if (objectLayer) {
+    for (const node of objectLayer.querySelectorAll("[data-object-id]")) {
+      node.classList.toggle("lit", node.dataset.objectId === objectId);
+    }
   }
+  postFocus(objectId);
 }
 
 function handleObjectActivate(object) {
@@ -849,6 +894,13 @@ function handleObjectActivate(object) {
     return;
   }
   if (object.type === "closeup" && object.targetSceneId) {
+    // A click never fires a native DOM `focus` event the way Tab navigation
+    // does, so without this, looking closer at a portrait — the single most
+    // common interaction in the museum — would never report a focus change
+    // at all, and other visitors in the room would never see this
+    // visitor's cameo "attend" to it. Broadcast it explicitly before the
+    // scene cut away from it.
+    setFocusedObject(`object:${object.id}`);
     illustrator.goToScene(object.targetSceneId, { direction: "forward" });
   }
 }

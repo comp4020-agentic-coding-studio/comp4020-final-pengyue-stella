@@ -119,6 +119,46 @@ with a compact visitor-list chip row as the always-visible alternative.
   "server defines valid positions, client never sends a free coordinate"
   contract from ADR 0004 is unchanged).
 
+## Addendum: ephemeral cross-visitor focus broadcast
+
+A deterministic anchor and a hover-reveal name alone still leave "there are
+two of us in this room" feeling inert — nothing connects one visitor's
+cameo to what they're actually doing. A new `POST /api/presence/focus`
+reports a visitor's current `object:<id>`/`exhibit:<id>` focus (or `null`,
+"stopped looking at anything") whenever `setFocusedObject` changes it on
+the client; the server relays it as a `focus` SSE event, but only to other
+connections already tagged with the *sender's own* current scene
+(`sse.sceneIdForVisitor` + the new `sse.broadcastToScene`, never a client-
+asserted scene) — a client can never announce a focus event into a room it
+isn't actually in. The payload is `{ publicKey, objectId }`: no position,
+no new personal information, and nothing persisted — this is the same
+"ephemeral, scene-scoped, never a reintroduced position" discipline ADR
+0004's cameo work already established, extended to a second, equally
+transient signal. A receiving client turns the sender's own cameo
+`.attending` (the existing cameo-silhouette treatment from ADR 0004,
+unchanged) and gives the focused object itself a brief, distinct
+`.peer-glance` glow — a cool-toned flash, so "someone else is looking at
+this" never reads as "you are looking at this" (the warm amber `.lit`
+state). Both client-side and server-side rate-limiting (debounce + the
+existing `*_MIN_INTERVAL_MS` pattern) bound this to a discrete per-
+interaction event, never a per-frame stream.
+
+Verified with the server-level scoping test in `spec/world.test.ts`
+(`real-time: ephemeral focus broadcast`, two independent visitor cookies,
+asserting a focus event from a different-scene visitor never arrives and a
+same-scene one does), and live in two independent headless-Chrome browser
+contexts: opening a portrait's close-up or a lore object from one visitor's
+session visibly turns the other visitor's cameo "attending" and flashes
+the shared object's glow within one SSE round-trip.
+
+This caught one real bug: activating a `closeup`-type interactive object
+(clicking "look closer" at a portrait — the single most common interaction
+in the museum) never called `setFocusedObject` at all, because a click
+never fires a native DOM `focus` event the way Tab navigation does, and
+`handleObjectActivate`'s `closeup` branch only ever called
+`illustrator.goToScene`. Fixed by calling `setFocusedObject` explicitly
+before the scene cut.
+
 ## Verification
 
 Checked directly against the running app (headless Chrome over the Chrome

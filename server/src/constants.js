@@ -51,3 +51,11 @@ export const ACCOUNT_COOLDOWN_MS = 2000;
 // per-frame stream like the old continuous movement was), so this floor is
 // generous, not a performance-critical rate limit.
 export const PRESENCE_MIN_INTERVAL_MS = 150;
+
+// A visitor focusing/opening an interactive object (hover-dwell, click, or
+// keyboard focus) is a lightweight ephemeral signal for "other visitors in
+// this room see that silhouette turn/pulse and the object briefly glow" —
+// never raw cursor coordinates, never a new field of personal information.
+// Throttled the same way scene-presence is, generously, since this is still
+// a discrete per-interaction event, not a per-frame stream.
+export const FOCUS_MIN_INTERVAL_MS = 150;

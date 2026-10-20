@@ -280,6 +280,29 @@ a {
   50% { filter: brightness(1.18); }
 }
 
+/* A brief, restrained cue that another visitor in this room just focused
+   this object (relayed via the ephemeral /api/presence/focus broadcast,
+   see app.js's "focus" SSE listener) — a cool-toned glance, distinct from
+   the warm amber of this visitor's own hover/lit state, so "someone else is
+   looking at this" never reads as "you are looking at this." Fades on its
+   own; app.js removes the class after a short delay regardless. */
+.interactive-object.peer-glance {
+  animation: peer-glance 1.4s ease-out;
+}
+
+@keyframes peer-glance {
+  0% { box-shadow: 0 0 0 0 rgba(140, 190, 210, 0); }
+  30% { box-shadow: 0 0 20px 6px rgba(140, 190, 210, 0.45); }
+  100% { box-shadow: 0 0 0 0 rgba(140, 190, 210, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interactive-object.peer-glance {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(140, 190, 210, 0.4);
+  }
+}
+
 /* A real, donated exhibit's own illuminated display object — the same glow
    treatment as any other interactive object, plus a small label that only
    reveals once lit (hover/focus/open), never a permanent card with a
