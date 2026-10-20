@@ -909,11 +909,15 @@ a {
 
 /* Every record shares the exact same container width, min-height, padding
    and column structure regardless of title length or status — a stable
-   four-column ledger row (catalogue number / title / gallery / status),
-   never a layout that stretches with its own content. */
+   three-column ledger row (catalogue number / title / status). The gallery
+   name is never repeated here: it's already the group heading directly
+   above these rows, and a fourth column was what squeezed the title column
+   into collapsing. `minmax(0, 1fr)` on the title column needs `min-width: 0`
+   to actually shrink below its content's intrinsic width inside a grid
+   track, or it ignores the fr and blows the row out instead of wrapping. */
 .archive-exhibit-row {
   display: grid;
-  grid-template-columns: 3.4rem minmax(0, 1fr) minmax(6rem, 9rem) 7.5rem;
+  grid-template-columns: 4rem minmax(0, 1fr) 7.5rem;
   align-items: center;
   gap: 0.6rem;
   width: 100%;
@@ -943,19 +947,16 @@ a {
 }
 
 .archive-exhibit-row .row-title {
+  min-width: 0;
   font-weight: 600;
   color: var(--parchment);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.archive-exhibit-row .row-gallery {
-  font-size: 0.76rem;
-  color: rgba(233, 221, 197, 0.65);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.25;
 }
 
 /* Status: a small restrained pill, not a wide solid stripe — colour is the
@@ -1025,9 +1026,6 @@ a {
     grid-column: 1 / -1;
     grid-row: 2;
     white-space: normal;
-  }
-  .archive-exhibit-row .row-gallery {
-    display: none;
   }
 }
 
@@ -1174,6 +1172,7 @@ a {
    small accents only, no large solid burgundy pill rows). Declared after
    `.gate-card`'s own rules so it wins the cascade at equal specificity. */
 .archive-card {
+  width: min(620px, 100%);
   background: linear-gradient(160deg, rgba(26, 20, 16, 0.97), rgba(17, 13, 10, 0.98));
   color: var(--parchment);
   border: 1px solid rgba(198, 161, 107, 0.45);

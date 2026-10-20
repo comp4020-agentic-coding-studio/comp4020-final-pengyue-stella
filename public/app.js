@@ -346,10 +346,13 @@ function renderArchiveList() {
       row.type = "button";
       row.className = "archive-exhibit-row";
 
-      // Every row shares exactly the same four-column structure regardless
-      // of title length, so the catalogue reads as one stable table rather
-      // than rows that stretch/shrink with their own content (CLAUDE.md:
-      // "content length must not change row width").
+      // Every row shares exactly the same three-column structure (number /
+      // title / status) regardless of title length, so the catalogue reads
+      // as one stable table rather than rows that stretch/shrink with their
+      // own content. The gallery name is NOT repeated here — it's already
+      // the group heading directly above every row in this group, and a
+      // fourth "gallery" column was exactly what squeezed the title column
+      // down to collapsed/invisible at the panel's own width.
       const number = document.createElement("span");
       number.className = "row-number";
       number.textContent = `#${String(exhibit.number).padStart(3, "0")}`;
@@ -357,16 +360,14 @@ function renderArchiveList() {
       const title = document.createElement("span");
       title.className = "row-title";
       title.textContent = exhibit.title; // textContent only — never innerHTML
-
-      const galleryCol = document.createElement("span");
-      galleryCol.className = "row-gallery";
-      galleryCol.textContent = gallery.name;
+      title.title = exhibit.title; // native tooltip carries the full title when the visible text truncates
 
       const status = document.createElement("span");
       status.className = `row-status row-status-${statusSlug(exhibit.classification)}`;
       status.textContent = exhibit.classification;
 
-      row.append(number, title, galleryCol, status);
+      row.append(number, title, status);
+      row.setAttribute("aria-label", `${exhibit.title}, ${exhibit.classification}. Open dossier.`);
       row.addEventListener("click", () => {
         closeArchive();
         goToSceneThen(`${exhibit.galleryId}-main`, () => openDossier(exhibit.id));
