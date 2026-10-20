@@ -64,6 +64,17 @@ a {
   will-change: transform, opacity;
 }
 
+/* The camera-driven "room" plane: art + interactive-object glows + visitor
+   cameos all live inside it and share one transform (see world/camera.js)
+   so an object's glow and a cameo's position both stay pixel-locked to the
+   art as the camera pans/zooms within its own bounded range. */
+.scene-room {
+  position: absolute;
+  inset: 0;
+  transform-origin: center center;
+  will-change: transform;
+}
+
 .scene-art {
   position: absolute;
   inset: 0;
@@ -71,6 +82,19 @@ a {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+}
+
+.object-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.cameo-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
 }
 
 /* Deep vignette + warm gradient layers so UI text stays readable over a
@@ -217,208 +241,181 @@ a {
   }
 }
 
-/* --- hotspot overlay: plain percentage-anchored buttons ------------------ */
-/* Positioned directly from a hotspot's {x, z} percentage anchor (see
-   app.js's refreshHotspots) — no 3D projection, since there is no camera any
-   more. The layer itself must never intercept clicks over its own empty
-   space, only an actual .hotspot button opts back in. */
-.hotspot-layer {
+/* --- interactive objects: invisible-until-attended glow regions ---------- */
+/* Each object anchors to a BOX (percentage of the illustration, see
+   server/src/world.js) clipped over the actual painted item it represents —
+   idle, it renders nothing but its own hit region; hovering, focusing, or
+   opening it (`.lit`) brings up a soft object-shaped halo, never a pill
+   button floating over the scene's centre (CLAUDE.md). Lives inside the
+   camera-driven `.scene-room` so the glow always stays pixel-locked to the
+   art as the camera pans/zooms. */
+.interactive-object {
   position: absolute;
-  inset: 0;
-  z-index: 4;
-  pointer-events: none;
+  background: none;
+  border: none;
+  border-radius: 10%;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  box-shadow: 0 0 0 0 rgba(198, 161, 107, 0);
+  transition: box-shadow 0.35s ease, background 0.35s ease;
+  pointer-events: auto;
 }
 
-.hotspot {
+.interactive-object.hovered,
+.interactive-object:focus-visible,
+.interactive-object.lit {
+  outline: none;
+  background: radial-gradient(ellipse at center, rgba(198, 161, 107, 0.22) 0%, rgba(198, 161, 107, 0.06) 55%, transparent 80%);
+  box-shadow: 0 0 22px 6px rgba(198, 161, 107, 0.35), inset 0 0 0 1px rgba(198, 161, 107, 0.55);
+  animation: object-pulse 2.2s ease-in-out infinite;
+}
+
+.interactive-object.lit {
+  box-shadow: 0 0 28px 10px rgba(198, 161, 107, 0.5), inset 0 0 0 2px rgba(198, 161, 107, 0.85);
+}
+
+@keyframes object-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.18); }
+}
+
+/* A real, donated exhibit's own illuminated display object — the same glow
+   treatment as any other interactive object, plus a small label that only
+   reveals once lit (hover/focus/open), never a permanent card with a
+   thumbnail strip. */
+.interactive-object-exhibit {
+  border-radius: 6%;
+}
+
+.object-label {
   position: absolute;
-  max-width: min(72vw, 260px);
-  transform: translate(-50%, -50%);
-  font: inherit;
-  font-size: 0.8rem;
-  white-space: normal;
-  text-align: center;
-  padding: 0.4rem 0.85rem;
+  left: 50%;
+  bottom: -1.6rem;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 0.74rem;
+  color: var(--parchment);
+  background: rgba(17, 16, 15, 0.82);
+  border: 1px solid rgba(198, 161, 107, 0.5);
+  padding: 0.15rem 0.55rem;
   border-radius: 999px;
-  border: 1px solid var(--brass);
-  background: rgba(53, 37, 28, 0.78);
-  color: var(--gold);
-  backdrop-filter: blur(4px);
-  cursor: pointer;
-  box-shadow: 0 0 0 0 rgba(198, 161, 107, 0.5);
-  animation: hotspot-glow 2.6s ease-in-out infinite;
-  pointer-events: auto;
-}
-
-.hotspot:hover,
-.hotspot:focus-visible {
-  background: rgba(102, 61, 67, 0.88);
-  color: var(--parchment);
-  outline: none;
-}
-
-@keyframes hotspot-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(198, 161, 107, 0.45); }
-  50% { box-shadow: 0 0 0 6px rgba(198, 161, 107, 0); }
-}
-
-.hotspot-donate {
-  border-color: var(--rose);
-}
-
-/* --- exhibit cards: dimensional Gothic display cards --------------------- */
-/* Each real persisted exhibit renders as a card with perspective tilt,
-   layered shadow and a small 3D preview — not a tiny distant mesh, not a
-   plain pill button. Hovering/focusing one brightens and lifts it while
-   `.exhibit-card.quiet` (applied to every OTHER card in the same scene)
-   recedes, per CLAUDE.md's "quiet surrounding exhibits" requirement. */
-.exhibit-card {
-  position: absolute;
-  width: clamp(104px, 11vw, 148px);
-  transform: translate(-50%, -100%) rotateX(2deg) rotateZ(var(--card-tilt, 0deg));
-  transform-style: preserve-3d;
-  background: linear-gradient(160deg, #2a1f17 0%, #1a130e 100%);
-  border: 2px solid var(--brass);
-  border-radius: 8px;
-  padding: 0.4rem 0.45rem 0.5rem;
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.55), 0 2px 0 rgba(198, 161, 107, 0.15) inset;
-  color: var(--parchment);
-  cursor: pointer;
-  text-align: center;
-  font: inherit;
-  transition: transform 0.22s ease, box-shadow 0.22s ease, opacity 0.22s ease, filter 0.22s ease;
-  pointer-events: auto;
-  z-index: 5;
-}
-
-.exhibit-card .card-preview {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  border-radius: 4px;
-  background: radial-gradient(circle at 50% 35%, #241a12, #0f0b08);
-  display: block;
-  margin-bottom: 0.3rem;
-  border: 1px solid rgba(198, 161, 107, 0.4);
-}
-
-.exhibit-card .card-title {
-  display: block;
-  font-family: Georgia, "Cormorant Garamond", serif;
-  font-size: 0.76rem;
-  line-height: 1.15;
-  color: var(--gold);
-  margin-bottom: 0.1rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.exhibit-card .card-donor {
-  display: block;
-  font-size: 0.62rem;
-  color: rgba(233, 221, 197, 0.75);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.exhibit-card .card-affordance {
-  display: block;
-  margin-top: 0.2rem;
-  font-size: 0.6rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: rgba(198, 161, 107, 0.9);
-}
-
-.exhibit-card:hover,
-.exhibit-card:focus-visible {
-  transform: translate(-50%, -112%) scale(1.12) rotateX(0deg) rotateZ(0deg);
-  box-shadow: 0 0 0 2px var(--gold), 0 18px 34px rgba(0, 0, 0, 0.65);
-  outline: none;
-  z-index: 7;
-}
-
-.exhibit-card.quiet {
-  opacity: 0.62;
-  filter: saturate(0.7) brightness(0.85);
-}
-
-/* A seeded decorative placeholder, clearly non-interactive — establishes
-   density in a gallery with few real donations without pretending to be a
-   persisted exhibit (CLAUDE.md: never fake a dossier for decorative
-   content). */
-.decorative-frame {
-  position: absolute;
-  width: clamp(48px, 5.5vw, 76px);
-  aspect-ratio: 3 / 4;
-  transform: translate(-50%, -100%);
-  border: 2px solid rgba(136, 101, 61, 0.45);
-  border-radius: 4px;
-  background: rgba(20, 15, 11, 0.35);
+  opacity: 0;
+  transition: opacity 0.2s ease;
   pointer-events: none;
-  opacity: 0.55;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.interactive-object.hovered .object-label,
+.interactive-object:focus-visible .object-label,
+.interactive-object.lit .object-label {
+  opacity: 1;
+}
+
+/* A placement-mode anchor: only a currently-free, server-defined slot
+   renders here, and only while placement is active — never an arbitrary
+   pixel coordinate, never a decorative card outside placement mode
+   (CLAUDE.md). `.chosen` shows the ghost-preview ring the donor confirms. */
+.placement-anchor {
+  position: absolute;
+  background: radial-gradient(ellipse at center, rgba(102, 200, 150, 0.22) 0%, rgba(102, 200, 150, 0.08) 55%, transparent 80%);
+  border: 2px dashed rgba(138, 209, 170, 0.75);
+  border-radius: 8%;
+  cursor: pointer;
+  animation: placement-glow 1.8s ease-in-out infinite;
+  pointer-events: auto;
+}
+
+.placement-anchor.chosen {
+  border-style: solid;
+  border-color: #8ad1aa;
+  background: radial-gradient(ellipse at center, rgba(138, 209, 170, 0.3) 0%, rgba(138, 209, 170, 0.12) 55%, transparent 80%);
+  animation: none;
+}
+
+.placement-anchor .object-label {
+  opacity: 0.9;
+  background: rgba(20, 15, 11, 0.9);
+  border-color: #8ad1aa;
+}
+
+@keyframes placement-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(138, 209, 170, 0.4); }
+  50% { box-shadow: 0 0 18px 4px rgba(138, 209, 170, 0.5); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interactive-object.hovered,
+  .interactive-object:focus-visible,
+  .interactive-object.lit,
+  .placement-anchor {
+    animation: none;
+  }
 }
 
 /* --- visitor cameos -------------------------------------------------------*/
-/* A small Gothic silhouette/medallion per OTHER visitor sharing this scene
-   (see docs/adr/0003-scene-exploration.md's visible-presence restoration) —
-   not an embodied 3D avatar, not free-roam movement; just a stable,
-   per-visitor visual anchored at a scene-relative spot that drifts slightly
-   for restrained idle motion. */
-.cameo-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-}
-
+/* A restrained Gothic silhouette per OTHER visitor sharing this scene,
+   standing at a server-defined `visitorAnchors` spot (with a small depth
+   value for parallax scale) — not an embodied 3D avatar, not free-roam
+   movement; a stable per-visitor silhouette that drifts slightly for
+   restrained idle motion, its name revealed only on hover/focus. */
 .cameo {
   position: absolute;
-  transform: translate(-50%, -100%);
+  transform: translate(-50%, -100%) scale(var(--cameo-depth, 1));
+  transform-origin: bottom center;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.2rem;
   animation: cameo-idle 5s ease-in-out infinite;
   animation-delay: var(--cameo-delay, 0s);
+  pointer-events: auto;
+  cursor: default;
+  background: none;
+  border: none;
 }
 
-.cameo-medallion {
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 50%;
-  border: 2px solid var(--cameo-color, var(--gold));
-  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.12), rgba(10, 8, 6, 0.85));
-  box-shadow: 0 0 10px 1px color-mix(in srgb, var(--cameo-color, var(--gold)) 55%, transparent), 0 4px 10px rgba(0, 0, 0, 0.5);
+.cameo-silhouette {
+  width: 1.9rem;
+  height: 3.4rem;
+  border-radius: 50% 50% 35% 35% / 60% 60% 30% 30%;
+  background: linear-gradient(180deg, rgba(10, 8, 6, 0.95), rgba(10, 8, 6, 0.75));
+  border: 1px solid var(--cameo-color, var(--gold));
+  box-shadow: 0 0 10px 1px color-mix(in srgb, var(--cameo-color, var(--gold)) 45%, transparent), 0 6px 10px rgba(0, 0, 0, 0.5);
 }
 
 .cameo-name {
   font-size: 0.66rem;
   color: var(--parchment);
-  background: rgba(17, 16, 15, 0.7);
+  background: rgba(17, 16, 15, 0.82);
   padding: 0.08rem 0.4rem;
   border-radius: 999px;
   white-space: nowrap;
   max-width: 7rem;
   overflow: hidden;
   text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
 }
 
-/* "You" render distinctly from every other visible cameo — a filled gold
-   medallion rather than the hollow-ring treatment everyone else gets. */
-.cameo.is-you .cameo-medallion {
-  background: radial-gradient(circle at 35% 30%, rgba(255, 244, 214, 0.5), var(--cameo-color, var(--gold)));
+.cameo:hover .cameo-name,
+.cameo:focus-visible .cameo-name,
+.cameo:focus-within .cameo-name {
+  opacity: 1;
 }
 
 @keyframes cameo-idle {
-  0%, 100% { transform: translate(-50%, -100%) translateY(0); }
-  50% { transform: translate(-50%, -100%) translateY(-5px); }
+  0%, 100% { transform: translate(-50%, -100%) scale(var(--cameo-depth, 1)) translateY(0); }
+  50% { transform: translate(-50%, -100%) scale(var(--cameo-depth, 1)) translateY(-4px); }
 }
 
 /* A restrained activity ring pulsing around a cameo when that visitor just
    donated/published/shifted a classification — connecting the live archive
    event to the specific visible presence that caused it. */
-.cameo.activity .cameo-medallion {
+.cameo.activity .cameo-silhouette {
   animation: cameo-activity 1.4s ease-out 1;
 }
 
@@ -427,13 +424,40 @@ a {
   100% { box-shadow: 0 0 0 14px transparent; }
 }
 
+/* `.attending` — this visitor just focused an exhibit elsewhere in the
+   scene: their silhouette tilts subtly "toward" what they're looking at and
+   brightens, a quiet cue distinct from the stronger `.activity` pulse. */
+.cameo.attending .cameo-silhouette {
+  filter: brightness(1.25);
+  transform: rotate(-4deg);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cameo {
     animation: none;
   }
-  .cameo.activity .cameo-medallion {
+  .cameo.activity .cameo-silhouette {
     animation: none;
   }
+}
+
+.visitor-list:not([hidden]) {
+  display: flex;
+}
+
+.visitor-list {
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.15rem 0;
+}
+
+.visitor-chip {
+  font-size: 0.72rem;
+  color: var(--parchment);
+  background: rgba(53, 37, 28, 0.6);
+  border: 1px solid var(--cameo-color, var(--brass));
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
 }
 
 /* --- hub-only look-turn controls ------------------------------------------*/
@@ -473,33 +497,137 @@ a {
   right: 1rem;
 }
 
-/* --- lore popover ---------------------------------------------------------*/
-.lore-card {
-  position: absolute;
-  left: 50%;
-  bottom: 6.5rem;
-  transform: translateX(-50%);
-  z-index: 11;
-  width: min(380px, calc(100% - 2rem));
-  background: var(--parchment);
-  color: var(--ink);
-  border: 2px solid var(--brass);
-  border-radius: 10px;
-  padding: 1rem 1.2rem;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+/* --- quiet corner navigation ----------------------------------------------*/
+/* Replaces a large bubble floated over the artwork's centre: a compact
+   "enter the next room" control upper-left (clear of the museum title) and
+   a "back" control lower-right. The label only reveals on hover/focus so
+   idle the control reads as a small glyph belonging to the museum's own
+   frame, not a floating hotspot. */
+/* `display` is set only when NOT hidden, the same `:not([hidden])` fix
+   CLAUDE.md records for the overlay gates — a plain `.corner-nav { display:
+   inline-flex }` would otherwise outrank the `hidden` attribute and the
+   button would render (and sit in tab order) even while hidden. */
+.corner-nav:not([hidden]) {
+  display: inline-flex;
 }
 
-.lore-card h3 {
+.corner-nav {
+  position: absolute;
+  z-index: 6;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--brass);
+  border-radius: 999px;
+  background: rgba(53, 37, 28, 0.68);
+  color: var(--parchment);
+  padding: 0.5rem;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.2s ease, padding 0.2s ease;
+}
+
+.corner-nav-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.corner-nav-label {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  transition: max-width 0.25s ease;
+}
+
+.corner-nav:hover,
+.corner-nav:focus-visible {
+  background: rgba(102, 61, 67, 0.85);
+  outline: none;
+  padding-right: 0.85rem;
+}
+
+.corner-nav:hover .corner-nav-label,
+.corner-nav:focus-visible .corner-nav-label {
+  max-width: 14rem;
+}
+
+.corner-nav-forward {
+  top: calc(5.4rem + env(safe-area-inset-top, 0px));
+  left: 1.1rem;
+}
+
+.corner-nav-back {
+  bottom: calc(3.6rem + env(safe-area-inset-bottom, 0px));
+  right: 1.1rem;
+}
+
+/* --- side drawer: lore + dossier -------------------------------------------*/
+/* Slides in from the side rather than covering the whole scene, so the
+   illuminated object it belongs to stays visible beside it (CLAUDE.md). */
+.side-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 11;
+  width: min(420px, 100%);
+  max-width: 100%;
+  overflow-y: auto;
+  background: var(--parchment);
+  color: var(--ink);
+  border-left: 3px solid var(--brass);
+  box-shadow: -20px 0 50px rgba(0, 0, 0, 0.55);
+  padding: calc(1.3rem + env(safe-area-inset-top, 0px)) 1.5rem 1.5rem;
+  transform: translateX(0);
+  transition: transform 0.3s ease;
+}
+
+.side-drawer[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-drawer {
+    transition: none;
+  }
+}
+
+.side-drawer h3 {
   margin: 0 0 0.3rem;
   font-family: Georgia, "Cormorant Garamond", serif;
   color: var(--mahogany);
   font-size: 1.05rem;
 }
 
-.lore-card p {
+.side-drawer p {
   margin: 0;
   font-size: 0.88rem;
   line-height: 1.45;
+}
+
+.drawer-close {
+  position: absolute;
+  top: 0.9rem;
+  right: 1rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1px solid var(--brass);
+  background: #fffdf7;
+  color: var(--mahogany);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 480px) {
+  .side-drawer {
+    width: 100%;
+  }
 }
 
 .topbar {
@@ -526,6 +654,15 @@ a {
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
+.topbar .scene-caption {
+  margin: 0 0 0.2rem;
+  color: var(--gold);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  min-height: 1em;
+}
+
 .presence {
   margin: 0;
   font-size: 0.76rem;
@@ -538,6 +675,13 @@ a {
   font-size: 0.74rem;
   color: rgba(233, 221, 197, 0.7);
   font-style: italic;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .about-link {
@@ -558,13 +702,38 @@ a {
   background: rgba(53, 37, 28, 0.8);
 }
 
+.sound-toggle {
+  pointer-events: auto;
+  flex-shrink: 0;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  border: 1px solid rgba(198, 161, 107, 0.5);
+  background: rgba(53, 37, 28, 0.55);
+  color: var(--parchment);
+  font-size: 1rem;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.sound-toggle[aria-pressed="true"] {
+  background: rgba(102, 61, 67, 0.75);
+  border-color: var(--rose);
+}
+
+.sound-toggle:hover,
+.sound-toggle:focus-visible {
+  background: rgba(53, 37, 28, 0.85);
+  outline: none;
+}
+
 /* --- persistent actions: always-reachable Donate + Archive --------------- */
 /* Fixed top-right, below the topbar text, so they never cover the artwork's
    centre or collide with the bottom bar — reachable from every main scene
    without requiring one specific hall orientation. */
 .persistent-actions {
   position: absolute;
-  top: calc(0.9rem + env(safe-area-inset-top, 0px));
+  top: calc(3.3rem + env(safe-area-inset-top, 0px));
   right: 1.1rem;
   z-index: 6;
   display: flex;
@@ -599,6 +768,89 @@ a {
 .donate-action {
   border-color: var(--rose);
   background: rgba(102, 61, 67, 0.75);
+}
+
+/* `display` set only when NOT hidden — see CLAUDE.md's "a dedupe/seen-set
+   is scoped to one concern" sibling lesson for overlay chrome: a plain
+   `.rooms-menu { display: flex }` would outrank the `hidden` attribute. */
+.rooms-menu:not([hidden]) {
+  display: flex;
+}
+
+.rooms-menu {
+  position: absolute;
+  top: calc(5.0rem + env(safe-area-inset-top, 0px));
+  right: 1.1rem;
+  z-index: 7;
+  flex-direction: column;
+  gap: 0.2rem;
+  background: var(--parchment);
+  border: 2px solid var(--brass);
+  border-radius: 10px;
+  padding: 0.5rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  min-width: 11rem;
+}
+
+.rooms-menu-item {
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.rooms-menu-item:hover,
+.rooms-menu-item:focus-visible {
+  background: rgba(198, 161, 107, 0.25);
+  outline: none;
+}
+
+/* --- donation placement mode ----------------------------------------------*/
+.placement-banner,
+.placement-confirm {
+  position: absolute;
+  left: 50%;
+  bottom: calc(2.2rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 9;
+  width: min(420px, calc(100% - 2rem));
+  background: rgba(17, 16, 15, 0.9);
+  color: var(--parchment);
+  border: 2px solid #8ad1aa;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  text-align: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+.placement-banner p,
+.placement-confirm p {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.placement-banner button,
+.placement-confirm button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid #8ad1aa;
+  background: #8ad1aa;
+  color: #0f1a13;
+  cursor: pointer;
+}
+
+.placement-banner button.secondary,
+.placement-confirm button.secondary {
+  background: none;
+  color: var(--parchment);
+  border-color: rgba(198, 161, 107, 0.6);
 }
 
 .archive-list {

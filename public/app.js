@@ -5,13 +5,10 @@ const NAME_STORAGE_KEY = "cursedMuseumNamed";
 
 const el = (id) => document.getElementById(id);
 const viewport = el("viewport");
-const hotspotLayer = el("hotspot-layer");
-const cameoLayer = el("cameo-layer");
 const turnControlsEl = el("turn-controls");
 const presenceEl = el("presence");
 const whoamiEl = el("whoami");
 const galleryTitleEl = el("gallery-title");
-const galleryHintEl = el("gallery-hint");
 const toastsEl = el("toasts");
 
 let myIdentity = null;
@@ -24,6 +21,24 @@ let lastSceneVisitors = {}; // sceneId -> [{publicKey, displayName}]
 let currentSceneId = null;
 let openDossierExhibitId = null;
 let pendingAfterArrival = null; // one-shot callback run once the current scene cut settles
+
+// Navigates to `sceneId` and then runs `then` once the scene is current.
+// `illustrator.goToScene` no-ops when the target is already the current
+// scene (there is nothing to cut to) — which silently drops `then` for the
+// common case of "a relic placed in the gallery the donor is already
+// standing in," or "open the archive while already in that exhibit's own
+// gallery." Run `then` immediately in that case instead of relying on a
+// scene-change event that will never fire.
+function goToSceneThen(sceneId, then) {
+  if (illustrator.currentScene().id === sceneId) {
+    then();
+  } else {
+    pendingAfterArrival = then;
+    illustrator.goToScene(sceneId);
+  }
+}
+let focusedObjectId = null; // the interactive object currently illuminated (hover/focus/open)
+let placement = null; // { exhibitForm, galleryId } while choosing/confirming a relic's spot — see "Spatial relic placement"
 
 function toast(message) {
   const div = document.createElement("div");
@@ -85,11 +100,17 @@ async function resyncExhibits() {
   if (openDossierExhibitId && exhibitsById.has(openDossierExhibitId)) {
     renderDossier(exhibitsById.get(openDossierExhibitId));
   }
-  refreshHotspots();
+  refreshInteractiveObjects();
 }
 
 // ---------------------------------------------------------------------------
-// Donation form
+// Donation: a two-step flow — the form collects gallery/relic type/story/
+// donor, then "Place Relic…" enters placement mode in that gallery's own
+// main scene where the donor clicks a glowing, currently-free anchor
+// (CLAUDE.md's "visual placement step," replacing a "Display slot"
+// dropdown). The server still only ever accepts one of its own allow-
+// listed slot ids — see db.js's donateExhibit — placement mode just picks
+// which one visually instead of by label.
 
 const SUBTYPE_LABEL = {
   painting: "Painting", sketch: "Sketch",
@@ -101,7 +122,6 @@ const SUBTYPE_LABEL = {
 function populateDonateForm() {
   const gallerySelect = el("donate-gallery");
   const subtypeSelect = el("donate-subtype");
-  const slotSelect = el("donate-slot");
   gallerySelect.innerHTML = "";
   for (const g of world.galleries) {
     const opt = document.createElement("option");
@@ -126,35 +146,8 @@ function populateDonateForm() {
       subtypeSelect.appendChild(opt);
     }
   }
-
-  function refreshSlots() {
-    const galleryId = gallerySelect.value;
-    const gallery = world.galleries.find((g) => g.id === galleryId);
-    const occupied = occupiedSlotIdsForGallery(galleryId);
-    slotSelect.innerHTML = "";
-    const free = gallery.slots.filter((s) => !occupied.has(s.id));
-    if (free.length === 0) {
-      const opt = document.createElement("option");
-      opt.value = "";
-      opt.textContent = "No free slots in this gallery right now";
-      slotSelect.appendChild(opt);
-      slotSelect.disabled = true;
-    } else {
-      slotSelect.disabled = false;
-      for (const s of free) {
-        const opt = document.createElement("option");
-        opt.value = s.id;
-        opt.textContent = `Slot ${Number(s.id.split("_").slice(-1)[0]) + 1}`;
-        slotSelect.appendChild(opt);
-      }
-    }
-  }
-  gallerySelect.onchange = () => {
-    refreshSubtypes();
-    refreshSlots();
-  };
+  gallerySelect.onchange = refreshSubtypes;
   refreshSubtypes();
-  refreshSlots();
 }
 
 function openDonateGate() {
@@ -173,38 +166,102 @@ function closeDonateGate() {
 
 el("open-donate").addEventListener("click", openDonateGate);
 el("donate-cancel").addEventListener("click", closeDonateGate);
-el("donate-form").addEventListener("submit", async (e) => {
+el("donate-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const form = e.target;
-  const payload = {
-    galleryId: form.galleryId.value,
+  const galleryId = form.galleryId.value;
+  const gallery = world.galleries.find((g) => g.id === galleryId);
+  const free = gallery.slots.filter((s) => !occupiedSlotIdsForGallery(galleryId).has(s.id));
+  const errEl = el("donate-error");
+  if (free.length === 0) {
+    errEl.textContent = "No free display spot in this gallery right now — try another gallery.";
+    return;
+  }
+  errEl.textContent = "";
+  const exhibitForm = {
+    galleryId,
     subtype: form.subtype.value,
-    slotId: form.slotId.value,
     title: form.title.value.trim(),
     originClaim: form.originClaim.value.trim(),
     donorName: form.donorName.value.trim() || myIdentity?.name,
   };
-  const errEl = el("donate-error");
-  if (!payload.slotId) {
-    errEl.textContent = "No free slot selected.";
-    return;
+  closeDonateGate();
+  startPlacement(exhibitForm);
+});
+
+// ---------------------------------------------------------------------------
+// Spatial relic placement: steps 3-8 of the donation workflow. Entering
+// placement mode navigates to the chosen gallery's main scene; only its
+// currently-free, server-defined slot anchors glow (rendered by
+// renderPlacementAnchors, called from refreshInteractiveObjects whenever
+// `placement` is active) — an occupied slot or arbitrary pixel coordinate
+// is never offered, matching CLAUDE.md's "continue using server-defined,
+// allow-listed anchors/slot IDs."
+
+function startPlacement(exhibitForm) {
+  placement = { exhibitForm, chosenSlotId: null, confirming: false };
+  const label = `${exhibitForm.title}`;
+  el("placement-title").textContent = label;
+  el("placement-banner").hidden = false;
+  el("placement-confirm").hidden = true;
+  const targetScene = `${exhibitForm.galleryId}-main`;
+  if (illustrator.currentScene().id === targetScene) {
+    refreshInteractiveObjects();
+  } else {
+    illustrator.goToScene(targetScene);
   }
+}
+
+function cancelPlacement() {
+  placement = null;
+  el("placement-banner").hidden = true;
+  el("placement-confirm").hidden = true;
+  refreshInteractiveObjects();
+  viewport.focus();
+}
+el("placement-cancel").addEventListener("click", cancelPlacement);
+
+function choosePlacementAnchor(slotId) {
+  if (!placement) return;
+  placement.chosenSlotId = slotId;
+  placement.confirming = true;
+  el("placement-banner").hidden = true;
+  el("placement-confirm").hidden = false;
+  refreshInteractiveObjects(); // repaint: ghost preview at the chosen anchor, others dim
+}
+
+el("placement-move").addEventListener("click", () => {
+  if (!placement) return;
+  placement.confirming = false;
+  placement.chosenSlotId = null;
+  el("placement-confirm").hidden = true;
+  el("placement-banner").hidden = false;
+  refreshInteractiveObjects();
+});
+
+el("placement-confirm-btn").addEventListener("click", async () => {
+  if (!placement?.chosenSlotId) return;
+  const { exhibitForm, chosenSlotId } = placement;
   const res = await fetch("/api/exhibits", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...exhibitForm, slotId: chosenSlotId }),
   });
   const data = await res.json();
   if (!res.ok) {
-    // A failed donation is reported exactly as what it is — never a success
-    // toast papering over a rejected write.
-    errEl.textContent = data.error ?? "Could not donate that relic.";
+    toast(data.error ?? "Could not place that relic — it may have just been taken.");
+    placement.confirming = false;
+    placement.chosenSlotId = null;
+    el("placement-confirm").hidden = true;
+    el("placement-banner").hidden = false;
+    refreshInteractiveObjects();
     return;
   }
   exhibitsById.set(data.exhibit.id, data.exhibit);
-  refreshHotspots();
-  closeDonateGate();
-  form.reset();
+  placement = null;
+  el("placement-banner").hidden = true;
+  el("placement-confirm").hidden = true;
+  refreshInteractiveObjects();
   openReceipt(data.exhibit);
 });
 
@@ -245,8 +302,7 @@ function closeReceipt() {
 function viewMyRelic(exhibitId) {
   const exhibit = exhibitsById.get(exhibitId);
   if (!exhibit) return;
-  pendingAfterArrival = () => openDossier(exhibitId);
-  illustrator.goToScene(`${exhibit.galleryId}-main`);
+  goToSceneThen(`${exhibit.galleryId}-main`, () => openDossier(exhibitId));
 }
 
 // ---------------------------------------------------------------------------
@@ -282,8 +338,7 @@ function renderArchiveList() {
       row.appendChild(meta);
       row.addEventListener("click", () => {
         closeArchive();
-        pendingAfterArrival = () => openDossier(exhibit.id);
-        illustrator.goToScene(`${exhibit.galleryId}-main`);
+        goToSceneThen(`${exhibit.galleryId}-main`, () => openDossier(exhibit.id));
       });
       group.appendChild(row);
     }
@@ -424,11 +479,17 @@ function openDossier(exhibitId) {
   renderDossier(exhibit);
   el("account-error").textContent = "";
   el("dossier").hidden = false;
+  // The clicked exhibit's own glow stays lit while its dossier is open
+  // (CLAUDE.md: "the selected object should remain illuminated while its
+  // information is open") — setFocusedObject, not a one-shot hover class,
+  // so it survives the mouse leaving the object once the drawer has focus.
+  setFocusedObject(`exhibit:${exhibitId}`);
 }
 
 function closeDossier() {
   openDossierExhibitId = null;
   el("dossier").hidden = true;
+  setFocusedObject(null);
   viewport.focus();
 }
 
@@ -482,15 +543,19 @@ function applyAccountUpdate(exhibitId, account, { isNew = false } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Environmental lore popover
+// Environmental lore drawer — a short caption for an in-room object that
+// isn't a full archival exhibit, opened as the same side-drawer pattern the
+// dossier uses rather than a modal covering the scene.
 
-function openLoreCard(title, text) {
+function openLoreCard(title, text, objectId) {
   el("lore-title").textContent = title;
   el("lore-text").textContent = text;
-  el("lore-card").hidden = false;
+  el("lore-drawer").hidden = false;
+  if (objectId) setFocusedObject(objectId);
 }
 function closeLoreCard() {
-  el("lore-card").hidden = true;
+  el("lore-drawer").hidden = true;
+  if (focusedObjectId?.startsWith("object:")) setFocusedObject(null);
 }
 el("lore-close").addEventListener("click", closeLoreCard);
 
@@ -529,26 +594,19 @@ el("name-form").addEventListener("submit", async (e) => {
 });
 
 // ---------------------------------------------------------------------------
-// Visitor cameos: a small Gothic silhouette/medallion per OTHER visitor in
-// this scene (restored visible presence — see docs/adr/0003-scene-
-// exploration.md's addendum), positioned at a few fixed scene-relative spots
-// rather than anything resembling walkable coordinates. A visitor's own
-// cameo never renders alongside everyone else's (CLAUDE.md: distinguish
-// "you" from others) — "you" is conveyed by the whoami line and the topbar,
-// not a cameo of yourself standing in your own room.
-
-const CAMEO_SPOTS = [
-  { x: 22, z: 50 },
-  { x: 78, z: 52 },
-  { x: 38, z: 42 },
-  { x: 64, z: 44 },
-  { x: 50, z: 36 },
-  { x: 12, z: 60 },
-];
+// Visitor cameos: a restrained Gothic silhouette per OTHER visitor in this
+// scene, standing at one of the scene's own server-defined `visitorAnchors`
+// (each carrying a small depth value for parallax — see server/src/world.js)
+// rather than anything resembling walkable coordinates or a raw cursor
+// position. A visitor's own cameo never renders alongside everyone else's
+// (CLAUDE.md: distinguish "you" from others) — "you" is conveyed by the
+// whoami line and the topbar, not a cameo of yourself standing in your own
+// room. A name only appears on hover/focus, never as a permanent label —
+// restrained by default, legible on demand.
 
 // A small seeded PRNG keyed on the visitor's own public key — stable per
-// visitor (same spot/colour/idle-delay on every re-render) without needing
-// the server to assign or broadcast a position.
+// visitor (same anchor assignment/colour/idle-delay on every re-render)
+// without needing the server to assign or broadcast a position.
 function hashKey(key) {
   let h = 1779033703;
   for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 3432918353);
@@ -560,32 +618,81 @@ function cameoColorFor(publicKey) {
 }
 
 let recentActivityByKey = new Map(); // publicKey -> timestamp, for the activity-pulse cue
+let recentFocusByKey = new Map(); // publicKey -> objectId, for "their silhouette turns toward what they're looking at"
+
+// Deterministically distributes however many OTHER visitors are in this
+// scene across its fixed anchors, one each, by sorting on each visitor's
+// own hashed key rather than arrival order — so which anchor a given
+// visitor lands on is stable for them across re-renders, and two visitors
+// never collide on the same anchor as long as there are enough anchors
+// (CLAUDE.md: "prevent overlap").
+function assignAnchors(visitors, anchors) {
+  const sorted = [...visitors].sort((a, b) => hashKey(a.publicKey) - hashKey(b.publicKey));
+  return sorted.map((v, i) => ({ visitor: v, anchor: anchors[i % anchors.length] }));
+}
 
 function renderCameos() {
+  const { cameoLayer } = illustrator.activeLayers();
+  if (!cameoLayer) return;
   cameoLayer.innerHTML = "";
+  const scene = illustrator.currentScene();
+  const anchors = scene.visitorAnchors ?? [];
   const visitors = (lastSceneVisitors[currentSceneId] ?? []).filter((v) => v.publicKey !== myPublicKey);
-  visitors.forEach((visitor, i) => {
-    const spot = CAMEO_SPOTS[i % CAMEO_SPOTS.length];
+  if (anchors.length === 0) return;
+
+  for (const { visitor, anchor } of assignAnchors(visitors, anchors)) {
     const cameo = document.createElement("div");
     cameo.className = "cameo";
+    cameo.dataset.publicKey = visitor.publicKey;
     const recentlyActive = Date.now() - (recentActivityByKey.get(visitor.publicKey) ?? 0) < 1500;
     if (recentlyActive) cameo.classList.add("activity");
-    cameo.style.left = `${spot.x}%`;
-    cameo.style.top = `${spot.z}%`;
+    const focusedOn = recentFocusByKey.get(visitor.publicKey);
+    if (focusedOn) cameo.classList.add("attending");
+    cameo.style.left = `${anchor.x}%`;
+    cameo.style.top = `${anchor.y}%`;
+    cameo.style.setProperty("--cameo-depth", String(anchor.depth ?? 1));
     cameo.style.setProperty("--cameo-color", cameoColorFor(visitor.publicKey));
     cameo.style.setProperty("--cameo-delay", `${(hashKey(visitor.publicKey) % 50) / 10}s`);
+    cameo.tabIndex = 0;
+    cameo.setAttribute("role", "img");
+    cameo.setAttribute("aria-label", `${visitor.displayName}, another visitor in this room`);
 
-    const medallion = document.createElement("div");
-    medallion.className = "cameo-medallion";
-    cameo.appendChild(medallion);
+    const silhouette = document.createElement("div");
+    silhouette.className = "cameo-silhouette";
+    cameo.appendChild(silhouette);
 
+    // The name reveals only on hover/focus (CLAUDE.md: "do not show large
+    // name bubbles permanently; reveal the name on hover/focus") — always
+    // present in the DOM for a11y/focus, visually hidden otherwise via CSS.
     const name = document.createElement("span");
     name.className = "cameo-name";
     name.textContent = visitor.displayName; // textContent only — never innerHTML
     cameo.appendChild(name);
 
     cameoLayer.appendChild(cameo);
-  });
+  }
+}
+
+// A small "who else is here" list, reachable without hovering every
+// silhouette individually — the brief's "or in a small visitor list"
+// alternative to hover-reveal.
+function renderVisitorList() {
+  const list = el("visitor-list");
+  if (!list) return;
+  const visitors = (lastSceneVisitors[currentSceneId] ?? []).filter((v) => v.publicKey !== myPublicKey);
+  list.innerHTML = "";
+  if (visitors.length === 0) {
+    list.hidden = true;
+    return;
+  }
+  list.hidden = false;
+  for (const v of visitors) {
+    const chip = document.createElement("span");
+    chip.className = "visitor-chip";
+    chip.style.setProperty("--cameo-color", cameoColorFor(v.publicKey));
+    chip.textContent = v.displayName;
+    list.appendChild(chip);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -605,6 +712,7 @@ function connectEvents() {
     if (visitors) lastSceneVisitors = { ...lastSceneVisitors, [currentSceneId]: visitors };
     updatePresenceLabel();
     renderCameos();
+    renderVisitorList();
 
     // The very first connection already hydrated from loadExhibits() in
     // boot(); every `hello` after that one means the stream reconnected,
@@ -629,6 +737,7 @@ function connectEvents() {
       if (count > previous && previous > 0) toast("Another visitor has entered this room.");
       updatePresenceLabel();
       renderCameos();
+      renderVisitorList();
     }
   });
 
@@ -641,7 +750,7 @@ function connectEvents() {
     const exhibit = JSON.parse(e.data);
     if (exhibitsById.has(exhibit.id)) return;
     exhibitsById.set(exhibit.id, exhibit);
-    refreshHotspots();
+    refreshInteractiveObjects();
     const gallery = world.galleries.find((g) => g.id === exhibit.galleryId);
     toast(`${exhibit.donorName} donated "${exhibit.title}" to ${gallery?.name ?? exhibit.galleryId}.`);
   });
@@ -667,6 +776,7 @@ function connectEvents() {
     if (!publicKey || publicKey === myPublicKey) return;
     recentActivityByKey.set(publicKey, Date.now());
     renderCameos();
+    renderVisitorList();
   });
 
   eventSource.onerror = () => {
@@ -694,15 +804,13 @@ async function postPresence(sceneId) {
 }
 
 // ---------------------------------------------------------------------------
-// Hotspot + exhibit-card overlay: real, focusable <button>s positioned as
-// plain percentage anchors over the current illustrated scene (no 3D
-// projection any more — see world/illustration.js). This is the entire
-// interaction surface: door/closeup/back/lore hotspots, every real
-// persisted exhibit as a dimensional Gothic card, and a small number of
-// clearly non-interactive decorative frames when a gallery has few
-// donations yet.
-
-let hoveredExhibitId = null;
+// Interactive objects: invisible-until-attended glow regions clipped to the
+// actual painted item they represent (a portrait, a bust, a display cabinet,
+// the donor counter), never a pill-shaped button floating over the scene's
+// centre (CLAUDE.md). Rendered inside the camera's own transformed
+// `.scene-room` plane (see world/illustration.js's activeLayers) so an
+// object's glow always stays pixel-locked to the art as the camera pans/
+// zooms. Room-to-room travel is NOT one of these — see renderCornerNav.
 
 function anyOverlayOpen() {
   return (
@@ -710,160 +818,247 @@ function anyOverlayOpen() {
     !el("donate-gate").hidden ||
     !el("donate-receipt").hidden ||
     !el("archive-gate").hidden ||
-    !el("name-gate").hidden
+    !el("name-gate").hidden ||
+    !el("rooms-menu").hidden
   );
 }
 
-function handleHotspotActivate(hotspot) {
-  if (anyOverlayOpen() || illustrator.isTransitioning) return;
-  if (hotspot.type === "donate") {
+// The one interactive object currently illuminated — a hover/focus/open
+// state, not a one-shot hover class, so it can be set from a keyboard focus
+// event or held open for the duration of a dossier/lore drawer (CLAUDE.md:
+// "the selected object should remain illuminated while its information is
+// open"). `objectId` is a stable per-render key ("object:<id>" for a
+// server-defined interactive object, "exhibit:<id>" for an exhibit card).
+function setFocusedObject(objectId) {
+  focusedObjectId = objectId;
+  const { objectLayer } = illustrator.activeLayers();
+  if (!objectLayer) return;
+  for (const node of objectLayer.querySelectorAll("[data-object-id]")) {
+    node.classList.toggle("lit", node.dataset.objectId === objectId);
+  }
+}
+
+function handleObjectActivate(object) {
+  if (anyOverlayOpen() || illustrator.isTransitioning || placement) return;
+  if (object.type === "donate") {
     openDonateGate();
     return;
   }
-  if (hotspot.type === "lore") {
-    openLoreCard(hotspot.label, hotspot.text);
+  if (object.type === "lore") {
+    openLoreCard(object.label, object.text, `object:${object.id}`);
     return;
   }
-  // door / closeup / back all resolve to a scene cut.
-  if (hotspot.targetSceneId) {
-    illustrator.goToScene(hotspot.targetSceneId, { direction: hotspot.type === "back" ? "back" : "forward" });
+  if (object.type === "closeup" && object.targetSceneId) {
+    illustrator.goToScene(object.targetSceneId, { direction: "forward" });
   }
 }
 
-function setHoveredExhibit(exhibitId) {
-  hoveredExhibitId = exhibitId;
-  for (const card of hotspotLayer.querySelectorAll(".exhibit-card")) {
-    card.classList.toggle("quiet", exhibitId !== null && card.dataset.exhibitId !== exhibitId);
-  }
+// A glow region clipped to an interactive object's own anchor BOX
+// (percentages of the illustration) — idle-invisible, a soft illuminated
+// outline on hover/focus/when `.lit` (open), never a solid button shape.
+function buildObjectGlow(object) {
+  const node = document.createElement("button");
+  node.type = "button";
+  node.className = `interactive-object interactive-object-${object.type}`;
+  node.dataset.objectId = `object:${object.id}`;
+  node.style.left = `${object.anchor.x}%`;
+  node.style.top = `${object.anchor.y}%`;
+  node.style.width = `${object.anchor.width}%`;
+  node.style.height = `${object.anchor.height}%`;
+  node.setAttribute("aria-label", object.label);
+  node.addEventListener("click", () => handleObjectActivate(object));
+  node.addEventListener("focus", () => setFocusedObject(`object:${object.id}`));
+  node.addEventListener("blur", () => {
+    if (focusedObjectId === `object:${object.id}`) setFocusedObject(null);
+  });
+  node.addEventListener("mouseenter", () => node.classList.add("hovered"));
+  node.addEventListener("mouseleave", () => node.classList.remove("hovered"));
+  return node;
 }
 
-function buildExhibitCard(exhibit, gallery, x, z, tiltSeed) {
-  const card = document.createElement("button");
-  card.type = "button";
-  card.className = "exhibit-card";
-  card.dataset.exhibitId = exhibit.id;
-  card.style.left = `${x}%`;
-  card.style.top = `${z}%`;
-  card.style.setProperty("--card-tilt", `${((tiltSeed % 7) - 3)}deg`);
-  card.setAttribute("aria-label", `${exhibit.title}, donated by ${exhibit.donorName}. Open dossier.`);
+// A real, persisted exhibit — rendered as its own illuminated display
+// object at its claimed slot anchor, not a floating card with a thumbnail/
+// title/donor/INSPECT strip. A small identifying label only appears once
+// lit (hover/focus/open), matching the "discovered through light and
+// attention" standard; the exhibit's still-frame preview renders into the
+// dossier/receipt, not pasted onto the object in the room.
+function buildExhibitObject(exhibit, gallery, slot) {
+  const node = document.createElement("button");
+  node.type = "button";
+  node.className = "interactive-object interactive-object-exhibit";
+  node.dataset.objectId = `exhibit:${exhibit.id}`;
+  node.style.left = `${slot.x}%`;
+  node.style.top = `${slot.z}%`;
+  node.style.width = `${slot.width ?? 10}%`;
+  node.style.height = `${slot.height ?? 16}%`;
+  node.setAttribute("aria-label", `${exhibit.title}, donated by ${exhibit.donorName}. Open dossier.`);
 
-  const preview = document.createElement("canvas");
-  preview.className = "card-preview";
-  preview.width = 160;
-  preview.height = 120;
-  card.appendChild(preview);
+  const label = document.createElement("span");
+  label.className = "object-label";
+  label.textContent = exhibit.title; // textContent only — never innerHTML
+  node.appendChild(label);
 
-  const title = document.createElement("span");
-  title.className = "card-title";
-  title.textContent = exhibit.title;
-  card.appendChild(title);
-
-  const donor = document.createElement("span");
-  donor.className = "card-donor";
-  donor.textContent = `Donated by ${exhibit.donorName}`;
-  card.appendChild(donor);
-
-  const affordance = document.createElement("span");
-  affordance.className = "card-affordance";
-  affordance.textContent = "Inspect";
-  card.appendChild(affordance);
-
-  card.addEventListener("mouseenter", () => setHoveredExhibit(exhibit.id));
-  card.addEventListener("mouseleave", () => setHoveredExhibit(null));
-  card.addEventListener("focus", () => setHoveredExhibit(exhibit.id));
-  card.addEventListener("blur", () => setHoveredExhibit(null));
-  card.addEventListener("click", () => {
-    if (anyOverlayOpen() || illustrator.isTransitioning) return;
+  node.addEventListener("click", () => {
+    if (anyOverlayOpen() || illustrator.isTransitioning || placement) return;
     openDossier(exhibit.id);
   });
-
-  // refreshHotspots() rebuilds the hotspot layer's DOM from scratch on every
-  // call, so this canvas is always freshly created — it needs its still
-  // frame painted every time regardless of whether this exhibit id has been
-  // seen before; the render is deterministic (seeded on exhibit id) so a
-  // repeated render always produces the same frame.
-  renderArtifactPreview(preview, {
-    category: exhibit.category,
-    subtype: exhibit.subtype,
-    accent: gallery?.accent ?? "#88653d",
-    exhibitId: exhibit.id,
-    title: exhibit.title,
-    donorName: exhibit.donorName,
+  node.addEventListener("focus", () => setFocusedObject(`exhibit:${exhibit.id}`));
+  node.addEventListener("blur", () => {
+    if (focusedObjectId === `exhibit:${exhibit.id}` && el("dossier").hidden) setFocusedObject(null);
   });
-
-  return card;
+  node.addEventListener("mouseenter", () => node.classList.add("hovered"));
+  node.addEventListener("mouseleave", () => node.classList.remove("hovered"));
+  return node;
 }
 
-// A small, clearly non-interactive decorative frame — establishes density
-// in a gallery with few real donations without pretending to be a persisted
-// exhibit (never a fake dossier target).
-function buildDecorativeFrame(x, z) {
-  const div = document.createElement("div");
-  div.className = "decorative-frame";
-  div.style.left = `${x}%`;
-  div.style.top = `${z}%`;
-  div.setAttribute("aria-hidden", "true");
-  return div;
+// ---------------------------------------------------------------------------
+// Placement-mode anchors: step 4 of the donation workflow. Only the
+// gallery's currently-free, server-defined slots glow; clicking one shows a
+// ghost preview and the confirm banner (steps 5-7). An arbitrary pixel
+// coordinate never reaches the server — the chosen anchor's own `slotId` is
+// exactly what `POST /api/exhibits` already validates (CLAUDE.md).
+function buildPlacementAnchor(slot, exhibitForm, state) {
+  const node = document.createElement("button");
+  node.type = "button";
+  node.className = "placement-anchor";
+  node.style.left = `${slot.x}%`;
+  node.style.top = `${slot.z}%`;
+  node.style.width = `${slot.width ?? 10}%`;
+  node.style.height = `${slot.height ?? 16}%`;
+  node.setAttribute("aria-label", `Place "${exhibitForm.title}" here`);
+  if (state.chosenSlotId === slot.id) {
+    node.classList.add("chosen");
+    const ghost = document.createElement("span");
+    ghost.className = "object-label";
+    ghost.textContent = exhibitForm.title;
+    node.appendChild(ghost);
+  }
+  node.addEventListener("click", () => choosePlacementAnchor(slot.id));
+  return node;
 }
 
-function refreshHotspots() {
-  hotspotLayer.innerHTML = "";
+function renderPlacementAnchors(objectLayer, scene) {
+  if (!placement || scene.id !== `${placement.exhibitForm.galleryId}-main`) return;
+  const gallery = world.galleries.find((g) => g.id === placement.exhibitForm.galleryId);
+  const occupied = occupiedSlotIdsForGallery(gallery.id);
+  for (const slot of gallery.slots) {
+    if (occupied.has(slot.id)) continue; // never offer an already-occupied, or arbitrary, spot
+    if (placement.confirming && placement.chosenSlotId !== slot.id) continue; // only the chosen one stays visible while confirming
+    objectLayer.appendChild(buildPlacementAnchor(slot, placement.exhibitForm, placement));
+  }
+}
+
+function refreshInteractiveObjects() {
+  const { objectLayer } = illustrator.activeLayers();
+  if (!objectLayer) return;
+  objectLayer.innerHTML = "";
   const scene = illustrator.currentScene();
 
-  for (const hotspot of scene.hotspots) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `hotspot hotspot-${hotspot.type}`;
-    button.textContent = hotspot.label;
-    button.style.left = `${hotspot.anchor.x}%`;
-    button.style.top = `${hotspot.anchor.z}%`;
-    button.addEventListener("click", () => handleHotspotActivate(hotspot));
-    hotspotLayer.appendChild(button);
-  }
-
-  // Every donated exhibit in this gallery's own main scene is a dimensional
-  // exhibit card, directly inspectable.
-  if (scene.kind === "main" && scene.galleryId) {
-    const gallery = world.galleries.find((g) => g.id === scene.galleryId);
-    const slotById = new Map(gallery.slots.map((s) => [s.id, s]));
-    const exhibits = [...exhibitsById.values()].filter((e) => e.galleryId === scene.galleryId);
-    let seed = 0;
-    for (const exhibit of exhibits) {
-      const slot = slotById.get(exhibit.slotId);
-      if (!slot) continue;
-      hotspotLayer.appendChild(buildExhibitCard(exhibit, gallery, slot.x, slot.z, seed++));
+  if (placement) {
+    renderPlacementAnchors(objectLayer, scene);
+  } else {
+    for (const object of scene.interactiveObjects) {
+      objectLayer.appendChild(buildObjectGlow(object));
     }
-    // Decorative-only frames fill the remaining free slots so a gallery with
-    // few real donations still reads as curated rather than sparse — never
-    // more than the slots actually left over, and never clickable.
-    const occupiedSlotIds = new Set(exhibits.map((e) => e.slotId));
-    for (const slot of gallery.slots) {
-      if (occupiedSlotIds.has(slot.id)) continue;
-      hotspotLayer.appendChild(buildDecorativeFrame(slot.x, slot.z));
+    if (scene.kind === "main" && scene.galleryId) {
+      const gallery = world.galleries.find((g) => g.id === scene.galleryId);
+      const slotById = new Map(gallery.slots.map((s) => [s.id, s]));
+      const exhibits = [...exhibitsById.values()].filter((e) => e.galleryId === scene.galleryId);
+      for (const exhibit of exhibits) {
+        const slot = slotById.get(exhibit.slotId);
+        if (!slot) continue;
+        objectLayer.appendChild(buildExhibitObject(exhibit, gallery, slot));
+      }
     }
   }
+  if (focusedObjectId) setFocusedObject(focusedObjectId);
 
   turnControlsEl.hidden = scene.kind !== "hub";
   el("turn-left").disabled = !scene.turnLeft;
   el("turn-right").disabled = !scene.turnRight;
 
-  galleryTitleEl.textContent = scene.caption;
-  galleryHintEl.textContent =
-    scene.kind === "hub"
-      ? "Click a glowing doorway to enter a gallery, or Donate a Relic above."
-      : scene.kind === "closeup"
-        ? "A closer look. Click back to return to the gallery."
-        : "Click a framed exhibit to inspect it.";
+  renderCornerNav(scene);
+  galleryTitleEl.textContent = scene.kind === "hub" ? "" : scene.caption;
 }
+
+// ---------------------------------------------------------------------------
+// Quiet corner navigation: a compact "enter the next room" control upper-
+// left and a "back" control lower-right, replacing a large bubble floated
+// over the artwork's centre. Labels only reveal on hover/focus via CSS
+// (`.corner-nav-label`), so idle the chrome reads as two small glyphs that
+// belong to the museum's own frame.
+function renderCornerNav(scene) {
+  const forwardBtn = el("nav-forward");
+  const backBtn = el("nav-back");
+  if (scene.nav?.forward) {
+    forwardBtn.hidden = false;
+    forwardBtn.querySelector(".corner-nav-label").textContent = scene.nav.forward.label;
+    forwardBtn.onclick = () => illustrator.goToScene(scene.nav.forward.targetSceneId, { direction: "forward" });
+  } else {
+    forwardBtn.hidden = true;
+    forwardBtn.onclick = null;
+  }
+  if (scene.nav?.back) {
+    backBtn.hidden = false;
+    backBtn.querySelector(".corner-nav-label").textContent = scene.nav.back.label;
+    backBtn.onclick = () => illustrator.goToScene(scene.nav.back.targetSceneId, { direction: "back" });
+  } else {
+    backBtn.hidden = true;
+    backBtn.onclick = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rooms menu: an alternative way to reach any gallery directly without
+// turning through the hub one facing at a time.
+function renderRoomsMenu() {
+  const menu = el("rooms-menu");
+  menu.innerHTML = "";
+  for (const gallery of world.galleries) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "rooms-menu-item";
+    item.role = "menuitem";
+    item.textContent = gallery.name;
+    item.addEventListener("click", () => {
+      closeRoomsMenu();
+      illustrator.goToScene(`${gallery.id}-main`, { direction: "forward" });
+    });
+    menu.appendChild(item);
+  }
+  const hubItem = document.createElement("button");
+  hubItem.type = "button";
+  hubItem.className = "rooms-menu-item";
+  hubItem.role = "menuitem";
+  hubItem.textContent = "Entrance Hall";
+  hubItem.addEventListener("click", () => {
+    closeRoomsMenu();
+    illustrator.goToScene("hall-n", { direction: "back" });
+  });
+  menu.appendChild(hubItem);
+}
+function openRoomsMenu() {
+  renderRoomsMenu();
+  el("rooms-menu").hidden = false;
+}
+function closeRoomsMenu() {
+  el("rooms-menu").hidden = true;
+  viewport.focus();
+}
+el("open-rooms").addEventListener("click", () => {
+  if (el("rooms-menu").hidden) openRoomsMenu();
+  else closeRoomsMenu();
+});
 
 function onSceneChange(scene) {
   currentSceneId = scene.id;
   closeLoreCard();
-  refreshHotspots();
+  refreshInteractiveObjects();
   postPresence(scene.id);
   updatePresenceLabel();
   renderCameos();
-  if (scene.kind === "closeup" && scene.lore) openLoreCard(scene.caption, scene.lore);
+  renderVisitorList();
+  if (scene.kind === "closeup" && scene.lore) openLoreCard(scene.caption, scene.lore, null);
   if (pendingAfterArrival) {
     const run = pendingAfterArrival;
     pendingAfterArrival = null;
@@ -872,8 +1067,10 @@ function onSceneChange(scene) {
 }
 
 // ---------------------------------------------------------------------------
-// Keyboard: Esc closes the topmost UI or steps back a scene; arrow keys turn
-// at the hub. There is no movement to protect focus from any more.
+// Keyboard: Esc closes the topmost UI, cancels placement, or steps back a
+// scene; Left/Right pan the camera (or turn at the hub); +/- zoom. There is
+// no walkable movement to protect form focus from any more, but the camera
+// drag/pan must still be ignored while a form field has focus.
 
 function isTypingTarget(el) {
   if (!el) return false;
@@ -883,17 +1080,29 @@ function isTypingTarget(el) {
 
 window.addEventListener("keydown", (e) => {
   if (e.code === "Escape") {
-    if (!el("dossier").hidden) closeDossier();
+    if (placement) cancelPlacement();
+    else if (!el("dossier").hidden) closeDossier();
     else if (!el("donate-gate").hidden) closeDonateGate();
     else if (!el("donate-receipt").hidden) closeReceipt();
     else if (!el("archive-gate").hidden) closeArchive();
-    else if (!el("lore-card").hidden) closeLoreCard();
+    else if (!el("rooms-menu").hidden) closeRoomsMenu();
+    else if (!el("lore-drawer").hidden) closeLoreCard();
     else illustrator.back();
     return;
   }
   if (isTypingTarget(document.activeElement) || anyOverlayOpen() || illustrator.isTransitioning) return;
-  if (e.code === "ArrowLeft") illustrator.turnLeft();
-  else if (e.code === "ArrowRight") illustrator.turnRight();
+  const scene = illustrator.currentScene();
+  if (e.code === "ArrowLeft") {
+    if (scene.kind === "hub") illustrator.turnLeft();
+    else illustrator.camera.panLeft();
+  } else if (e.code === "ArrowRight") {
+    if (scene.kind === "hub") illustrator.turnRight();
+    else illustrator.camera.panRight();
+  } else if (e.key === "+" || e.key === "=") {
+    illustrator.camera.zoomIn();
+  } else if (e.key === "-" || e.key === "_") {
+    illustrator.camera.zoomOut();
+  }
 });
 
 el("turn-left").addEventListener("click", () => illustrator.turnLeft());
@@ -918,7 +1127,7 @@ async function boot() {
   currentSceneId = illustrator.currentScene().id;
 
   connectEvents();
-  refreshHotspots();
+  refreshInteractiveObjects();
   updatePresenceLabel();
   postPresence(currentSceneId);
 

@@ -8,6 +8,14 @@
     // Imports name the file they mean, extension and all --- which is what
     // node itself wants when it runs a .ts file directly.
     "allowImportingTsExtensions": true,
+    // spec/camera.test.ts imports the plain-JS camera math module directly
+    // (deliberately dependency-free, see public/world/camera-math.js) —
+    // allowJs lets tsc resolve it instead of erroring with "implicitly has
+    // an 'any' type"; checkJs stays off so plain app/world JS isn't itself
+    // typechecked, matching this tsconfig's existing scope (spec/scripts
+    // only).
+    "allowJs": true,
+    "checkJs": false,
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["node"],
     "strict": true,

@@ -1,19 +1,20 @@
-// The illustrated-scene controller, replacing the retired live-3D camera
-// controller (public/world/exploration.js, removed — see docs/adr/0003-
-// scene-exploration.md's presentation-pivot addendum). There is still no
-// avatar position and still exactly one small fixed graph of named scenes
-// (server/src/world.js's SCENES) — only how a scene is PRESENTED changed:
-// each scene is now a full-bleed illustrated image with hotspots positioned
-// as plain percentage anchors, never a 3D projection, so there is no camera,
-// no frustum, no FOV correction to keep hotspots inside any more.
+// The illustrated-scene controller: owns scene-to-scene transitions (a
+// page-turn/cabinet-door cut between rooms, a cross-slide "turn" at the
+// hub) AND, new in the immersive-2.5D pass, a bounded look-around camera
+// per scene (public/world/camera.js) — see docs/adr/0005-immersive-2.5d-
+// camera.md. There is still exactly one small fixed graph of named scenes
+// (server/src/world.js's SCENES); only how a scene is PRESENTED changed
+// again: each scene is a full-bleed illustrated image a visitor can drag/
+// swipe/wheel to look around within its own bounded range, with glowing
+// interactive objects nested in the same transformed "room" plane as the
+// art so they always stay pixel-aligned with the painted item they
+// represent, never drifting independently of the picture.
 //
 // Two DOM layers (`layerA`/`layerB`) ping-pong so a transition can animate
-// the incoming scene over the outgoing one — a page-turn / cabinet-door
-// effect (CSS 3D transforms, transform-origin at the hinge edge) for a cut
-// between scenes, a quick cross-slide for a hub turn (looking toward a
-// different doorway without actually leaving the hall). Both degrade to a
-// near-instant swap under prefers-reduced-motion, same rule
-// exploration.js's own transitions followed.
+// the incoming scene over the outgoing one. Both transitions degrade to a
+// near-instant swap under prefers-reduced-motion.
+
+import { createSceneCamera } from "./camera.js";
 
 const PREFERS_REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 const CUT_MS = PREFERS_REDUCED_MOTION ? 1 : 620;
@@ -38,15 +39,36 @@ function imageUrl(key) {
   return `/assets/gallery-scenes/${file}`;
 }
 
+// Builds (once per layer) the nested "room" structure a camera drives: the
+// art plane and the object/cameo plane share one transform (parallax 1.0,
+// so a glowing object hit-region can never visually drift off the painted
+// item it represents), while dust gets a lighter parallax and the
+// vignette/frame stay fixed — "the edge of the window" never pans.
+function roomLayers(layer) {
+  return {
+    room: layer.querySelector(".scene-room"),
+    art: layer.querySelector(".scene-art"),
+    dust: layer.querySelector(".scene-dust"),
+  };
+}
+
 export function createIllustrationController({ layerA, layerB, world, onSceneChange }) {
   const scenesById = new Map(world.scenes.map((s) => [s.id, s]));
   let current = scenesById.get(world.defaultSceneId);
   let front = layerA;
   let back = layerB;
   let transitioning = false;
+  let frontCamera = createSceneCamera({
+    container: layerA,
+    layers: [
+      { el: roomLayers(layerA).room, parallax: 1 },
+      { el: roomLayers(layerA).dust, parallax: 0.55 },
+    ],
+  });
+  let backCamera = null;
 
   function paint(layer, scene) {
-    const art = layer.querySelector(".scene-art");
+    const { art } = roomLayers(layer);
     art.style.backgroundImage = `url("${imageUrl(scene.image)}")`;
     // A close-up scene flagged `zoom` reuses its gallery's own main image
     // (no separate close-up photograph exists for every gallery) but crops
@@ -64,11 +86,24 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
   }
 
   paint(front, current);
+  frontCamera.configure(current.camera);
   front.hidden = false;
   back.hidden = true;
 
   function currentScene() {
     return current;
+  }
+
+  // The object-layer/cameo-layer elements nested inside whichever physical
+  // layer (`scene-layer-a`/`-b`) is currently the FRONT one — app.js renders
+  // interactive-object glow regions and visitor cameos into these, so they
+  // live inside the same transformed `.scene-room` plane the camera pans,
+  // and ping-pong automatically whenever a transition swaps front/back.
+  function activeLayers() {
+    return {
+      objectLayer: front.querySelector(".object-layer"),
+      cameoLayer: front.querySelector(".cameo-layer"),
+    };
   }
 
   // A hub turn (left/right between the four doorway facings) is a quick
@@ -79,9 +114,19 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
     if (!next || transitioning) return;
     transitioning = true;
     paint(back, next);
+    backCamera?.destroy();
+    backCamera = createSceneCamera({
+      container: back,
+      layers: [
+        { el: roomLayers(back).room, parallax: 1 },
+        { el: roomLayers(back).dust, parallax: 0.55 },
+      ],
+    });
+    backCamera.configure(next.camera);
     back.hidden = false;
     back.className = "scene-layer scene-layer-incoming-turn";
     front.className = "scene-layer scene-layer-outgoing-turn";
+    frontCamera.setEnabled(false);
     // Force reflow so the browser registers the start state before the
     // transition-driving class swap below animates toward the end state.
     void back.offsetWidth;
@@ -93,6 +138,8 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
       front.hidden = true;
       front.className = "scene-layer";
       [front, back] = [back, front];
+      [frontCamera, backCamera] = [backCamera, frontCamera];
+      frontCamera.setEnabled(true);
       current = next;
       transitioning = false;
       onSceneChange?.(current);
@@ -117,11 +164,21 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
     if (!next || transitioning || next.id === current.id) return;
     transitioning = true;
     paint(back, next);
+    backCamera?.destroy();
+    backCamera = createSceneCamera({
+      container: back,
+      layers: [
+        { el: roomLayers(back).room, parallax: 1 },
+        { el: roomLayers(back).dust, parallax: 0.55 },
+      ],
+    });
+    backCamera.configure(next.camera);
     back.hidden = false;
     const inClass = direction === "back" ? "scene-layer-page-in-back" : "scene-layer-page-in-forward";
     const outClass = direction === "back" ? "scene-layer-page-out-back" : "scene-layer-page-out-forward";
     back.className = `scene-layer ${inClass}`;
     front.className = `scene-layer ${outClass}`;
+    frontCamera.setEnabled(false);
     void back.offsetWidth;
     requestAnimationFrame(() => {
       back.className = "scene-layer scene-layer-settled";
@@ -131,6 +188,8 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
       front.hidden = true;
       front.className = "scene-layer";
       [front, back] = [back, front];
+      [frontCamera, backCamera] = [backCamera, frontCamera];
+      frontCamera.setEnabled(true);
       current = next;
       transitioning = false;
       onSceneChange?.(current);
@@ -147,8 +206,12 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
     back: back_,
     turnLeft,
     turnRight,
+    activeLayers,
     get isTransitioning() {
       return transitioning;
+    },
+    get camera() {
+      return frontCamera;
     },
   };
 }

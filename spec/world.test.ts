@@ -49,7 +49,9 @@ describe("the museum world", () => {
     type Scene = {
       id: string;
       parentSceneId: string | null;
-      hotspots: Array<{ targetSceneId?: string }>;
+      interactiveObjects: Array<{ targetSceneId?: string; anchor: { x: number; y: number; width: number; height: number } }>;
+      nav?: { forward?: { targetSceneId: string }; back?: { targetSceneId: string } };
+      camera: { minPan: number; maxPan: number; minZoom: number; maxZoom: number };
       turnLeft?: string;
       turnRight?: string;
     };
@@ -68,17 +70,41 @@ describe("the museum world", () => {
       expect(byId.has(main.parentSceneId as string)).toBe(true);
       expect(closeup.parentSceneId).toBe(main.id);
 
-      // The main scene's own door hotspot actually leads back to that
-      // parent scene, and its close-up hotspot leads to its own close-up —
-      // no hotspot should ever point at a scene id the world doesn't know.
-      for (const hotspot of main.hotspots) {
-        if (hotspot.targetSceneId) expect(byId.has(hotspot.targetSceneId)).toBe(true);
+      // Navigation out of the main scene (back to the hub) resolves to a
+      // real scene id, and so does every in-room interactive object's own
+      // target (a "look closer" object pointing at its own close-up) — no
+      // object or nav entry should ever point at a scene id the world
+      // doesn't know.
+      expect(main.nav?.back?.targetSceneId).toBeTruthy();
+      expect(byId.has(main.nav!.back!.targetSceneId)).toBe(true);
+      expect(closeup.nav?.back?.targetSceneId).toBe(main.id);
+      for (const object of main.interactiveObjects) {
+        if (object.targetSceneId) expect(byId.has(object.targetSceneId)).toBe(true);
+        // Every interactive object anchors to a real BOX region on the
+        // illustration, not a bare point — this is what lets the client
+        // render a glow clipped to the actual painted item instead of a
+        // pill floating at a single coordinate.
+        expect(typeof object.anchor.x).toBe("number");
+        expect(typeof object.anchor.y).toBe("number");
+        expect(typeof object.anchor.width).toBe("number");
+        expect(typeof object.anchor.height).toBe("number");
+      }
+
+      // Every scene ships a bounded camera range — pan/zoom bounds must be
+      // real, ordered numbers, never an accidental "camera can't move" or
+      // "camera can go anywhere" default.
+      for (const scene of [main, closeup]) {
+        expect(scene.camera.minPan).toBeLessThanOrEqual(scene.camera.maxPan);
+        expect(scene.camera.minZoom).toBeLessThanOrEqual(scene.camera.maxZoom);
+        expect(scene.camera.minZoom).toBeGreaterThan(0);
       }
     }
 
     const hub = byId.get(defaultSceneId);
     expect(hub && byId.has(hub.turnLeft ?? "")).toBe(true);
     expect(hub && byId.has(hub.turnRight ?? "")).toBe(true);
+    expect(hub?.nav?.forward?.targetSceneId).toBeTruthy();
+    expect(hub && byId.has(hub.nav!.forward!.targetSceneId)).toBe(true);
   });
 });
 

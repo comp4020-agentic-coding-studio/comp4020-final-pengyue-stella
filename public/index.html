@@ -6,42 +6,45 @@
     <title>The Cursed Museum</title>
     <meta
       name="description"
-      content="A shared, explorable gothic museum of haunted objects and unreliable histories. Click to look closer, follow the glowing signs between rooms."
+      content="A shared, immersive gothic museum of haunted objects and unreliable histories. Drag to look around each room, click a glowing object to inspect it."
     />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body class="app-page">
     <div id="viewport" class="viewport" tabindex="0" role="application"
-      aria-label="The Cursed Museum. Click a glowing sign or exhibit to move and inspect; Tab and Enter work the same way.">
+      aria-label="The Cursed Museum. Drag or use arrow keys to look around the room, click a glowing object to inspect it; Tab and Enter work the same way.">
 
       <!-- The illustrated scene stack: two layers so a page-turn/cabinet-door
            transition can cross-fade/rotate the incoming scene over the
-           outgoing one, rather than cutting through a single shared element. -->
+           outgoing one. Each layer now holds a `.scene-room` plane that a
+           bounded 2.5D camera (public/world/camera.js) pans/zooms as one
+           unit — the art, the interactive-object glow regions, and visitor
+           cameos all live inside it so they stay pixel-locked to the
+           painted item they represent as the camera moves; only the dust
+           (lighter parallax) and the vignette/frame (fixed, "the edge of
+           the window") sit outside it. -->
       <div id="scene-stack" class="scene-stack">
         <div class="scene-layer scene-layer-a" id="scene-layer-a">
-          <div class="scene-art"></div>
+          <div class="scene-room">
+            <div class="scene-art"></div>
+            <div id="object-layer-a" class="object-layer" aria-hidden="false"></div>
+            <div id="cameo-layer-a" class="cameo-layer" aria-hidden="true"></div>
+          </div>
+          <div class="scene-dust" aria-hidden="true"></div>
           <div class="scene-vignette"></div>
           <div class="scene-frame" aria-hidden="true"></div>
-          <div class="scene-dust" aria-hidden="true"></div>
         </div>
         <div class="scene-layer scene-layer-b" id="scene-layer-b" hidden>
-          <div class="scene-art"></div>
+          <div class="scene-room">
+            <div class="scene-art"></div>
+            <div id="object-layer-b" class="object-layer" aria-hidden="false"></div>
+            <div id="cameo-layer-b" class="cameo-layer" aria-hidden="true"></div>
+          </div>
+          <div class="scene-dust" aria-hidden="true"></div>
           <div class="scene-vignette"></div>
           <div class="scene-frame" aria-hidden="true"></div>
-          <div class="scene-dust" aria-hidden="true"></div>
         </div>
       </div>
-
-      <!-- Hotspot overlay: real, focusable buttons positioned as plain
-           percentage-anchored CSS over the current illustrated scene — no
-           3D projection, since there is no camera any more. -->
-      <div id="hotspot-layer" class="hotspot-layer" aria-hidden="false"></div>
-
-      <!-- Visitor cameo layer: a small silhouette/medallion per OTHER
-           visitor currently in this scene (see docs/adr/0003-scene-
-           exploration.md's visible-presence addendum) — restored visible
-           presence without free-roam movement or an embodied 3D avatar. -->
-      <div id="cameo-layer" class="cameo-layer" aria-hidden="true"></div>
 
       <!-- Hub-only turn controls: the one place scene navigation is a look,
            not a cut — turning to face a different doorway in the Entrance
@@ -51,20 +54,44 @@
         <button type="button" id="turn-right" class="turn-arrow turn-right" aria-label="Turn right">&#10095;</button>
       </div>
 
+      <!-- Quiet corner navigation (replacing a large bubble floated over the
+           artwork's centre): a compact "enter the next room" control upper-
+           left, clear of the museum title, and a "back" control lower-right.
+           Labels stay hidden until hover/focus so the chrome reads as part
+           of the museum's own frame, not a floating hotspot. -->
+      <button type="button" id="nav-forward" class="corner-nav corner-nav-forward" hidden>
+        <span class="corner-nav-icon" aria-hidden="true">&#8599;</span>
+        <span class="corner-nav-label"></span>
+      </button>
+      <button type="button" id="nav-back" class="corner-nav corner-nav-back" hidden>
+        <span class="corner-nav-icon" aria-hidden="true">&#8601;</span>
+        <span class="corner-nav-label"></span>
+      </button>
+
       <!-- Everything below floats above the scene layers. -->
       <header class="topbar">
         <div class="topbar-text">
           <h1>The Cursed Museum</h1>
+          <p class="scene-caption" id="gallery-title"></p>
           <p class="presence" id="presence" aria-live="polite"></p>
+          <div id="visitor-list" class="visitor-list" hidden aria-label="Other visitors in this room"></div>
           <p class="whoami" id="whoami"></p>
         </div>
-        <a class="about-link" href="/readme/">What is this?</a>
+        <div class="topbar-actions">
+          <button type="button" id="sound-toggle" class="sound-toggle" aria-pressed="false"
+            aria-label="Ambient sound is off. Click to turn on.">
+            <span aria-hidden="true">&#128263;</span>
+          </button>
+          <a class="about-link" href="/readme/">What is this?</a>
+        </div>
       </header>
 
-      <!-- Always-reachable actions: donation must never require discovering
-           one specific hall orientation, and the archive must be findable
-           without already knowing which gallery holds an exhibit. -->
+      <!-- A small "Rooms" menu as an alternative way to reach any gallery
+           directly, without turning through the hub one facing at a time. -->
       <div class="persistent-actions">
+        <button type="button" id="open-rooms" class="persistent-action rooms-action">
+          <span aria-hidden="true">&#8982;</span> Rooms
+        </button>
         <button type="button" id="open-archive" class="persistent-action archive-action">
           <span aria-hidden="true">&#128214;</span> Archive
         </button>
@@ -73,21 +100,20 @@
         </button>
       </div>
 
+      <div id="rooms-menu" class="rooms-menu" hidden role="menu" aria-label="Jump to a room"></div>
+
       <footer class="bottom-bar">
-        <div class="scene-caption">
-          <h2 id="gallery-title">Entrance Hall</h2>
-          <p id="gallery-hint">&nbsp;</p>
-        </div>
         <p class="hint" id="control-hint">
-          Click a glowing sign to move &middot; click an exhibit to inspect &middot; Esc to go back
+          Drag or Left/Right to look around &middot; wheel or +/- to zoom &middot; click a glowing object to inspect &middot; Esc to go back
         </p>
       </footer>
 
-      <!-- Short environmental-lore popover (a hotspot that isn't a full
-           archival exhibit) — "important environmental objects can have
-           short lore text even if they are not full archival exhibits." -->
-      <div id="lore-card" class="lore-card" hidden role="dialog" aria-labelledby="lore-title">
-        <button type="button" id="lore-close" class="dossier-close" aria-label="Close">&times;</button>
+      <!-- Side drawer: lore and (eventually) the dossier open here, a panel
+           that slides in from the side without covering the whole scene —
+           "elegant side/lower drawer," never a full-screen gate for simply
+           reading a short caption. -->
+      <div id="lore-drawer" class="side-drawer" hidden role="dialog" aria-labelledby="lore-title">
+        <button type="button" id="lore-close" class="drawer-close" aria-label="Close">&times;</button>
         <h3 id="lore-title"></h3>
         <p id="lore-text"></p>
       </div>
@@ -115,18 +141,17 @@
         </div>
       </div>
 
-      <!-- Donation form overlay. -->
+      <!-- Donation form overlay: the first step only (gallery, relic type,
+           story, donor) — placement is a separate, visual step (see
+           "Placement mode" below) rather than a "Display slot" dropdown. -->
       <div id="donate-gate" class="overlay-gate" hidden>
         <form id="donate-form" class="gate-card dossier-card">
           <h2>Donate a Relic</h2>
           <label for="donate-gallery">Gallery</label>
           <select id="donate-gallery" name="galleryId" required></select>
 
-          <label for="donate-subtype">Artifact type</label>
+          <label for="donate-subtype">Relic type</label>
           <select id="donate-subtype" name="subtype" required></select>
-
-          <label for="donate-slot">Display slot</label>
-          <select id="donate-slot" name="slotId" required></select>
 
           <label for="donate-title">Title</label>
           <input id="donate-title" name="title" maxlength="80" required placeholder="The Spoon That Remembers" />
@@ -140,10 +165,27 @@
 
           <div class="gate-actions">
             <button type="button" id="donate-cancel" class="secondary">Esc &middot; Cancel</button>
-            <button type="submit">Donate</button>
+            <button type="submit">Place Relic&hellip;</button>
           </div>
           <p class="gate-error" id="donate-error" role="alert"></p>
         </form>
+      </div>
+
+      <!-- Placement-mode banner: shown instead of the normal bottom hint
+           while the donor is choosing where their relic stands. Only valid,
+           unoccupied anchors glow in this mode (rendered into the object
+           layer, see app.js's renderPlacementAnchors) — empty anchors are
+           otherwise invisible, never rendered as decorative cards. -->
+      <div id="placement-banner" class="placement-banner" hidden role="status">
+        <p>Choose where <strong id="placement-title"></strong> stands. Click a glowing spot.</p>
+        <button type="button" id="placement-cancel" class="secondary">Esc &middot; Cancel</button>
+      </div>
+      <div id="placement-confirm" class="placement-confirm" hidden role="status">
+        <p>Place it here?</p>
+        <div class="gate-actions">
+          <button type="button" id="placement-move" class="secondary">Choose another spot</button>
+          <button type="button" id="placement-confirm-btn">Confirm Placement</button>
+        </div>
       </div>
 
       <!-- Post-donation archival receipt: shown immediately after a
@@ -163,38 +205,39 @@
         </div>
       </div>
 
-      <!-- Exhibit dossier overlay. -->
-      <div id="dossier" class="overlay-gate" hidden>
-        <div class="gate-card dossier-card" role="dialog" aria-labelledby="dossier-title">
-          <button type="button" id="dossier-close" class="dossier-close" aria-label="Close dossier (Esc)">&times;</button>
-          <canvas id="dossier-preview" class="receipt-preview" width="420" height="220"></canvas>
-          <p class="dossier-kicker" id="dossier-kicker"></p>
-          <h2 id="dossier-title"></h2>
-          <p class="dossier-meta" id="dossier-meta"></p>
-          <div id="dossier-accounts" class="dossier-accounts"></div>
+      <!-- Exhibit dossier: a side drawer, not a full-screen gate, so the
+           illuminated object it belongs to stays visible beside it (CLAUDE.md's
+           "the selected object should remain illuminated while its
+           information is open"). -->
+      <div id="dossier" class="side-drawer dossier-drawer" hidden role="dialog" aria-labelledby="dossier-title">
+        <button type="button" id="dossier-close" class="drawer-close" aria-label="Close dossier (Esc)">&times;</button>
+        <canvas id="dossier-preview" class="receipt-preview" width="420" height="220"></canvas>
+        <p class="dossier-kicker" id="dossier-kicker"></p>
+        <h2 id="dossier-title"></h2>
+        <p class="dossier-meta" id="dossier-meta"></p>
+        <div id="dossier-accounts" class="dossier-accounts"></div>
 
-          <form id="account-form" class="account-form">
-            <h3 id="account-form-title">Add Counter-Evidence</h3>
-            <input type="hidden" id="account-challenged" value="" />
-            <label for="account-kind">This account is a&hellip;</label>
-            <select id="account-kind" name="kind">
-              <option value="testimony">New Testimony</option>
-              <option value="contradiction">Contradiction</option>
-              <option value="revision">Proposed Revision</option>
-              <option value="counter-evidence">Counter-Evidence</option>
-            </select>
-            <label for="account-body">Your account</label>
-            <textarea id="account-body" name="body" maxlength="600" rows="3" required
-              placeholder="Manufacturing records identify a later origin&hellip;"></textarea>
-            <label for="account-author">Your name</label>
-            <input id="account-author" name="authorName" maxlength="40" placeholder="Anonymous Curator" />
-            <div class="gate-actions">
-              <button type="button" id="account-cancel" class="secondary">Cancel</button>
-              <button type="submit">Publish</button>
-            </div>
-            <p class="gate-error" id="account-error" role="alert"></p>
-          </form>
-        </div>
+        <form id="account-form" class="account-form">
+          <h3 id="account-form-title">Add Counter-Evidence</h3>
+          <input type="hidden" id="account-challenged" value="" />
+          <label for="account-kind">This account is a&hellip;</label>
+          <select id="account-kind" name="kind">
+            <option value="testimony">New Testimony</option>
+            <option value="contradiction">Contradiction</option>
+            <option value="revision">Proposed Revision</option>
+            <option value="counter-evidence">Counter-Evidence</option>
+          </select>
+          <label for="account-body">Your account</label>
+          <textarea id="account-body" name="body" maxlength="600" rows="3" required
+            placeholder="Manufacturing records identify a later origin&hellip;"></textarea>
+          <label for="account-author">Your name</label>
+          <input id="account-author" name="authorName" maxlength="40" placeholder="Anonymous Curator" />
+          <div class="gate-actions">
+            <button type="button" id="account-cancel" class="secondary">Cancel</button>
+            <button type="submit">Publish</button>
+          </div>
+          <p class="gate-error" id="account-error" role="alert"></p>
+        </form>
       </div>
     </div>
 
