@@ -46,10 +46,14 @@ describe("the museum world", () => {
     expect(Array.isArray(scenes)).toBe(true);
     expect(scenes.some((s: { id: string }) => s.id === defaultSceneId)).toBe(true);
 
+    type Shape =
+      | { type: "polygon"; viewBox: string; points: [number, number][] }
+      | { type: "ellipse"; viewBox: string; cx: number; cy: number; rx: number; ry: number }
+      | { type: "path"; viewBox: string; d: string };
     type Scene = {
       id: string;
       parentSceneId: string | null;
-      interactiveObjects: Array<{ targetSceneId?: string; anchor: { x: number; y: number; width: number; height: number } }>;
+      interactiveObjects: Array<{ targetSceneId?: string; shape: Shape }>;
       nav?: { forward?: { targetSceneId: string }; back?: { targetSceneId: string } };
       camera: { minPan: number; maxPan: number; minZoom: number; maxZoom: number };
     };
@@ -78,14 +82,29 @@ describe("the museum world", () => {
       expect(closeup.nav?.back?.targetSceneId).toBe(main.id);
       for (const object of main.interactiveObjects) {
         if (object.targetSceneId) expect(byId.has(object.targetSceneId)).toBe(true);
-        // Every interactive object anchors to a real BOX region on the
-        // illustration, not a bare point — this is what lets the client
-        // render a glow clipped to the actual painted item instead of a
-        // pill floating at a single coordinate.
-        expect(typeof object.anchor.x).toBe("number");
-        expect(typeof object.anchor.y).toBe("number");
-        expect(typeof object.anchor.width).toBe("number");
-        expect(typeof object.anchor.height).toBe("number");
+        // Every interactive object carries a real traced SHAPE (a polygon's
+        // point list, or an ellipse's own cx/cy/rx/ry), never an
+        // {x,y,width,height} rectangle — this is what lets the client clip
+        // the glow to the actual painted object's silhouette instead of a
+        // bounding box, and what a test asserting only "it received focus"
+        // would miss entirely.
+        expect(["polygon", "ellipse", "path"]).toContain(object.shape.type);
+        expect(typeof object.shape.viewBox).toBe("string");
+        if (object.shape.type === "polygon") {
+          expect(Array.isArray(object.shape.points)).toBe(true);
+          expect(object.shape.points.length).toBeGreaterThanOrEqual(3);
+          for (const point of object.shape.points) {
+            expect(point.length).toBe(2);
+            expect(typeof point[0]).toBe("number");
+            expect(typeof point[1]).toBe("number");
+          }
+        }
+        if (object.shape.type === "ellipse") {
+          expect(typeof object.shape.cx).toBe("number");
+          expect(typeof object.shape.cy).toBe("number");
+          expect(object.shape.rx).toBeGreaterThan(0);
+          expect(object.shape.ry).toBeGreaterThan(0);
+        }
       }
 
       // Every scene ships a bounded camera range — pan/zoom bounds must be
@@ -272,5 +291,237 @@ describe("real-time: ephemeral focus broadcast (a visitor looking at an object)"
       body: JSON.stringify({ objectId: null }),
     });
     expect([200, 204]).toContain(res.status);
+  });
+});
+
+describe("surface-aware free relic placement", () => {
+  type Surface = {
+    id: string;
+    surfaceType: string;
+    shape: { type: string; points?: [number, number][]; cx?: number; cy?: number; rx?: number; ry?: number };
+    allowedRelicTypes: string[];
+    minScale: number;
+    maxScale: number;
+  };
+
+  async function world() {
+    return (await (await fetch(url("/api/world"))).json()) as {
+      galleries: Array<{ id: string; subtypes: string[]; slots: Array<{ id: string }>; placementSurfaces: Surface[] }>;
+    };
+  }
+
+  function centroidOf(shape: Surface["shape"]): { x: number; y: number } {
+    if (shape.type === "ellipse") return { x: shape.cx!, y: shape.cy! };
+    const xs = shape.points!.map((p) => p[0]);
+    const ys = shape.points!.map((p) => p[1]);
+    return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  }
+
+  function uvFromPoint(shape: Surface["shape"], x: number, y: number): { u: number; v: number } {
+    let minX: number, maxX: number, minY: number, maxY: number;
+    if (shape.type === "ellipse") {
+      minX = shape.cx! - shape.rx!;
+      maxX = shape.cx! + shape.rx!;
+      minY = shape.cy! - shape.ry!;
+      maxY = shape.cy! + shape.ry!;
+    } else {
+      const xs = shape.points!.map((p) => p[0]);
+      const ys = shape.points!.map((p) => p[1]);
+      minX = Math.min(...xs);
+      maxX = Math.max(...xs);
+      minY = Math.min(...ys);
+      maxY = Math.max(...ys);
+    }
+    return { u: (x - minX) / (maxX - minX), v: (y - minY) / (maxY - minY) };
+  }
+
+  async function freeGallerySlot(galleryId: string) {
+    const { galleries } = await world();
+    const gallery = galleries.find((g) => g.id === galleryId)!;
+    const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
+    const occupied = new Set(exhibits.map((e: { slotId: string }) => e.slotId));
+    const slot = gallery.slots.find((s) => !occupied.has(s.id));
+    if (!slot) throw new Error(`no free slot in ${galleryId}`);
+    return { gallery, slot };
+  }
+
+  it("every gallery's placement surfaces only allow relic types compatible with that surface type", async () => {
+    const { galleries } = await world();
+    for (const gallery of galleries) {
+      expect(gallery.placementSurfaces.length).toBeGreaterThan(0);
+      for (const surface of gallery.placementSurfaces) {
+        expect(["wall", "shelf", "tabletop", "cabinet", "plinth", "floor"]).toContain(surface.surfaceType);
+        // A painting/sketch must never be offered a floor or carpet
+        // placement — the one hard rule the brief calls out by name.
+        if (surface.surfaceType === "floor") {
+          expect(surface.allowedRelicTypes).not.toContain("painting");
+          expect(surface.allowedRelicTypes).not.toContain("sketch");
+        }
+      }
+    }
+    const portraits = galleries.find((g) => g.id === "portraits")!;
+    for (const surface of portraits.placementSurfaces) {
+      expect(surface.surfaceType).toBe("wall");
+    }
+  });
+
+  it("places a relic at a valid normalized point on a compatible surface, and persists it", async () => {
+    const { gallery, slot } = await freeGallerySlot("portraits");
+    const surface = gallery.placementSurfaces.find((s) => s.allowedRelicTypes.includes("painting"))!;
+    // Offset well clear of this surface's own centroid: the seeded Founding
+    // Collection exhibit (server/src/db.js's seedFoundingCollection) already
+    // occupies this gallery's first surface near its centroid via
+    // legacySlotPlacement, so placing exactly on it here would legitimately
+    // collide — this test is about a valid placement succeeding, not about
+    // collision (world.test.ts's own collision test covers that directly).
+    const centroid = centroidOf(surface.shape);
+    const bounds = (() => {
+      const xs = surface.shape.points!.map((p) => p[0]);
+      const ys = surface.shape.points!.map((p) => p[1]);
+      return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+    })();
+    const { u, v } = uvFromPoint(surface.shape, centroid.x + bounds.w * 0.3, centroid.y + bounds.h * 0.3);
+
+    const res = await fetch(url("/api/exhibits"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        galleryId: gallery.id,
+        slotId: slot.id,
+        surfaceId: surface.id,
+        u,
+        v,
+        subtype: "painting",
+        title: `placed painting ${Date.now()}`,
+        originClaim: "x",
+        donorName: "Spec Visitor",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const { exhibit } = await res.json();
+    expect(exhibit.placement).toBeTruthy();
+    expect(exhibit.placement.surfaceId).toBe(surface.id);
+    expect(exhibit.placement.u).toBeCloseTo(u, 5);
+    expect(exhibit.placement.v).toBeCloseTo(v, 5);
+
+    const { exhibit: fetched } = await (await fetch(url(`/api/exhibits/${exhibit.id}`))).json();
+    expect(fetched.placement.surfaceId).toBe(surface.id);
+  });
+
+  it("rejects a relic type that isn't allowed on the chosen surface, even though it's valid elsewhere in the same gallery", async () => {
+    const { gallery, slot } = await freeGallerySlot("memento");
+    // A memento tabletop surface doesn't accept "curiosity" (curiosity's own
+    // allowed surface types are shelf/cabinet/plinth, never tabletop) even
+    // though curiosity is a perfectly valid subtype for the memento
+    // category in general and would be accepted on this gallery's shelf or
+    // cabinet surfaces.
+    const tabletop = gallery.placementSurfaces.find((s) => s.surfaceType === "tabletop")!;
+    expect(tabletop.allowedRelicTypes).not.toContain("curiosity");
+    const res = await fetch(url("/api/exhibits"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        galleryId: gallery.id,
+        slotId: slot.id,
+        surfaceId: tabletop.id,
+        u: 0.5,
+        v: 0.5,
+        subtype: "curiosity",
+        title: "x",
+        originClaim: "x",
+        donorName: "A",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a normalized point that falls outside the chosen surface's authorised polygon", async () => {
+    const { gallery, slot } = await freeGallerySlot("specimen");
+    const surface = gallery.placementSurfaces[0];
+    const res = await fetch(url("/api/exhibits"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        galleryId: gallery.id,
+        slotId: slot.id,
+        surfaceId: surface.id,
+        // Just outside the surface's own bounding box in u/v terms.
+        u: 1.4,
+        v: 1.4,
+        subtype: surface.allowedRelicTypes[0],
+        title: "x",
+        originClaim: "x",
+        donorName: "A",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a donation whose surfaceId doesn't exist in that gallery", async () => {
+    const { gallery, slot } = await freeGallerySlot("childhood");
+    const res = await fetch(url("/api/exhibits"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        galleryId: gallery.id,
+        slotId: slot.id,
+        surfaceId: "not-a-real-surface",
+        u: 0.5,
+        v: 0.5,
+        subtype: gallery.placementSurfaces[0].allowedRelicTypes[0],
+        title: "x",
+        originClaim: "x",
+        donorName: "A",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a second placement that collides with one already on the same surface", async () => {
+    const { galleries } = await world();
+    const gallery = galleries.find((g) => g.id === "memento")!;
+    const surface = gallery.placementSurfaces[0];
+    const centroid = centroidOf(surface.shape);
+    const { u, v } = uvFromPoint(surface.shape, centroid.x, centroid.y);
+
+    async function place() {
+      const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
+      const occupied = new Set(exhibits.map((e: { slotId: string }) => e.slotId));
+      const slot = gallery.slots.find((s) => !occupied.has(s.id))!;
+      return fetch(url("/api/exhibits"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          galleryId: gallery.id,
+          slotId: slot.id,
+          surfaceId: surface.id,
+          u,
+          v,
+          subtype: surface.allowedRelicTypes[0],
+          title: `collision test ${Date.now()}-${Math.random()}`,
+          originClaim: "x",
+          donorName: "A",
+        }),
+      });
+    }
+
+    const first = await place();
+    expect(first.status).toBe(201);
+    const second = await place();
+    expect(second.status).toBe(409);
+  });
+
+  it("gives a legacy slot-based exhibit (no surfaceId) a derived default placement, never a missing one", async () => {
+    // The Founding Collection is seeded through the pre-surface path
+    // (server/src/db.js's seedFoundingCollection), so it's never donated
+    // with a surfaceId — exactly the "existed before this shipped" case
+    // backward compatibility exists for.
+    const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
+    const founding = exhibits.find((e: { id: string }) => e.id.startsWith("exhibit_founding_"));
+    expect(founding, "expected a seeded Founding Collection exhibit").toBeTruthy();
+    expect(founding.placement).toBeTruthy();
+    expect(typeof founding.placement.surfaceId).toBe("string");
+    expect(typeof founding.placement.u).toBe("number");
+    expect(typeof founding.placement.v).toBe("number");
   });
 });

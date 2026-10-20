@@ -361,11 +361,14 @@ const STAGE_BY_CATEGORY = {
   toy: stageCabinetDisplay,
 };
 
-// Builds a complete, staged, nameplated exhibit mesh for a donated relic.
-// Returns { group, interactY } — the same shape scene.js's addExhibitMesh
-// already expects, so nothing else about exhibit placement/raycasting
-// needs to change for this richer library to drop in.
-export function buildArtifactMesh({ category, subtype, accent, exhibitId, title, donorName }) {
+// Builds a complete, staged exhibit mesh for a donated relic — a nameplate
+// is added unless `skipNameplate` (used for the in-room/placement-preview
+// rendering path below, where the title/donor text belongs in the dossier,
+// never baked permanently over the artwork itself). Returns { group,
+// interactY } — the same shape scene.js's addExhibitMesh already expects,
+// so nothing else about exhibit placement/raycasting needs to change for
+// this richer library to drop in.
+export function buildArtifactMesh({ category, subtype, accent, exhibitId, title, donorName, skipNameplate = false }) {
   const rand = seededRandom(exhibitId ?? `${category}:${subtype}`);
   const builder = BUILDERS[subtype] ?? BUILDERS.curiosity;
   const built = builder(accent, rand);
@@ -379,7 +382,7 @@ export function buildArtifactMesh({ category, subtype, accent, exhibitId, title,
   const scale = 0.92 + rand() * 0.16;
   group.scale.multiplyScalar(scale);
 
-  group.add(buildNameplate(title, donorName, labelY));
+  if (!skipNameplate) group.add(buildNameplate(title, donorName, labelY));
   group.add(buildSpotlight(interactY + 0.4));
 
   return { group, interactY: interactY * scale };
@@ -440,5 +443,45 @@ export function renderArtifactPreview(canvas, { category, subtype, accent, exhib
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.globalAlpha = 1;
     }
+  }
+}
+
+// The in-room/placement-mode object representation (CLAUDE.md-aligned
+// brief: "replace the oversized donation card... render only the relic and
+// its frame/object body on a transparent canvas," never a title/donor/
+// INSPECT label or an opaque card background). Reuses the exact same
+// procedural model library and seeded-per-exhibit look as
+// renderArtifactPreview, just without the nameplate mesh and with no
+// backdrop drawn behind a failed-render fallback — a transparent canvas
+// stays transparent even if WebGL fails, rather than painting a tinted
+// rectangle that would itself read as "a card."
+export function renderArtifactObject(canvas, { category, subtype, accent, exhibitId }) {
+  try {
+    const scene = new THREE.Scene();
+    scene.background = null;
+    scene.add(new THREE.AmbientLight("#5a4a36", 3));
+    const key = new THREE.PointLight("#ffcf8a", 60, 0, 2);
+    key.position.set(0.6, 1.2, 1.0);
+    scene.add(key);
+
+    const { group, interactY } = buildArtifactMesh({ category, subtype, accent, exhibitId, skipNameplate: true });
+    group.position.set(0, 0, 0);
+    scene.add(group);
+
+    const camera = new THREE.PerspectiveCamera(42, canvas.width / canvas.height, 0.05, 20);
+    const focusHeight = Math.max(0.3, interactY);
+    camera.position.set(0.55, focusHeight + 0.35, 0.85);
+    camera.lookAt(0, focusHeight * 0.6, 0);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    renderer.setSize(canvas.width, canvas.height, false);
+    renderer.render(scene, camera);
+    renderer.dispose();
+  } catch (err) {
+    console.error("artifact object render failed, leaving the canvas transparent:", err);
   }
 }

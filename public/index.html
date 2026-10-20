@@ -27,7 +27,7 @@
         <div class="scene-layer scene-layer-a" id="scene-layer-a">
           <div class="scene-room">
             <div class="scene-art"></div>
-            <div id="object-layer-a" class="object-layer" aria-hidden="false"></div>
+            <svg id="object-layer-a" class="object-layer" aria-hidden="false" preserveAspectRatio="xMidYMid slice"></svg>
             <div id="cameo-layer-a" class="cameo-layer" aria-hidden="true"></div>
           </div>
           <div class="scene-dust" aria-hidden="true"></div>
@@ -37,7 +37,7 @@
         <div class="scene-layer scene-layer-b" id="scene-layer-b" hidden>
           <div class="scene-room">
             <div class="scene-art"></div>
-            <div id="object-layer-b" class="object-layer" aria-hidden="false"></div>
+            <svg id="object-layer-b" class="object-layer" aria-hidden="false" preserveAspectRatio="xMidYMid slice"></svg>
             <div id="cameo-layer-b" class="cameo-layer" aria-hidden="true"></div>
           </div>
           <div class="scene-dust" aria-hidden="true"></div>
@@ -164,19 +164,18 @@
       </div>
 
       <!-- Placement-mode banner: shown instead of the normal bottom hint
-           while the donor is choosing where their relic stands. Only valid,
-           unoccupied anchors glow in this mode (rendered into the object
-           layer, see app.js's renderPlacementAnchors) — empty anchors are
-           otherwise invisible, never rendered as decorative cards. -->
+           while the donor is positioning their relic. Only surfaces
+           compatible with the chosen relic type glow in this mode (see
+           app.js's renderPlacementSurfaces) — a real translucent preview of
+           the relic itself follows the pointer and can be dragged freely
+           within a compatible surface, snapping gently to a valid spot;
+           incompatible surfaces (a floor/carpet area for a painting, say)
+           are never shown at all. -->
       <div id="placement-banner" class="placement-banner" hidden role="status">
-        <p>Choose where <strong id="placement-title"></strong> stands. Click a glowing spot.</p>
-        <button type="button" id="placement-cancel" class="secondary">Esc &middot; Cancel</button>
-      </div>
-      <div id="placement-confirm" class="placement-confirm" hidden role="status">
-        <p>Place it here?</p>
+        <p>Drag <strong id="placement-title"></strong> onto a glowing surface, then confirm.</p>
         <div class="gate-actions">
-          <button type="button" id="placement-move" class="secondary">Choose another spot</button>
-          <button type="button" id="placement-confirm-btn">Confirm Placement</button>
+          <button type="button" id="placement-cancel" class="secondary">Esc &middot; Cancel</button>
+          <button type="button" id="placement-confirm-btn" disabled>Confirm Placement</button>
         </div>
       </div>
 

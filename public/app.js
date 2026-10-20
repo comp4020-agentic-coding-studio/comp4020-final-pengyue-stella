@@ -1,6 +1,9 @@
-import { renderArtifactPreview } from "./world/artifacts.js";
+import { renderArtifactPreview, renderArtifactObject } from "./world/artifacts.js";
 import { createIllustrationController } from "./world/illustration.js";
 import { createAmbientSoundscape } from "./world/ambient.js";
+import { pointInShape, shapeBounds, snapIntoShape, surfaceUvFromPoint, surfacePointFromUv, surfaceCentroidUv, expandShape } from "./world/geometry.js";
+
+const SVG_NS = "http://www.w3.org/2000/svg";
 
 const NAME_STORAGE_KEY = "cursedMuseumNamed";
 
@@ -191,20 +194,44 @@ el("donate-form").addEventListener("submit", (e) => {
 });
 
 // ---------------------------------------------------------------------------
-// Spatial relic placement: steps 3-8 of the donation workflow. Entering
-// placement mode navigates to the chosen gallery's main scene; only its
-// currently-free, server-defined slot anchors glow (rendered by
-// renderPlacementAnchors, called from refreshInteractiveObjects whenever
-// `placement` is active) — an occupied slot or arbitrary pixel coordinate
-// is never offered, matching CLAUDE.md's "continue using server-defined,
-// allow-listed anchors/slot IDs."
+// Surface-aware free relic placement (steps 3-13 of the donation workflow,
+// replacing the old fixed-box "click a dashed rectangle" model). Entering
+// placement mode navigates to the chosen gallery's main scene; only the
+// real, server-defined surfaces compatible with the chosen relic's subtype
+// glow (renderPlacementSurfaces, via refreshInteractiveObjects while
+// `placement` is active) — a painting is never offered a floor/carpet
+// surface, and no incompatible or arbitrary spot is ever shown. Dragging the
+// relic's own translucent preview within a surface snaps it gently to a
+// valid point (snapIntoShape); the server still independently re-validates
+// every field of the final placement (gallery/surface/compatibility/point-
+// in-polygon/scale/collision) before persisting it — the client-side
+// filtering here is a visitor-facing convenience, never the actual
+// authority CLAUDE.md requires.
+//
+// `placement.slotId` is chosen automatically (the gallery's own first free
+// display slot) rather than shown to the visitor: it still backs the
+// display-slot capacity bookkeeping server-side (so "no free display spot"
+// stays a real, finite constraint), but the *visual* position a visitor
+// actually controls is entirely the surfaceId/u/v the drag interaction
+// below produces.
 
 function startPlacement(exhibitForm) {
-  placement = { exhibitForm, chosenSlotId: null, confirming: false };
-  const label = `${exhibitForm.title}`;
-  el("placement-title").textContent = label;
+  const gallery = world.galleries.find((g) => g.id === exhibitForm.galleryId);
+  const occupied = occupiedSlotIdsForGallery(gallery.id);
+  const slot = gallery.slots.find((s) => !occupied.has(s.id));
+  if (!slot) {
+    toast("No free display spot in this gallery right now — try another gallery.");
+    return;
+  }
+  placement = {
+    exhibitForm,
+    slotId: slot.id,
+    surfaceId: null,
+    point: null, // { x, y } in the scene's own viewBox pixel units, once a surface is chosen
+  };
+  el("placement-title").textContent = exhibitForm.title;
   el("placement-banner").hidden = false;
-  el("placement-confirm").hidden = true;
+  el("placement-confirm-btn").disabled = true;
   const targetScene = `${exhibitForm.galleryId}-main`;
   if (illustrator.currentScene().id === targetScene) {
     refreshInteractiveObjects();
@@ -216,52 +243,35 @@ function startPlacement(exhibitForm) {
 function cancelPlacement() {
   placement = null;
   el("placement-banner").hidden = true;
-  el("placement-confirm").hidden = true;
   refreshInteractiveObjects();
   viewport.focus();
 }
 el("placement-cancel").addEventListener("click", cancelPlacement);
 
-function choosePlacementAnchor(slotId) {
-  if (!placement) return;
-  placement.chosenSlotId = slotId;
-  placement.confirming = true;
-  el("placement-banner").hidden = true;
-  el("placement-confirm").hidden = false;
-  refreshInteractiveObjects(); // repaint: ghost preview at the chosen anchor, others dim
-}
-
-el("placement-move").addEventListener("click", () => {
-  if (!placement) return;
-  placement.confirming = false;
-  placement.chosenSlotId = null;
-  el("placement-confirm").hidden = true;
-  el("placement-banner").hidden = false;
-  refreshInteractiveObjects();
-});
-
 el("placement-confirm-btn").addEventListener("click", async () => {
-  if (!placement?.chosenSlotId) return;
-  const { exhibitForm, chosenSlotId } = placement;
+  if (!placement?.surfaceId || !placement.point) return;
+  const { exhibitForm, slotId, surfaceId, point } = placement;
+  const gallery = world.galleries.find((g) => g.id === exhibitForm.galleryId);
+  const surface = gallery.placementSurfaces.find((s) => s.id === surfaceId);
+  const { u, v } = surfaceUvFromPoint(surface, point.x, point.y);
   const res = await fetch("/api/exhibits", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...exhibitForm, slotId: chosenSlotId }),
+    body: JSON.stringify({ ...exhibitForm, slotId, surfaceId, u, v }),
   });
   const data = await res.json();
   if (!res.ok) {
     toast(data.error ?? "Could not place that relic — it may have just been taken.");
-    placement.confirming = false;
-    placement.chosenSlotId = null;
-    el("placement-confirm").hidden = true;
-    el("placement-banner").hidden = false;
     refreshInteractiveObjects();
     return;
   }
   exhibitsById.set(data.exhibit.id, data.exhibit);
+  // Step 12: remove every placement guide immediately on confirmation —
+  // clearing `placement` and re-rendering drops the surface glows and the
+  // drag preview in the same stroke, leaving only the real, persisted relic
+  // (rendered by the normal exhibit path) integrated into the scene.
   placement = null;
   el("placement-banner").hidden = true;
-  el("placement-confirm").hidden = true;
   refreshInteractiveObjects();
   openReceipt(data.exhibit);
 });
@@ -948,143 +958,409 @@ function handleObjectActivate(object) {
   }
 }
 
-// A glow region clipped to an interactive object's own anchor BOX
-// (percentages of the illustration) — idle-invisible, a soft illuminated
-// outline on hover/focus/when `.lit` (open), never a solid button shape.
-function buildObjectGlow(object) {
-  const node = document.createElement("button");
-  node.type = "button";
-  node.className = `interactive-object interactive-object-${object.type}`;
-  node.dataset.objectId = `object:${object.id}`;
-  node.style.left = `${object.anchor.x}%`;
-  node.style.top = `${object.anchor.y}%`;
-  node.style.width = `${object.anchor.width}%`;
-  node.style.height = `${object.anchor.height}%`;
-  node.setAttribute("aria-label", object.label);
-  node.addEventListener("click", () => handleObjectActivate(object));
-  node.addEventListener("focus", () => setFocusedObject(`object:${object.id}`));
-  node.addEventListener("blur", () => {
-    if (focusedObjectId === `object:${object.id}`) setFocusedObject(null);
-  });
-  node.addEventListener("mouseenter", () => node.classList.add("hovered"));
-  node.addEventListener("mouseleave", () => node.classList.remove("hovered"));
+// ---------------------------------------------------------------------------
+// Object-shaped hotspots: every interactive object/exhibit renders as a real
+// SVG shape (path/polygon/ellipse) traced to the actual painted item, inside
+// the SVG object layer that shares the camera-driven `.scene-room`
+// transform — never an {x,y,width,height} rectangle. `visualShape` is what
+// actually draws (the exact traced silhouette, clipped from a brightened
+// copy of the scene art so the highlight reads as "this object is lit," not
+// a glowing outline floating over it); `hitShape` (optionally padded larger
+// via `hitPadding`) is what the invisible, slightly bigger `<rect>`-free hit
+// region uses for the actual pointer/focus target, so a comfortable touch
+// target never visually enlarges the glow.
+
+function svgShapeNode(shape) {
+  if (shape.type === "ellipse") {
+    const node = document.createElementNS(SVG_NS, "ellipse");
+    node.setAttribute("cx", shape.cx);
+    node.setAttribute("cy", shape.cy);
+    node.setAttribute("rx", shape.rx);
+    node.setAttribute("ry", shape.ry);
+    return node;
+  }
+  // polygon and path-with-bbox both render as a <polygon> here (no object in
+  // this world currently authors a raw `d` path — see server/src/world.js's
+  // own comment on why `path` stays in the schema regardless).
+  const node = document.createElementNS(SVG_NS, "polygon");
+  node.setAttribute("points", shape.points.map(([x, y]) => `${x},${y}`).join(" "));
   return node;
 }
 
-// A real, persisted exhibit — rendered as its own illuminated display
-// object at its claimed slot anchor, not a floating card with a thumbnail/
-// title/donor/INSPECT strip. A small identifying label only appears once
-// lit (hover/focus/open), matching the "discovered through light and
-// attention" standard; the exhibit's still-frame preview renders into the
-// dossier/receipt, not pasted onto the object in the room.
-function buildExhibitObject(exhibit, gallery, slot) {
-  const node = document.createElement("button");
-  node.type = "button";
-  node.className = "interactive-object interactive-object-exhibit";
-  node.dataset.objectId = `exhibit:${exhibit.id}`;
-  node.style.left = `${slot.x}%`;
-  node.style.top = `${slot.z}%`;
-  node.style.width = `${slot.width ?? 10}%`;
-  node.style.height = `${slot.height ?? 16}%`;
-  node.setAttribute("aria-label", `${exhibit.title}, donated by ${exhibit.donorName}. Open dossier.`);
+// A unique <clipPath> id per object/exhibit, scoped to this document — used
+// to clip a brightened duplicate of the scene art to exactly this object's
+// traced silhouette for the "the actual object lights up" treatment (see
+// `.object-clip-art` in styles.css), rather than a glow that floats over a
+// bounding box.
+let clipIdCounter = 0;
+function nextClipId() {
+  clipIdCounter += 1;
+  return `object-clip-${clipIdCounter}`;
+}
 
-  const label = document.createElement("span");
-  label.className = "object-label";
-  label.textContent = exhibit.title; // textContent only — never innerHTML
-  node.appendChild(label);
+// Builds one focusable, semantic hotspot: a <g role="button"> containing an
+// invisible hit-shape (the actual click/tap/focus target, grown by
+// `hitPadding`) and a clip-art brightening treatment that only shows through
+// the exact visual silhouette on hover/focus/`.lit`. `onActivate` fires on
+// click, Enter and Space; camera-drag gestures never reach here because the
+// camera only claims pointer capture once real drag movement is confirmed
+// (see world/camera.js), so a stationary click/tap always resolves here.
+function viewBoxSize(viewBoxStr) {
+  const parts = (viewBoxStr ?? "0 0 1672 941").split(/\s+/).map(Number);
+  return { width: parts[2] ?? 1672, height: parts[3] ?? 941 };
+}
 
-  node.addEventListener("click", () => {
-    if (anyOverlayOpen() || illustrator.isTransitioning || placement) return;
-    openDossier(exhibit.id);
+function buildShapeHotspot({ id, label, shape, hitPadding = 0, className, sceneImageKey }) {
+  const g = document.createElementNS(SVG_NS, "g");
+  g.setAttribute("class", `interactive-object ${className ?? ""}`.trim());
+  g.setAttribute("tabindex", "0");
+  g.setAttribute("role", "button");
+  g.setAttribute("aria-label", label);
+  g.dataset.objectId = id;
+
+  const hitShape = hitPadding ? expandShape(shape, hitPadding) : shape;
+  const hit = svgShapeNode(hitShape);
+  hit.setAttribute("class", "object-hit");
+  g.appendChild(hit);
+
+  // The lit/hover/focus treatment: a brightened duplicate of this scene's
+  // own art, clipped to the object's exact traced silhouette — the object
+  // itself appears to brighten, never a glow floating over a box. Falls
+  // back to a plain silhouette fill if the scene's image key isn't known
+  // (never the case in practice, but keeps this resilient).
+  const clipId = nextClipId();
+  const defs = document.createElementNS(SVG_NS, "defs");
+  const clipPath = document.createElementNS(SVG_NS, "clipPath");
+  clipPath.setAttribute("id", clipId);
+  clipPath.appendChild(svgShapeNode(shape));
+  defs.appendChild(clipPath);
+  g.appendChild(defs);
+
+  const glowArt = document.createElementNS(SVG_NS, "image");
+  glowArt.setAttribute("class", "object-clip-art");
+  glowArt.setAttributeNS("http://www.w3.org/1999/xlink", "href", sceneImageKey);
+  glowArt.setAttribute("href", sceneImageKey);
+  // The <image> must cover the whole scene at its own native viewBox size
+  // (the same `shape.viewBox` every object in this scene shares) so the
+  // clip reveals the correct region of it — positioned at the scene's own
+  // origin regardless of this object's own bounds, which only matter for
+  // the clip shape itself. `preserveAspectRatio="xMidYMid slice"` matches
+  // the art layer's own `background-size: cover` crop, so the clipped
+  // region lines up with the painted item exactly as the base art does.
+  const { width, height } = viewBoxSize(shape.viewBox);
+  glowArt.setAttribute("x", "0");
+  glowArt.setAttribute("y", "0");
+  glowArt.setAttribute("width", String(width));
+  glowArt.setAttribute("height", String(height));
+  glowArt.setAttribute("clip-path", `url(#${clipId})`);
+  glowArt.setAttribute("preserveAspectRatio", "xMidYMid slice");
+  g.appendChild(glowArt);
+
+  return { node: g, bounds: shapeBounds(shape) };
+}
+
+function attachHotspotBehaviour(node, { onActivate, objectId }) {
+  const activate = () => onActivate();
+  node.addEventListener("click", activate);
+  node.addEventListener("keydown", (e) => {
+    if (e.code === "Enter" || e.code === "Space") {
+      e.preventDefault();
+      activate();
+    }
   });
-  node.addEventListener("focus", () => setFocusedObject(`exhibit:${exhibit.id}`));
+  node.addEventListener("focus", () => setFocusedObject(objectId));
   node.addEventListener("blur", () => {
-    if (focusedObjectId === `exhibit:${exhibit.id}` && el("dossier").hidden) setFocusedObject(null);
+    if (focusedObjectId === objectId) setFocusedObject(null);
   });
   node.addEventListener("mouseenter", () => node.classList.add("hovered"));
   node.addEventListener("mouseleave", () => node.classList.remove("hovered"));
+}
+
+function sceneImageUrl(scene) {
+  const IMAGE_FILES = {
+    hall: "entrance-hall-v2.png",
+    portraits: "portraits.webp",
+    memento: "memento.webp",
+    specimen: "specimen.webp",
+    childhood: "childhood.webp",
+    "portrait-reference": "portrait-reference.webp",
+    "cabinet-reference": "cabinet-reference.webp",
+  };
+  return `/assets/gallery-scenes/${IMAGE_FILES[scene.image] ?? IMAGE_FILES.hall}`;
+}
+
+// A built-in scene object (chandelier, guardian statue, portal door, etc.) —
+// traced to the real painted item, never a rectangle.
+function buildObjectGlow(object, scene) {
+  const objectId = `object:${object.id}`;
+  const { node } = buildShapeHotspot({
+    id: objectId,
+    label: object.label,
+    shape: object.shape,
+    hitPadding: object.hitPadding ?? 0,
+    className: `interactive-object-${object.type}`,
+    sceneImageKey: sceneImageUrl(scene),
+  });
+  attachHotspotBehaviour(node, { objectId, onActivate: () => handleObjectActivate(object) });
+
+  // A short label only ever appears near the object on hover/focus — never
+  // a permanent floating caption (CLAUDE.md-aligned brief).
+  const labelNode = svgLabelFor(object.shape, object.label);
+  node.appendChild(labelNode);
+
   return node;
+}
+
+// A real, persisted exhibit — rendered as its own illuminated silhouette at
+// its actual placed position (CLAUDE.md-aligned brief: an object
+// representation integrated into the scene, not an oversized floating
+// card). The relic's own procedural model renders via a transparent
+// <foreignObject><canvas> positioned at the exhibit's placement point,
+// scaled by its own `scale`; title/donor text lives only in the dossier, a
+// short label appearing near it on hover/focus like any other object.
+function buildExhibitObject(exhibit, gallery, scene) {
+  const surface = gallery.placementSurfaces.find((s) => s.id === exhibit.placement?.surfaceId);
+  if (!surface || !exhibit.placement) return null;
+  const point = surfacePointFromUv(surface, exhibit.placement.u, exhibit.placement.v);
+  const scale = exhibit.placement.scale ?? 1;
+
+  const objectId = `exhibit:${exhibit.id}`;
+  const g = document.createElementNS(SVG_NS, "g");
+  g.setAttribute("class", "interactive-object interactive-object-exhibit");
+  g.setAttribute("tabindex", "0");
+  g.setAttribute("role", "button");
+  g.setAttribute("aria-label", `${exhibit.title}, donated by ${exhibit.donorName}. Open dossier.`);
+  g.dataset.objectId = objectId;
+
+  // A footprint sized relative to its surface's own extent, scaled by the
+  // placement's own `scale` — large enough to be a comfortable click
+  // target, small enough to read as sitting ON the surface rather than
+  // covering it.
+  const b = shapeBounds(surface.shape);
+  const footprint = Math.max(60, Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.55) * scale;
+  const half = footprint / 2;
+
+  const fo = document.createElementNS(SVG_NS, "foreignObject");
+  fo.setAttribute("x", String(point.x - half));
+  fo.setAttribute("y", String(point.y - half));
+  fo.setAttribute("width", String(footprint));
+  fo.setAttribute("height", String(footprint));
+  fo.setAttribute("class", "object-hit");
+  const canvas = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
+  canvas.width = 160;
+  canvas.height = 160;
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  fo.appendChild(canvas);
+  g.appendChild(fo);
+  renderArtifactObject(canvas, {
+    category: exhibit.category,
+    subtype: exhibit.subtype,
+    accent: gallery.accent,
+    exhibitId: exhibit.id,
+  });
+
+  const labelShape = { type: "ellipse", cx: point.x, cy: point.y, rx: half, ry: half };
+  g.appendChild(svgLabelFor(labelShape, exhibit.title));
+
+  attachHotspotBehaviour(g, {
+    objectId,
+    onActivate: () => {
+      if (anyOverlayOpen() || illustrator.isTransitioning || placement) return;
+      openDossier(exhibit.id);
+    },
+  });
+  return g;
+}
+
+// A small label, positioned just below the object's own bounds in viewBox
+// units, revealed only via CSS on hover/focus/`.lit` — never a permanently
+// visible caption.
+function svgLabelFor(shape, text) {
+  const b = shapeBounds(shape);
+  const fo = document.createElementNS(SVG_NS, "foreignObject");
+  const cx = (b.minX + b.maxX) / 2;
+  const width = Math.max(140, b.maxX - b.minX);
+  fo.setAttribute("x", String(cx - width / 2));
+  fo.setAttribute("y", String(b.maxY + 6));
+  fo.setAttribute("width", String(width));
+  fo.setAttribute("height", "40");
+  fo.setAttribute("class", "object-label-wrap");
+  const span = document.createElementNS("http://www.w3.org/1999/xhtml", "span");
+  span.className = "object-label";
+  span.textContent = text; // textContent only — never innerHTML
+  fo.appendChild(span);
+  return fo;
 }
 
 // ---------------------------------------------------------------------------
-// Placement-mode anchors: step 4 of the donation workflow. Only the
-// gallery's currently-free, server-defined slots glow; clicking one shows a
-// ghost preview and the confirm banner (steps 5-7). An arbitrary pixel
-// coordinate never reaches the server — the chosen anchor's own `slotId` is
-// exactly what `POST /api/exhibits` already validates (CLAUDE.md).
-function buildPlacementAnchor(slot, exhibitForm, state) {
-  const node = document.createElement("button");
-  node.type = "button";
-  node.className = "placement-anchor";
-  node.style.left = `${slot.x}%`;
-  node.style.top = `${slot.z}%`;
-  node.style.width = `${slot.width ?? 10}%`;
-  node.style.height = `${slot.height ?? 16}%`;
-  node.setAttribute("aria-label", `Place "${exhibitForm.title}" here`);
-  if (state.chosenSlotId === slot.id) {
-    node.classList.add("chosen");
-    // A real, scaled preview of the actual subtype — the same procedural
-    // model library the finished exhibit and its dossier use — rather than
-    // a bare text label, so every allowed subtype has a visible
-    // representation and a donor never confirms an empty-looking spot
-    // (CLAUDE.md: "a selected subtype must never produce an empty
-    // preview"). Rendered once as a still frame (renderArtifactPreview
-    // tears its own renderer down immediately), matching this anchor's own
-    // aspect ratio for a believable scale/perspective footprint.
-    const ghostCanvas = document.createElement("canvas");
-    ghostCanvas.className = "placement-ghost-preview";
-    ghostCanvas.width = 160;
-    ghostCanvas.height = 160;
-    node.appendChild(ghostCanvas);
-    const gallery = world.galleries.find((g) => g.id === exhibitForm.galleryId);
-    renderArtifactPreview(ghostCanvas, {
-      category: gallery?.category,
-      subtype: exhibitForm.subtype,
-      accent: gallery?.accent ?? "#88653d",
-      exhibitId: `placement-preview:${exhibitForm.subtype}`,
-      title: exhibitForm.title,
-      donorName: exhibitForm.donorName,
-    });
-    const ghost = document.createElement("span");
-    ghost.className = "object-label";
-    ghost.textContent = exhibitForm.title;
-    node.appendChild(ghost);
-  }
-  node.addEventListener("click", () => choosePlacementAnchor(slot.id));
-  return node;
-}
+// Placement mode: a translucent, pointer-following relic preview the
+// visitor drags freely within whichever compatible surface it's currently
+// over, snapping gently to a valid point (snapIntoShape) rather than a grid
+// of fixed anchors. Only surfaces whose `allowedRelicTypes` include the
+// chosen subtype are ever shown — a painting is never offered a floor/
+// carpet surface, matching the compatibility matrix server/src/world.js
+// enforces again server-side.
 
-function renderPlacementAnchors(objectLayer, scene) {
+function renderPlacementSurfaces(objectLayer, scene) {
   if (!placement || scene.id !== `${placement.exhibitForm.galleryId}-main`) return;
   const gallery = world.galleries.find((g) => g.id === placement.exhibitForm.galleryId);
-  const occupied = occupiedSlotIdsForGallery(gallery.id);
-  for (const slot of gallery.slots) {
-    if (occupied.has(slot.id)) continue; // never offer an already-occupied, or arbitrary, spot
-    if (placement.confirming && placement.chosenSlotId !== slot.id) continue; // only the chosen one stays visible while confirming
-    objectLayer.appendChild(buildPlacementAnchor(slot, placement.exhibitForm, placement));
+  const subtype = placement.exhibitForm.subtype;
+  const compatible = gallery.placementSurfaces.filter((s) => s.allowedRelicTypes.includes(subtype));
+
+  for (const surface of compatible) {
+    const node = svgShapeNode(surface.shape);
+    node.setAttribute("class", `placement-surface${placement.surfaceId === surface.id ? " chosen" : ""}`);
+    node.dataset.surfaceId = surface.id;
+    objectLayer.appendChild(node);
   }
+
+  // The translucent, draggable relic preview — rendered once at the chosen
+  // point (defaulting to the first compatible surface's own centroid the
+  // first time placement mode reaches this scene), via the same transparent
+  // object renderer the final integrated relic uses, so what the visitor
+  // drags is a true preview of the real thing, never a generic ghost box.
+  if (!placement.surfaceId && compatible.length > 0) {
+    const first = compatible[0];
+    const { u, v } = surfaceCentroidUv(first);
+    const point = surfacePointFromUv(first, u, v);
+    placement.surfaceId = first.id;
+    placement.point = point;
+  }
+  if (!placement.surfaceId) return;
+
+  const surface = gallery.placementSurfaces.find((s) => s.id === placement.surfaceId);
+  const defaultUv = surfaceCentroidUv(surface);
+  const point = placement.point ?? surfacePointFromUv(surface, defaultUv.u, defaultUv.v);
+  const b = shapeBounds(surface.shape);
+  const footprint = Math.max(60, Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.55);
+  const half = footprint / 2;
+
+  const fo = document.createElementNS(SVG_NS, "foreignObject");
+  fo.setAttribute("id", "placement-preview");
+  fo.setAttribute("x", String(point.x - half));
+  fo.setAttribute("y", String(point.y - half));
+  fo.setAttribute("width", String(footprint));
+  fo.setAttribute("height", String(footprint));
+  fo.setAttribute("class", "placement-preview");
+  const canvas = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
+  canvas.width = 160;
+  canvas.height = 160;
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  fo.appendChild(canvas);
+  objectLayer.appendChild(fo);
+  const gallery2 = gallery;
+  renderArtifactObject(canvas, {
+    category: gallery2.category,
+    subtype,
+    accent: gallery2.accent,
+    exhibitId: `placement-preview:${subtype}`,
+  });
+
+  wirePlacementDrag(objectLayer, fo, gallery);
+}
+
+// Converts a pointer event's client coordinates into the SVG's own viewBox
+// coordinate space, accounting for the camera's own current pan/zoom
+// transform on the room (the SVG's `getScreenCTM` already reflects the live
+// CSS transform, so this stays correct through pan/zoom without this code
+// needing to know camera-math.js's own formulas).
+function svgPointFromEvent(svg, event) {
+  const pt = svg.createSVGPoint();
+  pt.x = event.clientX;
+  pt.y = event.clientY;
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return { x: 0, y: 0 };
+  const local = pt.matrixTransform(ctm.inverse());
+  return { x: local.x, y: local.y };
+}
+
+let placementDragState = null;
+function wirePlacementDrag(objectLayer, previewNode, gallery) {
+  if (placementDragState?.cleanup) placementDragState.cleanup();
+  const svg = objectLayer;
+
+  function onPointerMove(e) {
+    if (!placement) return;
+    const p = svgPointFromEvent(svg, e);
+    const surfaces = gallery.placementSurfaces.filter((s) => s.allowedRelicTypes.includes(placement.exhibitForm.subtype));
+    // Snap into whichever compatible surface the pointer is nearest to —
+    // the surface actually under the pointer if it's inside one, otherwise
+    // the previously-chosen surface (so a brief overshoot outside every
+    // surface doesn't yank the preview to a different wall entirely).
+    let target = surfaces.find((s) => pointInShape(s.shape, p.x, p.y));
+    if (!target) target = surfaces.find((s) => s.id === placement.surfaceId) ?? surfaces[0];
+    if (!target) return;
+    const snapped = snapIntoShape(target.shape, p.x, p.y);
+    placement.surfaceId = target.id;
+    placement.point = snapped;
+    const b = shapeBounds(target.shape);
+    const footprint = Math.max(60, Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.55);
+    previewNode.setAttribute("x", String(snapped.x - footprint / 2));
+    previewNode.setAttribute("y", String(snapped.y - footprint / 2));
+    previewNode.setAttribute("width", String(footprint));
+    previewNode.setAttribute("height", String(footprint));
+    el("placement-confirm-btn").disabled = false;
+    for (const node of svg.querySelectorAll(".placement-surface")) {
+      node.classList.toggle("chosen", node.dataset.surfaceId === target.id);
+    }
+  }
+
+  let dragging = false;
+  function onPointerDown(e) {
+    dragging = true;
+    onPointerMove(e);
+  }
+  function onPointerUp() {
+    dragging = false;
+  }
+  function onMove(e) {
+    if (dragging) onPointerMove(e);
+  }
+
+  previewNode.addEventListener("pointerdown", onPointerDown);
+  svg.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onPointerUp);
+  // A click anywhere on a compatible surface (not just a drag of the
+  // preview itself) also moves the preview there — placement should feel
+  // like "drop it where I click," not require grabbing the preview first.
+  function onSurfaceClick(e) {
+    if (e.target.classList?.contains("placement-surface")) onPointerMove(e);
+  }
+  svg.addEventListener("click", onSurfaceClick);
+
+  placementDragState = {
+    cleanup() {
+      previewNode.removeEventListener("pointerdown", onPointerDown);
+      svg.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      svg.removeEventListener("click", onSurfaceClick);
+    },
+  };
+  // Confirm is enabled as soon as there's a valid chosen point (the initial
+  // centroid default already counts as one).
+  if (placement.surfaceId && placement.point) el("placement-confirm-btn").disabled = false;
 }
 
 function refreshInteractiveObjects() {
   const { objectLayer } = illustrator.activeLayers();
   if (!objectLayer) return;
-  objectLayer.innerHTML = "";
+  while (objectLayer.firstChild) objectLayer.removeChild(objectLayer.firstChild);
   const scene = illustrator.currentScene();
 
   if (placement) {
-    renderPlacementAnchors(objectLayer, scene);
+    renderPlacementSurfaces(objectLayer, scene);
   } else {
     for (const object of scene.interactiveObjects) {
-      objectLayer.appendChild(buildObjectGlow(object));
+      objectLayer.appendChild(buildObjectGlow(object, scene));
     }
     if (scene.kind === "main" && scene.galleryId) {
       const gallery = world.galleries.find((g) => g.id === scene.galleryId);
-      const slotById = new Map(gallery.slots.map((s) => [s.id, s]));
       const exhibits = [...exhibitsById.values()].filter((e) => e.galleryId === scene.galleryId);
       for (const exhibit of exhibits) {
-        const slot = slotById.get(exhibit.slotId);
-        if (!slot) continue;
-        objectLayer.appendChild(buildExhibitObject(exhibit, gallery, slot));
+        const node = buildExhibitObject(exhibit, gallery, scene);
+        if (node) objectLayer.appendChild(node);
       }
     }
   }

@@ -83,6 +83,19 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
     }
     layer.dataset.sceneId = scene.id;
     layer.dataset.kind = scene.kind;
+    // The SVG object-shape layer shares the art's own source-image pixel
+    // coordinate system via `viewBox`, with `preserveAspectRatio="xMidYMid
+    // slice"` (set once in index.html) matching the art's own `background-
+    // size: cover; background-position: center` crop — the same "fill and
+    // crop from the centre" behaviour, so a traced shape stays pixel-locked
+    // to the painted object it represents at every viewport size. Every
+    // interactive object in a scene shares one viewBox (the scene's own
+    // source image dimensions); take it from the first object that has one,
+    // falling back to the standard 1672x941 every illustration in this
+    // world is authored at.
+    const objectLayer = layer.querySelector(".object-layer");
+    const firstShape = scene.interactiveObjects?.find((o) => o.shape)?.shape;
+    objectLayer?.setAttribute("viewBox", firstShape?.viewBox ?? "0 0 1672 941");
   }
 
   paint(front, current);

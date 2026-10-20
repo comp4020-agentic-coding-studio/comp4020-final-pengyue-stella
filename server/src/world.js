@@ -38,6 +38,177 @@
 
 import { SUBTYPES_BY_CATEGORY } from "./constants.js";
 
+// Object-shaped hotspots and placement surfaces, replacing this file's
+// previous `anchor: {x, y, width, height}` box model (see docs/adr/0007-
+// object-shaped-interaction.md). A `shape` is authored directly in the
+// scene's own source-image pixel coordinate system (`viewBox`), traced by
+// hand against the actual painted item — never a percentage box floated
+// over whatever happens to be nearby. The client nests the same shape data
+// inside an SVG layer that shares the camera-driven `.scene-room` transform
+// (public/world/illustration.js), using `preserveAspectRatio="xMidYMid
+// slice"` so the SVG's own internal coordinate system tracks the
+// background-image's `background-size: cover` crop pixel-for-pixel at any
+// viewport size — the same reason a `viewBox` is given in image-native
+// pixels (1672x941 for every scene here) rather than 0-100 percentages.
+//
+// Three shape types: `ellipse` (round/oval objects — a chandelier, a floor
+// mosaic), `polygon` (anything else with real straight or angled edges —
+// statues, doors, cabinets, an easel-mounted map), and `path` (reserved for
+// a future hand-drawn SVG silhouette too organic for a polygon; no object
+// in this world currently needs it, but the schema supports it per the
+// brief). `hitPadding` grows an invisible, larger touch/click target
+// outward from the same silhouette (`expandShape`, server/src/geometry.js)
+// without enlarging the *visible* glow, which always renders at the exact
+// traced shape.
+export const SCENE_VIEWBOX = { width: 1672, height: 941 };
+
+function ellipse(cx, cy, rx, ry) {
+  return { type: "ellipse", viewBox: viewBoxStr(), cx, cy, rx, ry };
+}
+function polygon(points) {
+  return { type: "polygon", viewBox: viewBoxStr(), points };
+}
+function viewBoxStr() {
+  return `0 0 ${SCENE_VIEWBOX.width} ${SCENE_VIEWBOX.height}`;
+}
+
+// Surface types a `placementSurfaces` entry can declare — each the kind of
+// real furniture/architecture a relic can actually rest against, not a
+// generic "slot."
+export const SURFACE_TYPES = ["wall", "shelf", "tabletop", "cabinet", "plinth", "floor"];
+
+// Which surface types a relic subtype is allowed onto — the compatibility
+// matrix the brief specifies: "A painting must never be offered a carpet or
+// floor placement." Checked both client-side (only compatible surfaces are
+// ever shown while placing) and server-side (server/src/db.js rejects any
+// other combination even if a client tried to send one).
+export const SURFACE_TYPES_BY_SUBTYPE = {
+  painting: ["wall"],
+  sketch: ["wall"],
+  spoon: ["shelf", "cabinet", "tabletop"],
+  key: ["shelf", "cabinet", "tabletop"],
+  clock: ["shelf", "cabinet", "tabletop"],
+  mirror: ["shelf", "cabinet", "tabletop"],
+  curiosity: ["shelf", "cabinet", "plinth"],
+  botanical: ["cabinet", "shelf", "plinth"],
+  biological: ["cabinet", "shelf", "plinth"],
+  doll: ["shelf", "tabletop", "plinth"],
+  toy: ["shelf", "tabletop", "plinth"],
+  book: ["shelf", "cabinet", "tabletop"],
+};
+
+function surfaceAllows(surface, subtype) {
+  return (SURFACE_TYPES_BY_SUBTYPE[subtype] ?? []).includes(surface.surfaceType);
+}
+
+// A gallery's real, traced placement surfaces — each corresponds to an
+// actual wall panel, shelf, tabletop, cabinet or plinth visible in that
+// gallery's own illustration, replacing the old shared SLOT_ANCHORS box
+// arc. `allowedRelicTypes` is derived from SURFACE_TYPES_BY_SUBTYPE at
+// publish time (publicWorld()), not duplicated by hand here.
+const GALLERY_SURFACES = {
+  portraits: [
+    { id: "portrait-left-wall", surfaceType: "wall", shape: polygon([[60, 160], [330, 160], [330, 420], [60, 420]]), minScale: 0.6, maxScale: 1.1, depth: 0.4 },
+    { id: "portrait-right-wall", surfaceType: "wall", shape: polygon([[1000, 160], [1300, 160], [1300, 420], [1000, 420]]), minScale: 0.6, maxScale: 1.1, depth: 0.4 },
+    { id: "portrait-upper-wall", surfaceType: "wall", shape: polygon([[550, 20], [950, 20], [950, 150], [550, 150]]), minScale: 0.55, maxScale: 1.0, depth: 0.35 },
+  ],
+  memento: [
+    { id: "memento-shelf-left", surfaceType: "shelf", shape: polygon([[60, 520], [320, 520], [320, 650], [60, 650]]), minScale: 0.7, maxScale: 1.1, depth: 0.42 },
+    { id: "memento-shelf-right", surfaceType: "shelf", shape: polygon([[1150, 520], [1450, 520], [1450, 650], [1150, 650]]), minScale: 0.7, maxScale: 1.1, depth: 0.42 },
+    { id: "memento-tabletop", surfaceType: "tabletop", shape: polygon([[700, 420], [1000, 420], [1000, 480], [700, 480]]), minScale: 0.65, maxScale: 1.05, depth: 0.3 },
+    { id: "memento-cabinet", surfaceType: "cabinet", shape: polygon([[350, 550], [650, 550], [650, 700], [350, 700]]), minScale: 0.7, maxScale: 1.15, depth: 0.45 },
+  ],
+  specimen: [
+    { id: "specimen-shelf-left", surfaceType: "shelf", shape: polygon([[60, 520], [320, 520], [320, 650], [60, 650]]), minScale: 0.7, maxScale: 1.1, depth: 0.42 },
+    { id: "specimen-cabinet-right", surfaceType: "cabinet", shape: polygon([[1300, 520], [1600, 520], [1600, 700], [1300, 700]]), minScale: 0.7, maxScale: 1.15, depth: 0.45 },
+    { id: "specimen-plinth-center", surfaceType: "plinth", shape: polygon([[850, 600], [1080, 600], [1080, 700], [850, 700]]), minScale: 0.75, maxScale: 1.2, depth: 0.5 },
+  ],
+  childhood: [
+    { id: "childhood-shelf", surfaceType: "shelf", shape: polygon([[700, 150], [950, 150], [950, 350], [700, 350]]), minScale: 0.7, maxScale: 1.1, depth: 0.4 },
+    { id: "childhood-table", surfaceType: "tabletop", shape: polygon([[750, 600], [1000, 600], [1000, 750], [750, 750]]), minScale: 0.7, maxScale: 1.1, depth: 0.4 },
+    { id: "childhood-plinth", surfaceType: "plinth", shape: polygon([[1250, 600], [1500, 600], [1500, 800], [1250, 800]]), minScale: 0.75, maxScale: 1.2, depth: 0.5 },
+  ],
+};
+
+// A placement surface's own centroid, in its shape's own viewBox units —
+// the default point a legacy slot-based exhibit (see legacySlotPlacement
+// below) is anchored at, and a reasonable "drop it here" starting point for
+// a fresh placement before the visitor drags it.
+function surfaceCentroid(surface) {
+  const { shape } = surface;
+  if (shape.type === "ellipse") return { x: shape.cx, y: shape.cy };
+  const xs = shape.points.map((p) => p[0]);
+  const ys = shape.points.map((p) => p[1]);
+  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+}
+
+// Normalizes a point inside a (rectangular-ish) surface's own bounding box
+// to 0-1 u/v — what's actually persisted (server/src/db.js), never a raw
+// screen/viewBox pixel coordinate, so a surface can be retraced later
+// without invalidating every exhibit already placed on it.
+export function surfaceUvFromPoint(surface, x, y) {
+  const { shape } = surface;
+  let minX, maxX, minY, maxY;
+  if (shape.type === "ellipse") {
+    minX = shape.cx - shape.rx;
+    maxX = shape.cx + shape.rx;
+    minY = shape.cy - shape.ry;
+    maxY = shape.cy + shape.ry;
+  } else {
+    const xs = shape.points.map((p) => p[0]);
+    const ys = shape.points.map((p) => p[1]);
+    minX = Math.min(...xs);
+    maxX = Math.max(...xs);
+    minY = Math.min(...ys);
+    maxY = Math.max(...ys);
+  }
+  const u = maxX > minX ? (x - minX) / (maxX - minX) : 0.5;
+  const v = maxY > minY ? (y - minY) / (maxY - minY) : 0.5;
+  return { u: Math.min(1, Math.max(0, u)), v: Math.min(1, Math.max(0, v)) };
+}
+
+export function surfacePointFromUv(surface, u, v) {
+  const { shape } = surface;
+  let minX, maxX, minY, maxY;
+  if (shape.type === "ellipse") {
+    minX = shape.cx - shape.rx;
+    maxX = shape.cx + shape.rx;
+    minY = shape.cy - shape.ry;
+    maxY = shape.cy + shape.ry;
+  } else {
+    const xs = shape.points.map((p) => p[0]);
+    const ys = shape.points.map((p) => p[1]);
+    minX = Math.min(...xs);
+    maxX = Math.max(...xs);
+    minY = Math.min(...ys);
+    maxY = Math.max(...ys);
+  }
+  return { x: minX + u * (maxX - minX), y: minY + v * (maxY - minY) };
+}
+
+// Backward compatibility (CLAUDE.md-aligned brief: "maintain backward
+// compatibility with existing slot-based exhibits by mapping old slots to
+// default positions"). An exhibit donated under the retired slot-only model
+// still has a `slotId`, never a `surfaceId` — this derives a stable,
+// deterministic default surface + normalized point for it purely from its
+// gallery and slot index, so it renders at a believable spot on a real
+// surface instead of needing a data migration or silently disappearing.
+export function legacySlotPlacement(gallery, slot, subtype) {
+  const surfaces = GALLERY_SURFACES[gallery.id] ?? [];
+  const compatible = surfaces.filter((s) => !subtype || surfaceAllows(s, subtype));
+  const pool = compatible.length > 0 ? compatible : surfaces;
+  if (pool.length === 0) return null;
+  const index = gallery.slots.findIndex((s) => s.id === slot.id);
+  const surface = pool[Math.max(0, index) % pool.length];
+  const centroid = surfaceCentroid(surface);
+  // Spread multiple legacy exhibits that land on the same surface a little
+  // apart rather than stacking exactly on the centroid every time.
+  const offset = Math.max(0, index) % 3;
+  const jitter = [-0.12, 0, 0.12][offset];
+  const { u, v } = surfaceUvFromPoint(surface, centroid.x, centroid.y);
+  return { surfaceId: surface.id, u: Math.min(0.9, Math.max(0.1, u + jitter)), v, scale: 1 };
+}
+
 // An 8-point anchor arrangement for a gallery's display slots: two rows —
 // a lower row of five sitting on the room's own floor-level furniture
 // (plinths/tables/cabinet tops every reference composition shows along the
@@ -45,12 +216,11 @@ import { SUBTYPES_BY_CATEGORY } from "./constants.js";
 // positions, clear of the doorway/arch each composition centres near the
 // top and clear of VISITOR_ANCHORS below so a donated relic and a visitor
 // cameo never occupy the same illustrated spot. Each slot is a small BOX
-// (width/height alongside x/z), used as the placement-mode highlight region
-// and the ghost-preview footprint — still shared across galleries (the
-// exhibit display itself is a dimensional object placed ON the
-// illustration, not pixel-matched to one specific painted shelf), but now
-// with enough positions ("at least 8", CLAUDE.md) that a gallery with many
-// donations never runs out of a visually plausible spot.
+// (width/height alongside x/z) — kept only as the legacy donation path's
+// own addressable id space (server/src/db.js's `slot_id` column, still
+// referenced by exhibits donated before the surface model shipped); it is
+// never rendered as a placement option to a visitor any more (see
+// `placementSurfaces` below, the only thing a donor is offered now).
 const SLOT_ANCHORS = [
   { x: 12, z: 70, width: 9, height: 15 },
   { x: 28, z: 78, width: 9, height: 15 },
@@ -118,26 +288,42 @@ const GALLERY_LAYOUT = [
       image: "portrait-reference",
       caption: "The Watching Portrait",
       lore: "The mirror fogs from the edges inward, never from breath. Conservation notes say the fog always clears last around whoever has already looked away.",
-      closeupAnchor: { x: 30, y: 10, width: 42, height: 70 },
     },
-    // Several intentional built-in objects, each anchored to something
-    // actually visible in portraits.webp (the large gilt-framed central
-    // portrait, the twin plinth busts flanking the display table, the
-    // raven on the left-hand shelf) rather than arbitrary text floated
-    // over the picture.
+    // Five real painted objects in portraits.webp (1672x941), each
+    // hand-traced against the actual illustration rather than a percentage
+    // box floated over whatever happens to be nearby: the large gilt-framed
+    // central portrait, the twin plinth busts flanking the display table,
+    // the raven on the left-hand shelf, and a second framed portrait on the
+    // right wall (the brief's "selected framed portrait").
     objects: [
-      { type: "closeup", label: "Look closer: The Watching Portrait", anchor: { x: 40, y: 14, width: 18, height: 36 } },
+      {
+        type: "closeup",
+        label: "Look closer: The Watching Portrait",
+        shape: polygon([[670, 235], [820, 235], [820, 610], [670, 610]]),
+      },
       {
         type: "lore",
-        label: "A nameless bust",
+        label: "The left plinth bust",
         text: "The bust carries no accession record. Staff rotate it a quarter turn at every inventory, to see if a visitor notices it now faces a different way. Someone always does.",
-        anchor: { x: 34, y: 46, width: 8, height: 15 },
+        shape: polygon([[610, 400], [680, 400], [680, 490], [610, 490]]),
+      },
+      {
+        type: "lore",
+        label: "The right plinth bust",
+        text: "Its twin was catalogued in the same acquisition, but no two inventories since have agreed on which bust is the original and which the copy.",
+        shape: polygon([[850, 400], [920, 400], [920, 490], [850, 490]]),
       },
       {
         type: "lore",
         label: "A raven that never blinks",
         text: "It has perched in the same spot since the inventory began. No one recalls uncaging it; no one has ever tried.",
-        anchor: { x: 10, y: 27, width: 7, height: 10 },
+        shape: polygon([[155, 395], [230, 395], [230, 460], [155, 460]]),
+      },
+      {
+        type: "lore",
+        label: "The second framed portrait",
+        text: "Unsigned, undated, and — by every conservator's measurement — painted in exactly the same hand as the gallery's central portrait, though the museum has never catalogued them as a pair.",
+        shape: polygon([[1000, 180], [1150, 180], [1150, 400], [1000, 400]]),
       },
     ],
   },
@@ -152,21 +338,24 @@ const GALLERY_LAYOUT = [
       image: "cabinet-reference",
       caption: "The Long Cabinet",
       lore: "Every drawer is catalogued; no two catalogues agree on a date. Objects That Remember keeps the disagreements as carefully as the objects.",
-      closeupAnchor: { x: 15, y: 15, width: 70, height: 65 },
     },
     objects: [
-      { type: "closeup", label: "Look closer: The Long Cabinet", anchor: { x: 36, y: 42, width: 26, height: 36 } },
+      {
+        type: "closeup",
+        label: "Look closer: The Long Cabinet",
+        shape: polygon([[700, 480], [1000, 480], [1000, 650], [700, 650]]),
+      },
       {
         type: "lore",
         label: "A standing clock",
         text: "The clock keeps the time of a city three hours away. No one here has reset it. No one is certain it is wrong.",
-        anchor: { x: 82, y: 12, width: 9, height: 15 },
+        shape: polygon([[1480, 215], [1560, 215], [1560, 300], [1480, 300]]),
       },
       {
         type: "lore",
         label: "A locked drawer",
         text: "Every other drawer in the cabinet opens freely. This one has never been recorded unlocked, and no key has ever been catalogued for it.",
-        anchor: { x: 46, y: 64, width: 11, height: 10 },
+        shape: polygon([[770, 560], [930, 560], [930, 630], [770, 630]]),
       },
     ],
   },
@@ -182,22 +371,25 @@ const GALLERY_LAYOUT = [
       zoom: true,
       caption: "Under Glass",
       lore: "Logged as botanical in 1911, biological in 1958, and 'undetermined — do not reclassify again' in 2003. The jar has not been opened since.",
-      closeupAnchor: { x: 28, y: 40, width: 44, height: 40 },
       closeupCamera: { initialPan: 50, minPan: 30, maxPan: 70, initialZoom: 1.7, minZoom: 1.5, maxZoom: 2.3 },
     },
     objects: [
-      { type: "closeup", label: "Look closer: Under Glass", anchor: { x: 38, y: 54, width: 24, height: 26 } },
+      {
+        type: "closeup",
+        label: "Look closer: Under Glass",
+        shape: polygon([[850, 400], [1080, 400], [1080, 560], [850, 560]]),
+      },
       {
         type: "lore",
-        label: "A second bust",
-        text: "Collection records list only one sculpture for this gallery. Nobody currently on staff remembers the other one arriving.",
-        anchor: { x: 28, y: 24, width: 11, height: 26 },
+        label: "The skeletal figure on the shelf",
+        text: "Collection records list only one sculpture for this gallery. Nobody currently on staff remembers the other one arriving, nor can anyone say with confidence what species it was assembled to represent.",
+        shape: polygon([[560, 130], [700, 130], [700, 400], [560, 400]]),
       },
       {
         type: "lore",
         label: "The caged glow beyond the arch",
         text: "Logged as 'garden lighting' in every inventory since 1920. No garden has ever been found on the other side of that arch.",
-        anchor: { x: 44, y: 14, width: 12, height: 24 },
+        shape: polygon([[1000, 150], [1250, 150], [1250, 500], [1000, 500]]),
       },
     ],
   },
@@ -213,22 +405,25 @@ const GALLERY_LAYOUT = [
       zoom: true,
       caption: "The Shelf That Waits",
       lore: "The shelf is dusted every week, the gap on the third row included, around whatever used to sit there.",
-      closeupAnchor: { x: 2, y: 2, width: 48, height: 60 },
       closeupCamera: { initialPan: 28, minPan: 10, maxPan: 50, initialZoom: 1.6, minZoom: 1.4, maxZoom: 2.2 },
     },
     objects: [
-      { type: "closeup", label: "Look closer: The Shelf That Waits", anchor: { x: 6, y: 8, width: 24, height: 40 } },
+      {
+        type: "closeup",
+        label: "Look closer: The Shelf That Waits",
+        shape: polygon([[470, 120], [650, 120], [650, 350], [470, 350]]),
+      },
       {
         type: "lore",
         label: "A doll on the left",
         text: "It blinks on its own schedule, roughly once an hour, always when the gallery is otherwise empty of visitors. Staff have stopped checking.",
-        anchor: { x: 9, y: 14, width: 10, height: 20 },
+        shape: polygon([[50, 230], [150, 230], [150, 380], [50, 380]]),
       },
       {
         type: "lore",
         label: "The waiting cot",
         text: "It is turned down fresh every morning. The nursery has had no occupant on record for longer than any living curator can confirm.",
-        anchor: { x: 66, y: 34, width: 14, height: 30 },
+        shape: polygon([[1020, 460], [1210, 460], [1210, 620], [1020, 620]]),
       },
     ],
   },
@@ -243,6 +438,14 @@ export const GALLERIES = GALLERY_LAYOUT.map((g) => ({
     rotationY: 0,
     width: a.width,
     height: a.height,
+  })),
+  // The real, traced placement surfaces this gallery offers — the only
+  // positions a visitor is ever shown while placing a relic. Each carries
+  // the compatibility list derived from SURFACE_TYPES_BY_SUBTYPE so the
+  // client never has to duplicate that matrix to decide what to show.
+  placementSurfaces: (GALLERY_SURFACES[g.id] ?? []).map((s) => ({
+    ...s,
+    allowedRelicTypes: (SUBTYPES_BY_CATEGORY[g.category] ?? []).filter((subtype) => surfaceAllows(s, subtype)),
   })),
 }));
 
@@ -260,6 +463,13 @@ export function slotById(slotId) {
   return null;
 }
 
+export function surfaceById(galleryId, surfaceId) {
+  const gallery = galleryById(galleryId);
+  if (!gallery) return null;
+  const surface = gallery.placementSurfaces.find((s) => s.id === surfaceId);
+  return surface ? { gallery, surface } : null;
+}
+
 // The donor counter: an atmospheric secondary entrance point in the hall —
 // a real in-world interactive object kept for flavour, but (per the
 // product direction) no longer the only way to discover donation; see the
@@ -268,7 +478,7 @@ export function slotById(slotId) {
 // left, distinct from the chained guestbook on the far right (its own
 // `lore` object below).
 export const DONOR_COUNTER = { x: 7, z: 62 };
-const DONOR_COUNTER_ANCHOR = { x: 2, y: 48, width: 13, height: 28 };
+const DONOR_COUNTER_SHAPE = polygon([[30, 430], [310, 430], [310, 700], [30, 700]]);
 
 export function hallConfig() {
   return { image: "hall", donorCounter: DONOR_COUNTER };
@@ -290,8 +500,8 @@ export function hallConfig() {
 // were: the persistent, gallery-agnostic "Rooms" menu (`renderRoomsMenu()`
 // in app.js, unchanged by this pass).
 const HALL_PORTALS = [
-  { galleryId: "memento", doorAnchor: { x: 20, y: 56, width: 11, height: 30 } },
-  { galleryId: "specimen", doorAnchor: { x: 66, y: 54, width: 13, height: 32 } },
+  { galleryId: "memento", doorShape: polygon([[480, 450], [700, 450], [700, 780], [480, 780]]) },
+  { galleryId: "specimen", doorShape: polygon([[970, 450], [1190, 450], [1190, 780], [970, 780]]) },
 ];
 
 // galleryId -> the hall as "back" target for a gallery whose doorway isn't
@@ -311,49 +521,52 @@ const HALL_LORE_OBJECTS = [
     type: "lore",
     label: "The tiered chandelier",
     text: "Every candle on the lowest tier burns down at the same rate, night after night, regardless of how many visitors pass beneath it. The upper two tiers have never been lit in any record staff can find.",
-    anchor: { x: 42, y: 2, width: 18, height: 22 },
+    shape: ellipse(805, 95, 195, 95),
+    hitPadding: 12,
   },
   {
     id: "hall-guardian-left",
     type: "lore",
     label: "The left guardian",
     text: "Catalogued as a griffin, though no two inventories describe the same number of wings. It faces the staircase in every photograph taken of this hall since the museum opened — except one, filed separately, which nobody will say where it is now.",
-    anchor: { x: 4, y: 48, width: 13, height: 34 },
+    shape: polygon([[400, 130], [560, 130], [560, 420], [400, 420]]),
   },
   {
     id: "hall-guardian-right",
     type: "lore",
     label: "The right guardian",
     text: "Its twin, supposedly. Conservation measured a half-centimetre difference in wingspan between the two in 1964 and has re-measured every decade since. The difference has never been the same number twice.",
-    anchor: { x: 83, y: 48, width: 13, height: 34 },
+    shape: polygon([[1115, 130], [1290, 130], [1290, 420], [1115, 420]]),
   },
   {
     id: "hall-compass",
     type: "lore",
     label: "The floor compass mosaic",
     text: "A star-and-compass mosaic set directly before the stair. Cleaning staff report it is always faintly warm to the touch, in every season, regardless of the hall's own temperature.",
-    anchor: { x: 38, y: 74, width: 24, height: 20 },
+    shape: ellipse(845, 790, 290, 145),
   },
   {
     id: "hall-map",
     type: "lore",
     label: "The antique map",
     text: "A folded map of a coastline that matches no surveyed country. It has been re-folded along the same creases for as long as anyone has worked here, though no one admits to doing it.",
-    anchor: { x: 86, y: 30, width: 10, height: 20 },
+    shape: polygon([[1290, 400], [1430, 405], [1430, 620], [1290, 615]]),
+    hitPadding: 10,
   },
   {
     id: "hall-clock",
     type: "lore",
     label: "The mechanical clock",
     text: "A brass-and-wood clock that keeps correct time, checked against the city's own civic clock every month without fail. Staff still avoid being alone with it at the top of the hour.",
-    anchor: { x: 90, y: 50, width: 9, height: 26 },
+    shape: polygon([[1470, 180], [1645, 180], [1645, 460], [1470, 460]]),
   },
   {
     id: "hall-guestbook",
     type: "lore",
     label: "The chained guestbook",
     text: "Chained to its podium, like a book meant never to leave, though several names inside are of visitors who the front desk has no record of ever admitting.",
-    anchor: { x: 93, y: 62, width: 7, height: 18 },
+    shape: polygon([[1480, 525], [1655, 525], [1655, 750], [1480, 750]]),
+    hitPadding: 10,
   },
 ];
 
@@ -362,7 +575,7 @@ function buildHallScenes() {
     id: "hall-donate",
     type: "donate",
     label: "Donate a Relic",
-    anchor: DONOR_COUNTER_ANCHOR,
+    shape: DONOR_COUNTER_SHAPE,
   };
   const portalObjects = HALL_PORTALS.map((portal) => {
     const gallery = galleryById(portal.galleryId);
@@ -371,7 +584,7 @@ function buildHallScenes() {
       type: "portal",
       label: `Enter ${gallery.name}`,
       targetSceneId: `${portal.galleryId}-main`,
-      anchor: portal.doorAnchor,
+      shape: portal.doorShape,
     };
   });
   return [
@@ -423,7 +636,6 @@ function buildGalleryScenes(gallery) {
     caption: closeup.caption,
     image: closeup.image,
     zoom: closeup.zoom ?? false,
-    closeupAnchor: closeup.closeupAnchor,
     lore: closeup.lore,
     camera: closeup.closeupCamera ?? DEFAULT_CLOSEUP_CAMERA,
     interactiveObjects: [],
@@ -458,6 +670,7 @@ export function publicWorld() {
       image: g.image,
       subtypes: SUBTYPES_BY_CATEGORY[g.category] ?? [],
       slots: g.slots.map((s) => ({ id: s.id, x: s.x, z: s.z, rotationY: s.rotationY, width: s.width, height: s.height })),
+      placementSurfaces: g.placementSurfaces,
     })),
   };
 }

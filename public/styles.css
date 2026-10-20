@@ -84,10 +84,20 @@ a {
   background-repeat: no-repeat;
 }
 
+/* Now an <svg>, not a div: its own viewBox is the scene's source-image
+   pixel coordinate system (set per-scene in illustration.js's `paint`), so
+   every traced object `<path>`/`<polygon>`/`<ellipse>` inside it is
+   authored in those same pixel units and stays aligned with the
+   `background-size: cover`-cropped art behind it via `preserveAspectRatio`
+   (set once in index.html). Width/height 100% is required here because SVG
+   defaults to its own intrinsic size otherwise, unlike a div. */
 .object-layer {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 2;
+  overflow: visible;
 }
 
 .cameo-layer {
@@ -241,43 +251,49 @@ a {
   }
 }
 
-/* --- interactive objects: invisible-until-attended glow regions ---------- */
-/* Each object anchors to a BOX (percentage of the illustration, see
-   server/src/world.js) clipped over the actual painted item it represents —
-   idle, it renders nothing but its own hit region; hovering, focusing, or
-   opening it (`.lit`) brings up a soft object-shaped halo, never a pill
-   button floating over the scene's centre (CLAUDE.md). Lives inside the
-   camera-driven `.scene-room` so the glow always stays pixel-locked to the
-   art as the camera pans/zooms. */
+/* --- interactive objects: object-shaped, invisible-until-attended -------- */
+/* Each object is a real traced SVG shape (path/polygon/ellipse, see
+   server/src/world.js) inside the object layer's own <svg>, never an
+   {x,y,width,height} rectangle. `.object-hit` is the actual click/tap/focus
+   target (optionally padded larger via `hitPadding` without visually
+   growing); `.object-clip-art` is a brightened duplicate of the scene's own
+   art, clipped to the object's exact silhouette via <clipPath> — idle, it's
+   invisible (opacity 0); hovering, focusing, or opening it (`.lit`) fades it
+   in, so the actual painted object brightens, never a glow floating over a
+   bounding box. Lives inside the camera-driven `.scene-room`'s SVG so it
+   always stays pixel-locked to the art as the camera pans/zooms. */
 .interactive-object {
-  position: absolute;
-  background: none;
-  border: none;
-  border-radius: 10%;
-  padding: 0;
-  margin: 0;
   cursor: pointer;
-  box-shadow: 0 0 0 0 rgba(198, 161, 107, 0);
-  transition: box-shadow 0.35s ease, background 0.35s ease;
+  outline: none;
+}
+
+.object-hit {
+  fill: transparent;
+  stroke: none;
   pointer-events: auto;
 }
 
-.interactive-object.hovered,
-.interactive-object:focus-visible,
-.interactive-object.lit {
-  outline: none;
-  background: radial-gradient(ellipse at center, rgba(198, 161, 107, 0.22) 0%, rgba(198, 161, 107, 0.06) 55%, transparent 80%);
-  box-shadow: 0 0 22px 6px rgba(198, 161, 107, 0.35), inset 0 0 0 1px rgba(198, 161, 107, 0.55);
+.object-clip-art {
+  opacity: 0;
+  filter: brightness(1.55) saturate(1.15) drop-shadow(0 0 14px rgba(198, 161, 107, 0.65));
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+
+.interactive-object.hovered .object-clip-art,
+.interactive-object:focus-visible .object-clip-art,
+.interactive-object.lit .object-clip-art {
+  opacity: 1;
   animation: object-pulse 2.2s ease-in-out infinite;
 }
 
-.interactive-object.lit {
-  box-shadow: 0 0 28px 10px rgba(198, 161, 107, 0.5), inset 0 0 0 2px rgba(198, 161, 107, 0.85);
+.interactive-object.lit .object-clip-art {
+  filter: brightness(1.85) saturate(1.25) drop-shadow(0 0 20px rgba(198, 161, 107, 0.85));
 }
 
 @keyframes object-pulse {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.18); }
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
 }
 
 /* A brief, restrained cue that another visitor in this room just focused
@@ -286,49 +302,53 @@ a {
    the warm amber of this visitor's own hover/lit state, so "someone else is
    looking at this" never reads as "you are looking at this." Fades on its
    own; app.js removes the class after a short delay regardless. */
-.interactive-object.peer-glance {
+.interactive-object.peer-glance .object-clip-art {
   animation: peer-glance 1.4s ease-out;
 }
 
 @keyframes peer-glance {
-  0% { box-shadow: 0 0 0 0 rgba(140, 190, 210, 0); }
-  30% { box-shadow: 0 0 20px 6px rgba(140, 190, 210, 0.45); }
-  100% { box-shadow: 0 0 0 0 rgba(140, 190, 210, 0); }
+  0% { opacity: 0; filter: brightness(1.3) saturate(1.1) drop-shadow(0 0 0 rgba(140, 190, 210, 0)); }
+  30% { opacity: 1; filter: brightness(1.3) saturate(1.1) drop-shadow(0 0 16px rgba(140, 190, 210, 0.6)); }
+  100% { opacity: 0; filter: brightness(1.3) saturate(1.1) drop-shadow(0 0 0 rgba(140, 190, 210, 0)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .interactive-object.peer-glance {
+  .interactive-object.peer-glance .object-clip-art,
+  .interactive-object.hovered .object-clip-art,
+  .interactive-object:focus-visible .object-clip-art,
+  .interactive-object.lit .object-clip-art {
     animation: none;
-    box-shadow: 0 0 0 3px rgba(140, 190, 210, 0.4);
   }
 }
 
-/* A real, donated exhibit's own illuminated display object — the same glow
-   treatment as any other interactive object, plus a small label that only
-   reveals once lit (hover/focus/open), never a permanent card with a
-   thumbnail strip. */
-.interactive-object-exhibit {
-  border-radius: 6%;
+/* A real, donated exhibit's own object body (rendered via <foreignObject>
+   into a transparent canvas — see renderArtifactObject) sits directly at
+   its placed position, integrated into the scene — never an oversized
+   floating card with a thumbnail/title/donor/INSPECT strip. */
+.interactive-object-exhibit .object-hit {
+  pointer-events: auto;
+}
+
+.object-label-wrap {
+  pointer-events: none;
+  overflow: visible;
 }
 
 .object-label {
-  position: absolute;
-  left: 50%;
-  bottom: -1.6rem;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  font-size: 0.74rem;
+  display: inline-block;
+  font: inherit;
+  font-size: 0.72rem;
   color: var(--parchment);
-  background: rgba(17, 16, 15, 0.82);
+  background: rgba(17, 16, 15, 0.86);
   border: 1px solid rgba(198, 161, 107, 0.5);
   padding: 0.15rem 0.55rem;
   border-radius: 999px;
   opacity: 0;
   transition: opacity 0.2s ease;
-  pointer-events: none;
-  max-width: 10rem;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .interactive-object.hovered .object-label,
@@ -337,48 +357,50 @@ a {
   opacity: 1;
 }
 
-/* A placement-mode anchor: only a currently-free, server-defined slot
-   renders here, and only while placement is active — never an arbitrary
-   pixel coordinate, never a decorative card outside placement mode
-   (CLAUDE.md). `.chosen` shows the ghost-preview ring the donor confirms. */
-.placement-anchor {
-  position: absolute;
-  background: radial-gradient(ellipse at center, rgba(102, 200, 150, 0.22) 0%, rgba(102, 200, 150, 0.08) 55%, transparent 80%);
-  border: 2px dashed rgba(138, 209, 170, 0.75);
-  border-radius: 8%;
+/* A placement-mode surface: only a surface compatible with the relic
+   subtype being placed renders here, and only while placement is active —
+   never an arbitrary pixel coordinate, never a dashed rectangle unrelated
+   to a real wall/shelf/table/cabinet/plinth (CLAUDE.md-aligned brief).
+   `.chosen` is the surface the drag preview currently sits on. */
+.placement-surface {
+  fill: rgba(102, 200, 150, 0.14);
+  stroke: rgba(138, 209, 170, 0.75);
+  stroke-width: 3;
+  stroke-dasharray: 10 6;
   cursor: pointer;
-  animation: placement-glow 1.8s ease-in-out infinite;
   pointer-events: auto;
+  animation: placement-glow 1.8s ease-in-out infinite;
 }
 
-.placement-anchor.chosen {
-  border-style: solid;
-  border-color: #8ad1aa;
-  background: radial-gradient(ellipse at center, rgba(138, 209, 170, 0.3) 0%, rgba(138, 209, 170, 0.12) 55%, transparent 80%);
+.placement-surface.chosen {
+  fill: rgba(138, 209, 170, 0.22);
+  stroke: #8ad1aa;
+  stroke-dasharray: none;
   animation: none;
 }
 
-.placement-anchor .object-label {
-  opacity: 0.9;
-  background: rgba(20, 15, 11, 0.9);
-  border-color: #8ad1aa;
-}
-
-/* The chosen anchor's real subtype preview (see buildPlacementAnchor) —
-   sized to sit inside its own anchor box at a believable scale, never
-   overflowing it, and ignoring pointer events so the anchor button itself
-   stays the click target. */
-.placement-ghost-preview {
-  position: absolute;
-  inset: 8%;
-  width: 84%;
-  height: 84%;
-  pointer-events: none;
-}
-
 @keyframes placement-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(138, 209, 170, 0.4); }
-  50% { box-shadow: 0 0 18px 4px rgba(138, 209, 170, 0.5); }
+  0%, 100% { stroke-opacity: 0.55; }
+  50% { stroke-opacity: 0.95; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .placement-surface {
+    animation: none;
+  }
+}
+
+/* The draggable relic preview during placement — a real, translucent
+   rendering of the actual subtype (via renderArtifactObject on a
+   transparent canvas), not a generic ghost box, grabbable and
+   pointer-followed within whichever compatible surface it's over. */
+.placement-preview {
+  cursor: grab;
+  pointer-events: auto;
+  opacity: 0.82;
+}
+.placement-preview:active {
+  cursor: grabbing;
 }
 
 @media (prefers-reduced-motion: reduce) {
