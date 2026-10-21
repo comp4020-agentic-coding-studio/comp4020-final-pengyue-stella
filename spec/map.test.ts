@@ -104,7 +104,11 @@ describe("the live museum map's data contract", () => {
 
   it("groups every exhibit under its own galleryId, so the map never shows a relic marker on the wrong room's node", async () => {
     const { galleries } = await (await fetch(url("/api/world"))).json();
-    const galleryIds = new Set(galleries.map((g: { id: string }) => g.id));
+    // A built-in museum object (origin: "builtin") turned into a real
+    // exhibit may belong to the Entrance Hall itself, not one of the four
+    // real galleries — "hall" is a valid room id for the floor plan even
+    // though it's never one of `/api/world`'s own `galleries` entries.
+    const galleryIds = new Set([...galleries.map((g: { id: string }) => g.id), "hall"]);
     const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
 
     expect(Array.isArray(exhibits)).toBe(true);
