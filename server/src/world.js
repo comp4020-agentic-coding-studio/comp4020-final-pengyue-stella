@@ -62,15 +62,39 @@ import { SUBTYPES_BY_CATEGORY } from "./constants.js";
 // traced shape.
 export const SCENE_VIEWBOX = { width: 1672, height: 941 };
 
-function ellipse(cx, cy, rx, ry) {
-  return { type: "ellipse", viewBox: viewBoxStr(), cx, cy, rx, ry };
+function ellipse(cx, cy, rx, ry, viewBox) {
+  return { type: "ellipse", viewBox: viewBox ?? viewBoxStr(), cx, cy, rx, ry };
 }
-function polygon(points) {
-  return { type: "polygon", viewBox: viewBoxStr(), points };
+function polygon(points, viewBox) {
+  return { type: "polygon", viewBox: viewBox ?? viewBoxStr(), points };
 }
 function viewBoxStr() {
   return `0 0 ${SCENE_VIEWBOX.width} ${SCENE_VIEWBOX.height}`;
 }
+
+// A close-up scene's own object shapes are traced in the pixel space of
+// whatever image actually backs that close-up, which is NOT always the main
+// gallery's 1672x941 — and for the two galleries whose close-up reuses their
+// own main image at a CSS zoom (illustration.js's `paint()`:
+// `background-size: 180%; background-position: 50% 65%`), it's a specific
+// sub-window of that same 1672x941 image, not the whole thing. A `viewBox`
+// whose own aspect ratio matches the image's (so the SVG's
+// `preserveAspectRatio="xMidYMid slice"` crops exactly the way
+// `background-size: cover` on that sub-window would) is the only way a
+// close-up's traced shapes stay pixel-locked to the zoomed/panned art —
+// derived once here from the exact CSS values above, not eyeballed:
+//   scaled size = 1.8 * 1672 x 1.8 * 941 = 3009.6 x 1693.8
+//   visible window (top-left, in scaled px) = (scaledSize - 1672x941) * (50%, 65%)
+//   window in ORIGINAL image px = that window / 1.8
+// giving the 929x523 box below (same 1672:941 aspect ratio, so the slice
+// crop matches regardless of viewport aspect ratio).
+const ZOOM_CLOSEUP_VIEWBOX = "372 272 929 523";
+// The two galleries with a dedicated close-up reference image (rather than a
+// zoomed reuse of their own main image) use that image's own native pixel
+// size as their shapes' viewBox — see public/world/illustration.js's
+// IMAGE_FILES and the actual file dimensions in public/assets/gallery-scenes/.
+const PORTRAIT_REF_VIEWBOX = "0 0 419 398";
+const CABINET_REF_VIEWBOX = "0 0 494 398";
 
 // Surface types a `placementSurfaces` entry can declare — each the kind of
 // real furniture/architecture a relic can actually rest against, not a
@@ -289,12 +313,14 @@ const GALLERY_LAYOUT = [
       caption: "The Watching Portrait",
       lore: "The mirror fogs from the edges inward, never from breath. Conservation notes say the fog always clears last around whoever has already looked away.",
     },
-    // Five real painted objects in portraits.webp (1672x941), each
+    // Eight real painted objects in portraits.webp (1672x941), each
     // hand-traced against the actual illustration rather than a percentage
     // box floated over whatever happens to be nearby: the large gilt-framed
     // central portrait, the twin plinth busts flanking the display table,
-    // the raven on the left-hand shelf, and a second framed portrait on the
-    // right wall (the brief's "selected framed portrait").
+    // the raven on the left-hand shelf, a second framed portrait on the
+    // right wall, a death's-head bust on the far-left pedestal, an oval wall
+    // mirror, and a cabinet of pinned moths on the far right — distributed
+    // left/centre/right so panning the room keeps revealing more of them.
     objects: [
       {
         type: "closeup",
@@ -324,6 +350,44 @@ const GALLERY_LAYOUT = [
         label: "The second framed portrait",
         text: "Unsigned, undated, and — by every conservator's measurement — painted in exactly the same hand as the gallery's central portrait, though the museum has never catalogued them as a pair.",
         shape: polygon([[1000, 180], [1150, 180], [1150, 400], [1000, 400]]),
+      },
+      {
+        type: "lore",
+        label: "A death's-head bust on the far pedestal",
+        text: "Donated anonymously, decades before the gallery itself existed. The donation ledger lists only one line in its entry: 'it asked to come inside.'",
+        shape: polygon([[60, 495], [210, 495], [210, 650], [60, 650]]),
+      },
+      {
+        type: "lore",
+        label: "An oval wall mirror",
+        text: "It reflects the room a half-second late, conservators insist, though no instrument sensitive enough to confirm it has ever been brought in to try.",
+        shape: ellipse(462, 285, 42, 58),
+      },
+      {
+        type: "lore",
+        label: "A cabinet of pinned moths",
+        text: "Each moth is labelled with a date of collection and nothing else — no collector's name, no location, across a span of hand-writing styles that covers at least three centuries.",
+        shape: polygon([[1430, 555], [1610, 555], [1610, 710], [1430, 710]]),
+      },
+    ],
+    closeupObjects: [
+      {
+        type: "lore",
+        label: "The gilt frame's crest",
+        text: "The carved cartouche at the frame's crown has no family crest the heralds' office can identify. It has been asked to identify it four separate times, by four separate curators, each unaware the others had already asked.",
+        shape: polygon([[145, 0], [285, 0], [285, 45], [145, 45]], PORTRAIT_REF_VIEWBOX),
+      },
+      {
+        type: "lore",
+        label: "The receding corridor in the painting",
+        text: "Measured against the frame, the painted corridor is longer than the wall it hangs on could physically contain. No restorer has ever proposed correcting the perspective.",
+        shape: polygon([[150, 45], [330, 45], [330, 370], [150, 370]], PORTRAIT_REF_VIEWBOX),
+      },
+      {
+        type: "lore",
+        label: "A wilting rose at the frame's foot",
+        text: "Replaced weekly by a hand no roster accounts for. The replacement is always the same species, always already a little wilted.",
+        shape: ellipse(22, 175, 24, 48, PORTRAIT_REF_VIEWBOX),
       },
     ],
   },
@@ -356,6 +420,50 @@ const GALLERY_LAYOUT = [
         label: "A locked drawer",
         text: "Every other drawer in the cabinet opens freely. This one has never been recorded unlocked, and no key has ever been catalogued for it.",
         shape: polygon([[770, 560], [930, 560], [930, 630], [770, 630]]),
+      },
+      {
+        type: "lore",
+        label: "A watchful owl on the high shelf",
+        text: "Taxidermied, the ledger insists, though no preparator's name is attached to the mount, and its head has been found facing a different corner of the room at the start of more than one shift.",
+        shape: polygon([[1430, 10], [1600, 10], [1600, 150], [1430, 150]]),
+      },
+      {
+        type: "lore",
+        label: "A gilt standing mirror",
+        text: "Visitors report it holds their reflection a beat longer than they turned away for. Staff log the complaint, politely, and change nothing.",
+        shape: ellipse(88, 365, 38, 78),
+      },
+      {
+        type: "lore",
+        label: "A brass armillary globe",
+        text: "Its rings are set to a sky that matches no hemisphere's stars as drawn. An astronomer consulted twice has twice declined to say more on the record.",
+        shape: ellipse(320, 565, 90, 90),
+      },
+      {
+        type: "lore",
+        label: "A mounted bird mid-call",
+        text: "Perched exactly as it was catalogued in 1889, mid-song, beak open. No recording of the call it was meant to be making has ever been found in the archive.",
+        shape: polygon([[1175, 280], [1265, 280], [1265, 420], [1175, 420]]),
+      },
+    ],
+    closeupObjects: [
+      {
+        type: "lore",
+        label: "A small locked chest in the lowest drawer",
+        text: "Catalogued as empty. Weighed twice since, at two different conservators' insistence, and found slightly heavier each time.",
+        shape: polygon([[55, 230], [200, 230], [200, 330], [55, 330]], CABINET_REF_VIEWBOX),
+      },
+      {
+        type: "lore",
+        label: "A cracked hourglass",
+        text: "The sand no longer falls, but the top chamber is never quite as full as the bottom should allow for.",
+        shape: polygon([[225, 95], [280, 95], [280, 220], [225, 220]], CABINET_REF_VIEWBOX),
+      },
+      {
+        type: "lore",
+        label: "A twinned pair of pocket-watches",
+        text: "Wound on the same schedule for forty years. They have never, in any inspection on record, shown the same time as each other.",
+        shape: polygon([[295, 110], [360, 110], [360, 185], [295, 185]], CABINET_REF_VIEWBOX),
       },
     ],
   },
@@ -391,6 +499,50 @@ const GALLERY_LAYOUT = [
         text: "Logged as 'garden lighting' in every inventory since 1920. No garden has ever been found on the other side of that arch.",
         shape: polygon([[1000, 150], [1250, 150], [1250, 500], [1000, 500]]),
       },
+      {
+        type: "lore",
+        label: "A glass dome over a glowing skull",
+        text: "The glow has never dimmed since the dome was first sealed, by nobody now on record, over a specimen nobody now on record can name.",
+        shape: ellipse(145, 600, 85, 100),
+      },
+      {
+        type: "lore",
+        label: "A mounted skeletal fawn",
+        text: "Reassembled, according to the tag, 'in the order it was found' — a phrasing conservation has never been comfortable repeating aloud.",
+        shape: polygon([[565, 170], [700, 170], [700, 400], [565, 400]]),
+      },
+      {
+        type: "lore",
+        label: "A preserved butterfly wall",
+        text: "Some specimens are pinned facing the glass, wings spread for viewing. A few, inexplicably, are pinned facing the wall.",
+        shape: polygon([[90, 60], [305, 60], [305, 300], [90, 300]]),
+      },
+      {
+        type: "lore",
+        label: "A taxidermied bird of prey",
+        text: "Catalogued three separate times under three separate species names, each correction filed by a different ornithologist who never consulted the last.",
+        shape: polygon([[1490, 20], [1640, 20], [1640, 220], [1490, 220]]),
+      },
+    ],
+    closeupObjects: [
+      {
+        type: "lore",
+        label: "An ammonite fossil under glass",
+        text: "Its spiral runs the wrong direction for its catalogued species — a detail noted once, in pencil, in the margin of a logbook nobody has been able to relocate since.",
+        shape: polygon([[390, 430], [480, 430], [480, 520], [390, 520]], ZOOM_CLOSEUP_VIEWBOX),
+      },
+      {
+        type: "lore",
+        label: "A cluster of raw crystal",
+        text: "It is faintly warm at the centre of the cluster, year-round, and no geologist asked to explain it has agreed to put a theory in writing.",
+        shape: polygon([[680, 440], [770, 440], [770, 530], [680, 530]], ZOOM_CLOSEUP_VIEWBOX),
+      },
+      {
+        type: "lore",
+        label: "The glowing moss within the case",
+        text: "It has never been watered, fed, or replaced, and has not visibly grown or withered in any photograph spanning the gallery's recorded history.",
+        shape: polygon([[900, 460], [975, 460], [975, 540], [900, 540]], ZOOM_CLOSEUP_VIEWBOX),
+      },
     ],
   },
   {
@@ -424,6 +576,56 @@ const GALLERY_LAYOUT = [
         label: "The waiting cot",
         text: "It is turned down fresh every morning. The nursery has had no occupant on record for longer than any living curator can confirm.",
         shape: polygon([[1020, 460], [1210, 460], [1210, 620], [1020, 620]]),
+      },
+      {
+        type: "lore",
+        label: "A castle puppet-theatre diorama",
+        text: "Wound once a century, according to the plaque, though no mechanism to wind it has ever been found. It has changed scenes twice in living memory, always overnight.",
+        shape: polygon([[215, 155], [390, 155], [390, 350], [215, 350]]),
+      },
+      {
+        type: "lore",
+        label: "A rocking horse worn smooth",
+        text: "Its paint is worn through at the saddle and nowhere else, in a pattern consistent with decades of riding the collection has no record of ever permitting.",
+        shape: polygon([[160, 360], [310, 360], [310, 600], [160, 600]]),
+      },
+      {
+        type: "lore",
+        label: "A carousel beneath a glass dome",
+        text: "It turns, very slowly, without a key, a motor, or a draft to explain it. Conservation has measured the rotation and confirmed only that it is consistent.",
+        shape: ellipse(305, 600, 110, 60),
+      },
+      {
+        type: "lore",
+        label: "A ballerina music box beneath the moon window",
+        text: "The figure completes one full turn for every visitor who pauses here, never more, never fewer, by a count nobody has admitted to keeping.",
+        shape: polygon([[1375, 235], [1505, 235], [1505, 420], [1375, 420]]),
+      },
+      {
+        type: "lore",
+        label: "A branched silver candelabra",
+        text: "Its candles have never been lit, and never collect dust either, in a room where every other surface keeps a thin coat of it faithfully.",
+        shape: polygon([[780, 380], [850, 380], [850, 520], [780, 520]]),
+      },
+    ],
+    closeupObjects: [
+      {
+        type: "lore",
+        label: "The worn teddy bear",
+        text: "Mended the same way, by the same uneven stitch, every time the seam reopens — though no conservator currently on staff has ever been asked to do the mending.",
+        shape: polygon([[500, 380], [600, 380], [600, 520], [500, 520]], ZOOM_CLOSEUP_VIEWBOX),
+      },
+      {
+        type: "lore",
+        label: "The second rocking horse, further back",
+        text: "Identical to the one nearer the door, down to the same worn saddle patch, though the ledger lists only a single horse ever acquired.",
+        shape: polygon([[870, 390], [1030, 390], [1030, 580], [870, 580]], ZOOM_CLOSEUP_VIEWBOX),
+      },
+      {
+        type: "lore",
+        label: "The crib's carved headboard",
+        text: "Carved with a lullaby in a script the museum's own linguists have never fully translated, past the first and last lines.",
+        shape: polygon([[1070, 330], [1230, 330], [1230, 460], [1070, 460]], ZOOM_CLOSEUP_VIEWBOX),
       },
     ],
   },
@@ -616,6 +818,10 @@ function buildGalleryScenes(gallery) {
     targetSceneId: obj.type === "closeup" ? `${gallery.id}-closeup` : undefined,
     ...obj,
   }));
+  const closeupObjects = (gallery.closeupObjects ?? []).map((obj, i) => ({
+    id: `${gallery.id}-closeup-object-${i}`,
+    ...obj,
+  }));
   const mainScene = {
     id: `${gallery.id}-main`,
     kind: "main",
@@ -638,7 +844,7 @@ function buildGalleryScenes(gallery) {
     zoom: closeup.zoom ?? false,
     lore: closeup.lore,
     camera: closeup.closeupCamera ?? DEFAULT_CLOSEUP_CAMERA,
-    interactiveObjects: [],
+    interactiveObjects: closeupObjects,
     visitorAnchors: VISITOR_ANCHORS,
     nav: { back: { targetSceneId: `${gallery.id}-main`, label: `Back to ${gallery.name}` } },
   };

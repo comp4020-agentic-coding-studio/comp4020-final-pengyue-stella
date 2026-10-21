@@ -117,6 +117,27 @@ describe("the museum world", () => {
       }
     }
 
+    // Each main gallery scene offers 6-8 real clickable objects (the "look
+    // closer" portal into its own close-up counts as one of them, same as
+    // any other object a visitor can click), and each close-up scene offers
+    // 3-5 of its own — the density target set out in the interactive-lore
+    // expansion brief, verified here so it can't silently regress back to a
+    // sparse scene without a test noticing.
+    for (const gallery of galleries) {
+      const main = byId.get(`${gallery.id}-main`)!;
+      const closeup = byId.get(`${gallery.id}-closeup`)!;
+      expect(
+        main.interactiveObjects.length,
+        `${gallery.id}-main should have 6-8 interactive objects, has ${main.interactiveObjects.length}`,
+      ).toBeGreaterThanOrEqual(6);
+      expect(main.interactiveObjects.length).toBeLessThanOrEqual(8);
+      expect(
+        closeup.interactiveObjects.length,
+        `${gallery.id}-closeup should have 3-5 interactive objects, has ${closeup.interactiveObjects.length}`,
+      ).toBeGreaterThanOrEqual(3);
+      expect(closeup.interactiveObjects.length).toBeLessThanOrEqual(5);
+    }
+
     // The hall is now exactly one scene — panned/zoomed/dragged the same
     // bounded way as every other main room, not a special four-facing "hub"
     // mode. Its own doorways are ordinary in-room `type: "portal"` objects
