@@ -717,6 +717,13 @@ a {
   width: min(420px, 100%);
   max-width: 100%;
   overflow-y: auto;
+  /* Stops a wheel/trackpad/touch scroll that reaches the top or bottom of
+     the drawer's own content from "chaining" into scrolling the page body
+     behind it (there is no body scroll in this app, but without this a
+     elastic/rubber-band overscroll effect can still visually leak through
+     on some browsers/touchpads) — the scroll gesture stays owned by this
+     container for its whole duration. */
+  overscroll-behavior: contain;
   background: var(--parchment);
   color: var(--ink);
   border-left: 3px solid var(--brass);
@@ -749,10 +756,21 @@ a {
   line-height: 1.45;
 }
 
+/* `position: sticky`, not `absolute` — `.side-drawer` is itself both the
+   positioning context AND the scroll container (`overflow-y: auto` sits
+   directly on it, not on some inner wrapper), so an absolutely-positioned
+   close button would scroll away with the rest of the drawer's content the
+   moment a long dossier/lore-drawer needs scrolling. `sticky` keeps it
+   pinned to the top of the scrollable area regardless of scroll position,
+   which is what "the close button should remain easy to reach" requires.
+   `float: right` + a negative bottom margin lets it sit in the drawer's own
+   top-right corner without reserving a full-width row of vertical space
+   above the title that would follow it. */
 .drawer-close {
-  position: absolute;
-  top: 0.9rem;
-  right: 1rem;
+  position: sticky;
+  top: 0;
+  float: right;
+  margin: -0.3rem -0.3rem -1.6rem 0.6rem;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -766,6 +784,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 2;
 }
 
 @media (max-width: 480px) {
@@ -786,7 +805,17 @@ a {
   color: var(--parchment);
   border-left: 1px solid rgba(198, 161, 107, 0.5);
   box-shadow: -24px 0 60px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(198, 161, 107, 0.14);
-  position: relative;
+  /* NOT `position: relative` here: `.side-drawer` (below) already sets
+     `position: absolute; top: 0; bottom: 0;`, which is what constrains this
+     drawer's own height so its `overflow-y: auto` becomes a real scroll
+     container — `position: relative` on this more-specific rule was
+     silently overriding that positioning, so the drawer grew to fit all of
+     its content instead of being clipped to the viewport, leaving every
+     account/form/button past the fold completely unreachable (no scrollbar
+     ever appears on an element that isn't actually size-constrained). The
+     `::before`/`::after` corner ornaments below don't need their own
+     positioning context — `.side-drawer`'s existing `position: absolute`
+     already provides one. */
 }
 
 /* A restrained antique-brass corner flourish, echoing `.dossier-card`'s own
@@ -1228,8 +1257,9 @@ a {
 .gate-card {
   position: relative;
   width: min(440px, 100%);
-  max-height: min(80vh, 640px);
+  max-height: min(80dvh, 640px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--parchment);
   color: var(--ink);
   border: 3px solid var(--brass);
@@ -1978,10 +2008,23 @@ a {
   transform: rotate(180deg);
 }
 
+/* `position: sticky`, matching `.drawer-close`'s own fix above and for the
+   exact same reason: `.gate-card` (this button's containing block, via
+   `archive-card`/`guide-card`) is itself the scroll container whenever its
+   content overflows (the Museum Guide's own tab panels, in particular, can
+   be taller than the card's `max-height`) — an `absolute` close button
+   would scroll out of view with that content instead of staying reachable.
+   `.gate-card` is a flex column, so `float` (used for the equivalent
+   `.drawer-close` fix in a non-flex container) has no effect here — instead
+   this button is pulled out of the normal flex flow entirely via negative
+   margins (so it reserves no row of its own) and self-aligned to the right
+   edge, while staying a real flex item so `position: sticky` has the
+   scrolling flex container as its nearest scrolling ancestor. */
 .dossier-close {
-  position: absolute;
+  position: sticky;
+  align-self: flex-end;
   top: 0.7rem;
-  right: 0.7rem;
+  margin: -0.7rem -0.7rem -1.7rem 0;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1995,6 +2038,8 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 2;
+  flex-shrink: 0;
 }
 
 .dossier-kicker {
