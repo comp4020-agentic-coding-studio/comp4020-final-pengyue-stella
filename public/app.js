@@ -2,6 +2,7 @@ import { renderArtifactObject } from "./world/artifacts.js";
 import { createIllustrationController } from "./world/illustration.js";
 import { createAmbientSoundscape } from "./world/ambient.js";
 import { pointInShape, shapeBounds, snapIntoShape, surfaceUvFromPoint, surfacePointFromUv, surfaceCentroidUv, expandShape } from "./world/geometry.js";
+import { renderFloorPlan } from "./world/floor-plan.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -159,13 +160,24 @@ function populateDonateForm() {
 
   function selectVisual(visualId, subtype) {
     selectedVisualId = visualId;
-    subtypeSelect.value = subtype;
+    if (subtype) subtypeSelect.value = subtype;
     for (const tile of visualGrid.querySelectorAll(".visual-preset-tile")) {
       tile.setAttribute("aria-checked", tile.dataset.visualId === String(visualId) ? "true" : "false");
     }
+    // A picked preset drives everything else; with none picked, the
+    // subtype select is the only way left to say what the relic is (the
+    // old "Classic" tile's effect, now just the natural fallback state
+    // rather than a dedicated clickable tile).
+    const hasPreset = visualId != null;
+    subtypeSelect.hidden = hasPreset;
+    subtypeLabel.hidden = hasPreset;
   }
 
-  function refreshSubtypes() {
+  // Rebuilds just the subtype <select> for whichever gallery is currently
+  // chosen — independent of the preset grid below, which never changes
+  // once built (all 4 curated presets are always shown, regardless of
+  // gallery selection).
+  function refreshSubtypeSelect() {
     const gallery = world.galleries.find((g) => g.id === gallerySelect.value);
     subtypeSelect.innerHTML = "";
     for (const subtype of gallery?.subtypes ?? []) {
@@ -174,13 +186,19 @@ function populateDonateForm() {
       opt.textContent = SUBTYPE_LABEL[subtype] ?? subtype;
       subtypeSelect.appendChild(opt);
     }
+  }
 
-    // The visual picker: every curated preset for this gallery's category,
-    // plus a trailing "Classic" tile that falls back to the old procedural
-    // model and lets the donor freely pick any subtype via the select below.
+  // The visual picker: all four curated presets, always shown together,
+  // regardless of which gallery happens to be selected — selecting one
+  // DRIVES the gallery/subtype choice (preset-first), rather than being
+  // filtered down to whichever single preset matches an already-chosen
+  // gallery (the old "only one preset + Classic" bug). "Classic" is no
+  // longer a user-facing tile; a donor who changes the gallery dropdown
+  // directly, without clicking a preset, simply sees the subtype select
+  // reappear as the fallback.
+  function buildVisualGrid() {
     visualGrid.innerHTML = "";
-    const presetsForGallery = relicPresets.filter((p) => p.category === gallery?.category);
-    for (const preset of presetsForGallery) {
+    for (const preset of relicPresets) {
       const tile = document.createElement("button");
       tile.type = "button";
       tile.className = "visual-preset-tile";
@@ -195,47 +213,37 @@ function populateDonateForm() {
       name.textContent = preset.name;
       tile.appendChild(name);
       tile.addEventListener("click", () => {
+        const targetGalleryId = world.galleries.find((g) => g.category === preset.category)?.id;
+        if (targetGalleryId) gallerySelect.value = targetGalleryId;
+        refreshSubtypeSelect();
         selectVisual(preset.id, preset.subtype);
-        subtypeSelect.hidden = true;
-        subtypeLabel.hidden = true;
       });
       visualGrid.appendChild(tile);
     }
-    const classicTile = document.createElement("button");
-    classicTile.type = "button";
-    classicTile.className = "visual-preset-tile";
-    classicTile.setAttribute("role", "radio");
-    classicTile.dataset.visualId = "null";
-    const swatch = document.createElement("span");
-    swatch.className = "visual-preset-swatch";
-    swatch.textContent = "Classic";
-    classicTile.appendChild(swatch);
-    const classicName = document.createElement("span");
-    classicName.className = "visual-preset-name";
-    classicName.textContent = "Choose a type below";
-    classicTile.appendChild(classicName);
-    classicTile.addEventListener("click", () => {
-      selectVisual(CLASSIC_VISUAL_ID, subtypeSelect.value);
-      subtypeSelect.hidden = false;
-      subtypeLabel.hidden = false;
-    });
-    visualGrid.appendChild(classicTile);
-
-    // Default to the gallery's first curated preset if it has one, so a
-    // donor sees an integrated illustrated relic by default rather than
-    // having to discover the picker; "Classic" otherwise.
-    if (presetsForGallery.length > 0) {
-      selectVisual(presetsForGallery[0].id, presetsForGallery[0].subtype);
-      subtypeSelect.hidden = true;
-      subtypeLabel.hidden = true;
-    } else {
-      selectVisual(CLASSIC_VISUAL_ID, subtypeSelect.value);
-      subtypeSelect.hidden = false;
-      subtypeLabel.hidden = false;
-    }
   }
-  gallerySelect.onchange = refreshSubtypes;
-  refreshSubtypes();
+
+  gallerySelect.onchange = () => {
+    // A manual gallery change (not a preset click) clears any selected
+    // preset that no longer matches, revealing the subtype select again.
+    selectedVisualId = CLASSIC_VISUAL_ID;
+    refreshSubtypeSelect();
+    selectVisual(CLASSIC_VISUAL_ID, undefined);
+  };
+
+  buildVisualGrid();
+  refreshSubtypeSelect();
+  // Default to the first curated preset overall, so a donor sees an
+  // integrated illustrated relic by default rather than having to discover
+  // the picker — this also sets the gallery to match that preset's own
+  // category, superseding the "default to the visitor's current gallery"
+  // convenience above when a default preset is available.
+  if (relicPresets.length > 0) {
+    const first = relicPresets[0];
+    const targetGalleryId = world.galleries.find((g) => g.category === first.category)?.id;
+    if (targetGalleryId) gallerySelect.value = targetGalleryId;
+    refreshSubtypeSelect();
+    selectVisual(first.id, first.subtype);
+  }
 }
 
 function openDonateGate() {
@@ -586,7 +594,11 @@ function renderDossier(exhibit) {
     `Exhibit #${exhibit.number} · ${exhibit.category.toUpperCase()} · ${exhibit.classification}`;
   el("dossier-title").textContent = exhibit.title;
   const gallery = world.galleries.find((g) => g.id === exhibit.galleryId);
-  el("dossier-meta").textContent = `${gallery?.name ?? exhibit.galleryId} · donated by ${exhibit.donorName} · ${exhibit.accounts.length} account${exhibit.accounts.length === 1 ? "" : "s"}`;
+  const galleryName = gallery?.name ?? (exhibit.galleryId === "hall" ? "Entrance Hall" : exhibit.galleryId);
+  // A built-in museum object was never "donated" — its provenance line
+  // reads as recorded by the curator rather than attributed to a visitor.
+  const provenance = exhibit.origin === "builtin" ? `recorded by ${exhibit.donorName}` : `donated by ${exhibit.donorName}`;
+  el("dossier-meta").textContent = `${galleryName} · ${provenance} · ${exhibit.accounts.length} account${exhibit.accounts.length === 1 ? "" : "s"}`;
 
   if (dossierPreviewExhibitId !== exhibit.id) {
     dossierPreviewExhibitId = exhibit.id;
@@ -597,6 +609,29 @@ function renderDossier(exhibit) {
       accent: gallery?.accent ?? "#88653d",
       exhibitId: exhibit.id,
     });
+  }
+
+  // A backfilled visual (an exhibit donated/seeded before the curated
+  // preset catalog existed) is an archival stand-in, not the donor's own
+  // choice — disclose that honestly rather than letting the image imply a
+  // match to the dossier's own subtype text.
+  const backfillNote = el("dossier-visual-note");
+  backfillNote.textContent = exhibit.visualIdBackfilled ? "Shown with an archival representative image." : "";
+
+  // A dossier whose backing object is itself a gallery's own marquee
+  // closeup trigger (e.g. "Look closer: The Watching Portrait") offers a
+  // way to actually enter that closeup scene, rather than leaving it
+  // reachable only by the old direct-click navigation.
+  const inspectBtn = el("dossier-inspect-closer");
+  if (exhibit.closeupSceneId) {
+    inspectBtn.hidden = false;
+    inspectBtn.onclick = () => {
+      closeDossier();
+      illustrator.goToScene(exhibit.closeupSceneId, { direction: "forward" });
+    };
+  } else {
+    inspectBtn.hidden = true;
+    inspectBtn.onclick = null;
   }
 
   const container = el("dossier-accounts");
@@ -610,7 +645,7 @@ function renderDossier(exhibit) {
 function openDossier(exhibitId) {
   const exhibit = exhibitsById.get(exhibitId);
   if (!exhibit) return;
-  closeLoreCard();
+  hideLoreDrawer();
   openDossierExhibitId = exhibitId;
   renderDossier(exhibit);
   el("account-error").textContent = "";
@@ -679,19 +714,37 @@ function applyAccountUpdate(exhibitId, account, { isNew = false } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Environmental lore drawer — a short caption for an in-room object that
-// isn't a full archival exhibit, opened as the same side-drawer pattern the
-// dossier uses rather than a modal covering the scene.
+// Environmental lore drawer — now used only for a close-up scene's own
+// arrival caption (every in-room lore OBJECT opens the unified dossier
+// instead, see handleObjectActivate). Closing a caption that was shown
+// automatically on arrival should return to the parent scene (the visitor
+// came here only to see this caption); closing one a visitor opened
+// deliberately must never navigate anywhere — `loreDrawerAutoOpened` tracks
+// which case this is, set by the one caller that auto-opens it
+// (onSceneChange), reset to "user-opened" by default on every open so any
+// future caller defaults safely.
+
+let loreDrawerAutoOpened = false;
 
 function openLoreCard(title, text, objectId) {
+  loreDrawerAutoOpened = false;
   el("lore-title").textContent = title;
   el("lore-text").textContent = text;
   el("lore-drawer").hidden = false;
   if (objectId) setFocusedObject(objectId);
 }
-function closeLoreCard() {
+// Dismisses the lore drawer without ever triggering the auto-opened "return
+// to parent scene" behaviour — used when something ELSE (opening a dossier,
+// a scene change) needs the drawer out of the way, not a deliberate close.
+function hideLoreDrawer() {
   el("lore-drawer").hidden = true;
+  loreDrawerAutoOpened = false;
   if (focusedObjectId?.startsWith("object:")) setFocusedObject(null);
+}
+function closeLoreCard() {
+  const wasAutoOpened = loreDrawerAutoOpened;
+  hideLoreDrawer();
+  if (wasAutoOpened) illustrator.back();
 }
 el("lore-close").addEventListener("click", closeLoreCard);
 
@@ -743,6 +796,22 @@ el("name-form").addEventListener("submit", async (e) => {
 // the whole scene.
 const TOUR_STORAGE_KEY = "cursedMuseumToured";
 const TOUR_SHIMMER_KEY = "cursedMuseumDiscoveredObject";
+const GUIDE_SEEN_KEY = "cursedMuseumGuideSeen";
+
+function hasSeenGuide() {
+  try {
+    return localStorage.getItem(GUIDE_SEEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function markGuideSeen() {
+  try {
+    localStorage.setItem(GUIDE_SEEN_KEY, "1");
+  } catch {
+    // Private browsing / blocked storage: the shimmer cue just reappears.
+  }
+}
 
 function hasTouredBefore() {
   try {
@@ -901,9 +970,12 @@ function endTour() {
 
 el("onboarding-next").addEventListener("click", advanceTour);
 el("onboarding-skip").addEventListener("click", endTour);
+// The topbar Help/"?" control now reopens the Museum Guide (which itself
+// offers a "replay the tour" affordance in its own Welcome section) rather
+// than jumping straight back into the first-visit tour.
 el("replay-tour").addEventListener("click", () => {
   if (anyOverlayOpen() || placement) return;
-  goToSceneThen("hall", startTour);
+  openMuseumGuide({ section: "welcome" });
 });
 
 // ---------------------------------------------------------------------------
@@ -1004,7 +1076,48 @@ function renderCameos() {
     chip.appendChild(badge);
     cameoLayer.appendChild(chip);
   }
+
+  clampCameosIntoViewport();
 }
+
+// A pragmatic safety net against a visitor cameo rendering outside the
+// visible viewport (observed live in a two-browser test — a `.cameo`'s own
+// `translate(-50%, -100%) scale()` compounds with the scene camera's own
+// pan/zoom transform on its ancestor, and a near-edge anchor at an extreme
+// zoom/pan combination can push the result past the visible frame). Runs
+// after every cameo (re)render AND after every camera pan/zoom change (see
+// `onCameraTransform` wiring in boot()) and window resize, nudging any
+// cameo whose own bounding rect falls outside the viewport back inward —
+// independent of fully isolating the underlying transform-composition
+// cause, this guarantees no ghost is ever rendered off-screen.
+function clampCameosIntoViewport() {
+  if (!illustrator) return;
+  const { cameoLayer } = illustrator.activeLayers();
+  if (!cameoLayer) return;
+  const viewportRect = viewport.getBoundingClientRect();
+  for (const cameo of cameoLayer.querySelectorAll(".cameo")) {
+    const rect = cameo.getBoundingClientRect();
+    let dx = 0;
+    let dy = 0;
+    if (rect.left < viewportRect.left) dx = viewportRect.left - rect.left;
+    else if (rect.right > viewportRect.right) dx = viewportRect.right - rect.right;
+    if (rect.top < viewportRect.top) dy = viewportRect.top - rect.top;
+    else if (rect.bottom > viewportRect.bottom) dy = viewportRect.bottom - rect.bottom;
+    if (dx !== 0 || dy !== 0) {
+      const currentLeft = cameo.style.left ? parseFloat(cameo.style.left) : 0;
+      const currentTop = cameo.style.top ? parseFloat(cameo.style.top) : 0;
+      const layerRect = cameoLayer.getBoundingClientRect();
+      if (layerRect.width > 0) cameo.style.left = `${currentLeft + (dx / layerRect.width) * 100}%`;
+      if (layerRect.height > 0) cameo.style.top = `${currentTop + (dy / layerRect.height) * 100}%`;
+    }
+  }
+}
+
+let cameoClampResizeTimer = null;
+window.addEventListener("resize", () => {
+  if (cameoClampResizeTimer) clearTimeout(cameoClampResizeTimer);
+  cameoClampResizeTimer = setTimeout(clampCameosIntoViewport, 120);
+});
 
 // A small "who else is here" list, reachable without hovering every
 // silhouette individually — the brief's "or in a small visitor list"
@@ -1072,7 +1185,7 @@ function connectEvents() {
       renderCameos();
       renderVisitorList();
     }
-    refreshMapIfOpen();
+    refreshGuideFloorPlanIfOpen();
   });
 
   eventSource.addEventListener("presence-left", () => {
@@ -1087,7 +1200,7 @@ function connectEvents() {
     refreshInteractiveObjects();
     const gallery = world.galleries.find((g) => g.id === exhibit.galleryId);
     toast(`${exhibit.donorName} donated "${exhibit.title}" to ${gallery?.name ?? exhibit.galleryId}.`);
-    refreshMapIfOpen();
+    refreshGuideFloorPlanIfOpen();
   });
 
   eventSource.addEventListener("account", (e) => {
@@ -1196,7 +1309,7 @@ function anyOverlayOpen() {
     !el("donate-receipt").hidden ||
     !el("archive-gate").hidden ||
     !el("name-gate").hidden ||
-    !el("rooms-menu").hidden ||
+    !el("museum-guide").hidden ||
     !el("onboarding").hidden
   );
 }
@@ -1231,8 +1344,12 @@ function handleObjectActivate(object) {
     openDonateGate();
     return;
   }
+  if (object.type === "guide") {
+    openMuseumGuide({ section: "welcome" });
+    return;
+  }
   if (object.type === "lore") {
-    openLoreCard(object.label, object.text, `object:${object.id}`);
+    openDossier(`exhibit_builtin_${object.id}`);
     return;
   }
   if ((object.type === "closeup" || object.type === "portal") && object.targetSceneId) {
@@ -1441,6 +1558,14 @@ function buildObjectGlow(object, scene) {
   // skipped entirely under reduced-motion.
   if (hasTouredBefore() && !hasDiscoveredAnObject() && !prefersReducedMotion()) {
     node.classList.add("ambient-shimmer");
+  }
+  // The physical hall-map object gets its own restrained first-visit cue
+  // (a shimmer plus a short label, never a centred modal) inviting the
+  // visitor to open the Museum Guide — independent of the general
+  // ambient-shimmer-until-first-discovery cue above, since the Guide is
+  // worth surfacing even after that first discovery has already happened.
+  if (object.type === "guide" && !hasSeenGuide() && !prefersReducedMotion()) {
+    node.classList.add("ambient-shimmer", "guide-shimmer");
   }
 
   return node;
@@ -1749,193 +1874,79 @@ function renderCornerNav(scene) {
 }
 
 // ---------------------------------------------------------------------------
-// Live museum map: replaces the plain Rooms dropdown with a compact
-// illustrated floor plan — the Entrance Hall as a central hub, the four
-// galleries connected around it. Reuses the existing SSE scene-presence
-// system (`lastSceneCounts`/`lastSceneVisitors`) rather than a second
-// presence channel: a gallery's own "room total" is its main scene's count
-// plus its close-up scene's count (a visitor "looking closer" at one
-// painting is still in that gallery, just not in its main-scene headcount).
-// Donated-relic markers come from the already-loaded `exhibitsById`, grouped
-// by galleryId — no separate map-specific fetch. The map re-renders on every
-// scene-presence/exhibit event exactly where those already trigger other UI
-// refreshes, so it never goes stale while open.
+// Museum Guide: one shared modal (Welcome / Floor Plan / How to Explore /
+// How the Archive Works) replacing both the old compass map popup and the
+// old plain tour-replay button — the hall-map object, the "Rooms" control,
+// and the topbar "?" Help control all open this same component, each
+// pinned to a different starting section. The Floor Plan section renders
+// the real architectural floor plan (public/world/floor-plan.js), reused
+// unchanged by both the "Rooms" shortcut and this fuller guide.
 
-// A small fixed compass layout — Entrance Hall centred, the four galleries
-// at the cardinal/ordinal positions a real wing off a central hall would
-// occupy. Percentages of the map's own square canvas.
-const MAP_LAYOUT = {
-  hall: { x: 50, y: 50 },
-  portraits: { x: 50, y: 14 },
-  memento: { x: 86, y: 50 },
-  specimen: { x: 50, y: 86 },
-  childhood: { x: 14, y: 50 },
-};
+const GUIDE_SECTIONS = ["welcome", "floorplan", "explore", "archive"];
 
-function galleryRoomTotal(galleryId) {
-  return (lastSceneCounts[`${galleryId}-main`] ?? 0) + (lastSceneCounts[`${galleryId}-closeup`] ?? 0);
-}
-
-function currentRoomId() {
-  // The map treats every scene belonging to a gallery (main or close-up) as
-  // "in that room," and every hall-facing scene as the hub — matching
-  // galleryRoomTotal's own main+closeup aggregation.
-  const scene = illustrator?.currentScene();
-  return scene?.galleryId ?? "hall";
-}
-
-function exhibitsByGallery(galleryId) {
-  return [...exhibitsById.values()].filter((e) => e.galleryId === galleryId);
-}
-
-function buildMapNode({ id, label, x, y, count, exhibits, isHub }) {
-  const node = document.createElement("button");
-  node.type = "button";
-  node.className = `map-node${isHub ? " map-node-hub" : ""}`;
-  node.style.left = `${x}%`;
-  node.style.top = `${y}%`;
-  node.dataset.roomId = id;
-  if (id === currentRoomId()) node.classList.add("current");
-
-  const plaque = document.createElement("span");
-  plaque.className = "map-node-label";
-  plaque.textContent = label;
-  node.appendChild(plaque);
-
-  if (count > 0) {
-    const badge = document.createElement("span");
-    badge.className = "map-node-badge";
-    badge.textContent = String(count);
-    badge.setAttribute("aria-hidden", "true");
-    node.appendChild(badge);
+function selectGuideSection(section) {
+  for (const tab of document.querySelectorAll(".guide-tab")) {
+    tab.setAttribute("aria-selected", String(tab.dataset.section === section));
   }
-
-  if (exhibits.length > 0) {
-    const dots = document.createElement("span");
-    dots.className = "map-node-relics";
-    dots.setAttribute("aria-hidden", "true");
-    // Cap the visible dots so a heavily-donated gallery still reads calmly —
-    // the overflow count folds into one small grouped "+N" marker rather
-    // than stacking dots indefinitely.
-    const MAX_DOTS = 4;
-    for (const exhibit of exhibits.slice(0, MAX_DOTS)) {
-      const dot = document.createElement("span");
-      dot.className = "map-relic-dot";
-      dots.appendChild(dot);
-    }
-    if (exhibits.length > MAX_DOTS) {
-      const more = document.createElement("span");
-      more.className = "map-relic-dot map-relic-more";
-      more.textContent = `+${exhibits.length - MAX_DOTS}`;
-      dots.appendChild(more);
-    }
-    node.appendChild(dots);
+  for (const panel of document.querySelectorAll(".guide-panel")) {
+    panel.hidden = panel.id !== `guide-panel-${section}`;
   }
-
-  const detailParts = [];
-  detailParts.push(count === 0 ? "Empty" : count === 1 ? "1 visitor" : `${count} visitors`);
-  if (exhibits.length > 0) {
-    detailParts.push(
-      `${exhibits.length} relic${exhibits.length === 1 ? "" : "s"}: ${exhibits
-        .slice(0, 6)
-        .map((e) => `${e.title} (donated by ${e.donorName})`)
-        .join("; ")}${exhibits.length > 6 ? "…" : ""}`,
-    );
-  }
-  node.setAttribute("aria-label", `${label}. ${detailParts.join(". ")}.${id === currentRoomId() ? " You are here." : ""}`);
-  node.title = detailParts.join(" · "); // native hover tooltip — the brief's "hover/focus detail"
-
-  node.addEventListener("click", () => {
-    closeRoomsMenu();
-    if (id === "hall") illustrator.goToScene("hall", { direction: "back" });
-    else illustrator.goToScene(`${id}-main`, { direction: "forward" });
-  });
-  return node;
-}
-
-function renderMuseumMap() {
-  const canvas = el("museum-map");
-  const list = el("map-room-list");
-  if (!canvas || !list) return;
-  canvas.innerHTML = "";
-  list.innerHTML = "";
-
-  const rooms = [
-    { id: "hall", label: "Entrance Hall", isHub: true },
-    ...world.galleries.map((g) => ({ id: g.id, label: g.name, isHub: false })),
-  ];
-
-  for (const room of rooms) {
-    const pos = MAP_LAYOUT[room.id] ?? { x: 50, y: 50 };
-    const count = room.id === "hall" ? lastSceneCounts.hall ?? 0 : galleryRoomTotal(room.id);
-    const exhibits = room.id === "hall" ? [] : exhibitsByGallery(room.id);
-    canvas.appendChild(buildMapNode({ id: room.id, label: room.label, x: pos.x, y: pos.y, count, exhibits, isHub: room.isHub }));
-
-    // Connecting line from the hub to each gallery — a straight SVG-free CSS
-    // line via a rotated/positioned div is enough for "which rooms connect
-    // to which," never claiming exact walking geometry.
-    if (!room.isHub) {
-      const hubPos = MAP_LAYOUT.hall;
-      const dx = pos.x - hubPos.x;
-      const dy = pos.y - hubPos.y;
-      const length = Math.hypot(dx, dy);
-      const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
-      const line = document.createElement("span");
-      line.className = "map-connector";
-      line.style.left = `${hubPos.x}%`;
-      line.style.top = `${hubPos.y}%`;
-      line.style.setProperty("--map-connector-length", `${length}%`);
-      line.style.setProperty("--map-connector-angle", `${angleDeg}deg`);
-      canvas.appendChild(line);
-    }
-
-    // The accessible textual room list — present regardless of whether the
-    // visual map is perceived, each a real focusable list item button.
-    const li = document.createElement("li");
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "map-room-list-item";
-    if (room.id === currentRoomId()) btn.classList.add("current");
-    const countLabel = count === 0 ? "empty" : count === 1 ? "1 visitor" : `${count} visitors`;
-    btn.textContent = `${room.label} — ${countLabel}${exhibits.length > 0 ? `, ${exhibits.length} relic${exhibits.length === 1 ? "" : "s"}` : ""}`;
-    btn.addEventListener("click", () => {
-      closeRoomsMenu();
-      if (room.id === "hall") illustrator.goToScene("hall", { direction: "back" });
-      else illustrator.goToScene(`${room.id}-main`, { direction: "forward" });
+  if (section === "floorplan") {
+    renderFloorPlan(el("guide-floor-plan-mount"), {
+      world,
+      sceneVisitors: lastSceneVisitors,
+      exhibitsById,
+      currentSceneId,
+      myPublicKey,
+      onRoomSelect: (roomId) => {
+        closeMuseumGuide();
+        if (roomId === "hall") illustrator.goToScene("hall", { direction: "back" });
+        else illustrator.goToScene(`${roomId}-main`, { direction: "forward" });
+      },
     });
-    li.appendChild(btn);
-    list.appendChild(li);
   }
 }
 
-function refreshMapIfOpen() {
-  if (!el("rooms-menu").hidden) renderMuseumMap();
+function openMuseumGuide({ section = "welcome" } = {}) {
+  hideLoreDrawer();
+  selectGuideSection(GUIDE_SECTIONS.includes(section) ? section : "welcome");
+  el("museum-guide").hidden = false;
+  markGuideSeen();
 }
-
-function openRoomsMenu() {
-  renderMuseumMap();
-  el("rooms-menu").hidden = false;
-}
-function closeRoomsMenu() {
-  el("rooms-menu").hidden = true;
+function closeMuseumGuide() {
+  el("museum-guide").hidden = true;
   viewport.focus();
 }
-el("open-rooms").addEventListener("click", () => {
-  if (el("rooms-menu").hidden) openRoomsMenu();
-  else closeRoomsMenu();
-});
-el("map-close").addEventListener("click", closeRoomsMenu);
+function refreshGuideFloorPlanIfOpen() {
+  if (!el("museum-guide").hidden && el("guide-panel-floorplan") && !el("guide-panel-floorplan").hidden) {
+    selectGuideSection("floorplan");
+  }
+}
+el("guide-close").addEventListener("click", closeMuseumGuide);
+for (const tab of document.querySelectorAll(".guide-tab")) {
+  tab.addEventListener("click", () => selectGuideSection(tab.dataset.section));
+}
+for (const btn of document.querySelectorAll(".guide-begin")) {
+  btn.addEventListener("click", closeMuseumGuide);
+}
+el("open-rooms").addEventListener("click", () => openMuseumGuide({ section: "floorplan" }));
 
 function onSceneChange(scene) {
   currentSceneId = scene.id;
-  closeLoreCard();
+  // A scene change is already underway — dismiss any lore drawer left over
+  // from the PREVIOUS scene without re-triggering its own auto-opened
+  // "return to parent" behaviour (that would double-navigate).
+  hideLoreDrawer();
   refreshInteractiveObjects();
   postPresence(scene.id);
   updatePresenceLabel();
   renderCameos();
   renderVisitorList();
   if (ambient.isOn) ambient.setGallery(scene.galleryId ?? null);
-  if (scene.kind === "closeup" && scene.lore) openLoreCard(scene.caption, scene.lore, null);
+  if (scene.kind === "closeup" && scene.lore) {
+    openLoreCard(scene.caption, scene.lore, null);
+    loreDrawerAutoOpened = true;
+  }
   if (pendingAfterArrival) {
     const run = pendingAfterArrival;
     pendingAfterArrival = null;
@@ -1962,7 +1973,7 @@ window.addEventListener("keydown", (e) => {
     else if (!el("donate-gate").hidden) closeDonateGate();
     else if (!el("donate-receipt").hidden) closeReceipt();
     else if (!el("archive-gate").hidden) closeArchive();
-    else if (!el("rooms-menu").hidden) closeRoomsMenu();
+    else if (!el("museum-guide").hidden) closeMuseumGuide();
     else if (!el("onboarding").hidden) endTour();
     else if (!el("lore-drawer").hidden) closeLoreCard();
     else illustrator.back();
@@ -1996,6 +2007,7 @@ async function boot() {
     layerB: el("scene-layer-b"),
     world,
     onSceneChange,
+    onCameraTransform: clampCameosIntoViewport,
   });
   currentSceneId = illustrator.currentScene().id;
 

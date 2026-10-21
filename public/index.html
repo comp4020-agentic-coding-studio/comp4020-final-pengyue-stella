@@ -109,20 +109,57 @@
         </button>
       </div>
 
-      <!-- The live museum map: replaces the plain Rooms dropdown with a
-           compact illustrated floor plan (Entrance Hall as the central hub,
-           the four galleries connected around it), each room node showing a
-           live visitor-count badge and small donated-relic markers. An
-           accessible textual room list (#map-room-list) stays available
-           alongside the visual map, so every room is reachable and
-           announced even without perceiving the graphic layout. -->
-      <div id="rooms-menu" class="overlay-gate" hidden>
-        <div class="gate-card map-card" role="dialog" aria-labelledby="map-title">
-          <button type="button" id="map-close" class="dossier-close" aria-label="Close map">&times;</button>
+      <!-- The Museum Guide: one shared modal for Welcome / Floor Plan / How
+           to Explore / How the Archive Works. Opened by the physical
+           hall-map object (Welcome), the topbar "?" Help control (Welcome),
+           and the "Rooms" persistent action (Floor Plan directly) — never
+           three inconsistent surfaces, one component with different
+           starting sections. The Floor Plan section hosts the real
+           architectural floor plan (public/world/floor-plan.js). -->
+      <div id="museum-guide" class="overlay-gate" hidden>
+        <div class="gate-card archive-card guide-card" role="dialog" aria-labelledby="guide-title">
+          <button type="button" id="guide-close" class="dossier-close" aria-label="Close guide">&times;</button>
           <p class="dossier-kicker">The Collection</p>
-          <h2 id="map-title">Museum Floor Plan</h2>
-          <div id="museum-map" class="museum-map" aria-hidden="true"></div>
-          <ul id="map-room-list" class="map-room-list" aria-label="Rooms"></ul>
+          <h2 id="guide-title">Museum Guide</h2>
+          <nav class="guide-tabs" role="tablist" aria-label="Museum Guide sections">
+            <button type="button" class="guide-tab" data-section="welcome" role="tab" aria-selected="true">Welcome</button>
+            <button type="button" class="guide-tab" data-section="floorplan" role="tab" aria-selected="false">Floor Plan</button>
+            <button type="button" class="guide-tab" data-section="explore" role="tab" aria-selected="false">How to Explore</button>
+            <button type="button" class="guide-tab" data-section="archive" role="tab" aria-selected="false">How the Archive Works</button>
+          </nav>
+
+          <div id="guide-panel-welcome" class="guide-panel" role="tabpanel">
+            <p>The Cursed Museum is a shared, living collection — every painting, bust, mirror and donated relic carries a record that changes as visitors remember it, challenge it, and vote on which version to believe.</p>
+            <p>Somewhere in this building, a story is always being rewritten. None of them can be fully trusted; that is the point.</p>
+            <button type="button" class="guide-begin">Begin exploring</button>
+          </div>
+
+          <div id="guide-panel-floorplan" class="guide-panel" role="tabpanel" hidden>
+            <div id="guide-floor-plan-mount"></div>
+          </div>
+
+          <div id="guide-panel-explore" class="guide-panel" role="tabpanel" hidden>
+            <ul class="guide-list">
+              <li>Drag, or use Left/Right, to look around a room.</li>
+              <li>Scroll, pinch, or +/- to zoom.</li>
+              <li>Hover or focus a glowing object to see what it is.</li>
+              <li>Click an object to open its archive dossier.</li>
+              <li>Other visitors appear as small coloured ghosts in the room.</li>
+              <li>The floor plan shows which room each visitor currently occupies.</li>
+            </ul>
+            <button type="button" class="guide-begin">Begin exploring</button>
+          </div>
+
+          <div id="guide-panel-archive" class="guide-panel" role="tabpanel" hidden>
+            <ul class="guide-list">
+              <li>Every collection object — built-in or donated — has an evolving record of accounts.</li>
+              <li>Visitors may add testimony, a contradiction, a revision, or counter-evidence.</li>
+              <li>Visitors vote an account Believable, Suspicious, or Definitely Cursed.</li>
+              <li>You may donate a new relic: choose its appearance, gallery, title and origin story.</li>
+              <li>Later visitors can discover your relic and keep expanding its legend.</li>
+            </ul>
+            <button type="button" class="guide-begin">Begin exploring</button>
+          </div>
         </div>
       </div>
 
@@ -174,16 +211,18 @@
           <label for="donate-gallery">Gallery</label>
           <select id="donate-gallery" name="galleryId" required></select>
 
-          <!-- Visual preset picker: a grid of real relic-appearance
-               thumbnails (see server/src/relic-presets.js), replacing the
-               plain subtype <select> as the primary way a donor chooses what
-               their relic looks like. "Classic" (no curated image for this
-               category/subtype yet) keeps the old subtype dropdown visible
-               underneath, which the legacy procedural renderer then draws. -->
+          <!-- Visual preset picker: all four curated relic-appearance
+               thumbnails (see server/src/relic-presets.js), always shown
+               together regardless of the selected gallery — picking one
+               drives the gallery/subtype choice (preset-first), rather than
+               being filtered down to a single match. No separate "Classic"
+               tile: changing the gallery directly reveals the subtype
+               select below as the plain fallback (the legacy procedural
+               renderer then draws that choice, with no curated image). -->
           <span class="donate-field-label" id="donate-visual-label">Relic appearance</span>
           <div id="donate-visual-grid" class="visual-preset-grid" role="radiogroup" aria-labelledby="donate-visual-label"></div>
 
-          <label for="donate-subtype" id="donate-subtype-label">Relic type</label>
+          <label for="donate-subtype" id="donate-subtype-label">Or choose a type without a curated image</label>
           <select id="donate-subtype" name="subtype" required></select>
 
           <label for="donate-title">Title</label>
@@ -244,9 +283,11 @@
       <div id="dossier" class="side-drawer dossier-drawer" hidden role="dialog" aria-labelledby="dossier-title">
         <button type="button" id="dossier-close" class="drawer-close" aria-label="Close dossier (Esc)">&times;</button>
         <div id="dossier-preview" class="receipt-preview"></div>
+        <p class="dossier-visual-note" id="dossier-visual-note"></p>
         <p class="dossier-kicker" id="dossier-kicker"></p>
         <h2 id="dossier-title"></h2>
         <p class="dossier-meta" id="dossier-meta"></p>
+        <button type="button" id="dossier-inspect-closer" class="dossier-inspect-closer" hidden>Inspect Closer</button>
         <div id="dossier-accounts" class="dossier-accounts"></div>
 
         <form id="account-form" class="account-form">
