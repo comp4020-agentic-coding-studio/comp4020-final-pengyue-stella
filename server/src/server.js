@@ -481,6 +481,13 @@ const server = createServer(async (req, res) => {
           yourPublicKey: myPublicKey,
           sceneCounts: sse.sceneCounts(),
           visitors: sse.visitorsInScene(initialSceneId),
+          // A full per-scene roster snapshot (not just this connection's own
+          // scene), so a freshly-(re)connected client's cache is complete
+          // enough to aggregate a gallery's main+closeup rosters into one
+          // "who else is in this room" list/count immediately — see
+          // sse.js's allSceneVisitors doc comment for why a partial cache
+          // would otherwise under-count the room.
+          sceneVisitors: sse.allSceneVisitors(),
         })}\n\n`,
       );
       // Announce this arrival to everyone else immediately, same reasoning

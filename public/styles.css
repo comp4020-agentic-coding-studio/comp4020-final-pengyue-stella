@@ -438,12 +438,33 @@ a {
 }
 
 /* --- visitor cameos -------------------------------------------------------*/
-/* A restrained Gothic GHOST per OTHER visitor sharing this scene, standing
-   at a server-defined `visitorAnchors` spot (with a small depth value for
-   parallax scale) — not an embodied 3D avatar, not free-roam movement; a
-   translucent, softly-glowing silhouette in a colour stable per public key
-   (so the same visitor always reads as the same ghost), drifting gently for
-   restrained idle motion, its name revealed only on hover/focus. */
+/* A full-body translucent Gothic apparition per OTHER visitor sharing this
+   scene, standing at a server-defined `visitorAnchors` spot (with a small
+   depth value for parallax scale) — not an embodied 3D avatar, not
+   free-roam movement; a head/shoulder/body silhouette built from layered
+   CSS gradients and clip-path (no image assets), fading toward the lower
+   body like a figure dissolving into mist, with a soft spectral glow in a
+   colour stable per public key (so the same visitor always reads as the
+   same ghost) — that colour + silhouette shape together are the
+   ALWAYS-visible identity cue; the name label itself only reveals on
+   hover/focus (a tiny monogram glyph would be redundant with the stable
+   hue + shape, so the always-visible cue stays purely the apparition
+   itself, same restrained-by-default intent as before). Floats gently for
+   restrained idle motion.
+   Visibility note: an earlier pass used `mix-blend-mode: screen` on the
+   whole shape, reasoning "screen only ever lightens, so it holds contrast
+   over a dark room." That reasoning only holds over a DARK background — a
+   screen blend washes out and nearly disappears over the busy, warm, often
+   quite BRIGHT scenes this museum actually has (verified visually: a
+   Playwright screenshot in The Forgotten Childhood, a warm red/gold room,
+   showed the apparition as barely a faint smudge). Fixed by keeping the
+   core shape's own fill fully opaque (normal blending, not screen) with a
+   near-white, high-contrast body and a dark contact-shadow rim via
+   `filter: drop-shadow(...)`, which holds contrast against ANY background
+   brightness because it's a real dark edge, not a lightening blend; the
+   per-visitor hue + the glow's `mix-blend-mode: screen` are layered OUTSIDE
+   that solid core purely as colour/light accents, never the sole source of
+   visibility. */
 .cameo {
   position: absolute;
   transform: translate(-50%, -100%) scale(var(--cameo-depth, 1));
@@ -451,55 +472,100 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
-  animation: cameo-idle 6s ease-in-out infinite;
+  gap: 0.25rem;
+  animation: cameo-float 7s ease-in-out infinite;
   animation-delay: var(--cameo-delay, 0s);
   pointer-events: auto;
   cursor: default;
   background: none;
   border: none;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
 }
 
+/* Two stacked layers build the apparition: `.cameo-silhouette` is the
+   head+shoulders (an ellipse, via border-radius), `::after` is the longer
+   draped body beneath it clipped to a soft robe-like polygon and faded
+   toward the hem with a mask gradient — together reading as a hooded
+   Victorian/Gothic figure rather than a plain blob. The core fill of each
+   is an OPAQUE near-white-to-hue gradient (normal blending) so the shape
+   itself holds contrast against any scene brightness; the per-visitor hue
+   shows strongest at the rim/glow, keeping "whose ghost is this" legible
+   without relying on a blend mode that only works over dark art. */
 .cameo-silhouette {
-  width: 2rem;
-  height: 3.6rem;
-  border-radius: 50% 50% 40% 40% / 65% 65% 35% 35%;
+  position: relative;
+  width: 3.1rem;
+  height: 2.3rem;
+  margin-bottom: -0.35rem;
+  border-radius: 50% 50% 45% 45% / 60% 60% 40% 40%;
   background: radial-gradient(
-    ellipse 90% 80% at 50% 30%,
-    color-mix(in srgb, var(--cameo-color, var(--gold)) 55%, white 10%) 0%,
-    color-mix(in srgb, var(--cameo-color, var(--gold)) 35%, transparent) 55%,
+    ellipse 85% 85% at 50% 32%,
+    color-mix(in srgb, white 70%, var(--cameo-color, var(--gold)) 30%) 0%,
+    color-mix(in srgb, var(--cameo-color, var(--gold)) 75%, white 10%) 55%,
+    color-mix(in srgb, var(--cameo-color, var(--gold)) 55%, transparent) 85%,
     transparent 100%
   );
-  opacity: 0.62;
-  border: 1px solid color-mix(in srgb, var(--cameo-color, var(--gold)) 70%, transparent);
-  box-shadow: 0 0 16px 2px color-mix(in srgb, var(--cameo-color, var(--gold)) 40%, transparent), 0 6px 10px rgba(0, 0, 0, 0.35);
-  filter: blur(0.3px);
+  opacity: 0.96;
+  border: 1.5px solid color-mix(in srgb, var(--cameo-color, var(--gold)) 85%, white 15%);
+  box-shadow:
+    0 0 10px 2px rgba(0, 0, 0, 0.5),
+    0 0 26px 6px color-mix(in srgb, var(--cameo-color, var(--gold)) 65%, transparent),
+    0 0 52px 14px color-mix(in srgb, var(--cameo-color, var(--gold)) 35%, transparent);
+  z-index: 1;
+}
+
+.cameo-silhouette::after {
+  content: "";
+  position: absolute;
+  top: 72%;
+  left: 50%;
+  width: 4.4rem;
+  height: 6.4rem;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, white 55%, var(--cameo-color, var(--gold)) 45%) 0%,
+    color-mix(in srgb, var(--cameo-color, var(--gold)) 70%, white 8%) 30%,
+    color-mix(in srgb, var(--cameo-color, var(--gold)) 50%, transparent) 65%,
+    transparent 95%
+  );
+  clip-path: polygon(30% 0%, 70% 0%, 94% 58%, 100% 100%, 0% 100%, 6% 58%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 96%);
+  mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 96%);
+  opacity: 0.88;
 }
 
 .cameo-name {
-  font-size: 0.66rem;
+  font-family: Georgia, "Cormorant Garamond", serif;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  font-size: 0.72rem;
   color: var(--parchment);
   background: rgba(17, 16, 15, 0.82);
-  padding: 0.08rem 0.4rem;
+  padding: 0.1rem 0.55rem;
   border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--cameo-color, var(--gold)) 60%, transparent);
   white-space: nowrap;
-  max-width: 7rem;
+  max-width: 8rem;
   overflow: hidden;
   text-overflow: ellipsis;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transform: translateY(2px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
   pointer-events: none;
+  position: relative;
+  z-index: 2;
 }
 
 .cameo:hover .cameo-name,
 .cameo:focus-visible .cameo-name,
 .cameo:focus-within .cameo-name {
   opacity: 1;
+  transform: translateY(0);
 }
 
-@keyframes cameo-idle {
+@keyframes cameo-float {
   0%, 100% { transform: translate(-50%, -100%) scale(var(--cameo-depth, 1)) translateY(0); }
-  50% { transform: translate(-50%, -100%) scale(var(--cameo-depth, 1)) translateY(-4px); }
+  50% { transform: translate(-50%, -100%) scale(var(--cameo-depth, 1)) translateY(-6px); }
 }
 
 /* A restrained activity ring pulsing around a cameo when that visitor just
@@ -510,15 +576,15 @@ a {
 }
 
 @keyframes cameo-activity {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cameo-color, var(--gold)) 70%, transparent); }
-  100% { box-shadow: 0 0 0 14px transparent; }
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cameo-color, var(--gold)) 80%, transparent); }
+  100% { box-shadow: 0 0 0 18px transparent; }
 }
 
 /* `.attending` — this visitor just focused an exhibit elsewhere in the
    scene: their silhouette tilts subtly "toward" what they're looking at and
    brightens, a quiet cue distinct from the stronger `.activity` pulse. */
 .cameo.attending .cameo-silhouette {
-  filter: brightness(1.25);
+  filter: brightness(1.3);
   transform: rotate(-4deg);
 }
 
@@ -526,6 +592,9 @@ a {
    ghost once more visitors share this scene than it has anchors for, so two
    ghosts never render stacked exactly on top of each other. */
 .cameo-overflow .cameo-silhouette {
+  display: none;
+}
+.cameo-overflow .cameo-silhouette::after {
   display: none;
 }
 

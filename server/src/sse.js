@@ -12,6 +12,36 @@
 // public key and display name — never the raw visitor cookie) and headcount,
 // restoring visible visitor cameos without ever reintroducing a position or
 // trajectory to relay.
+//
+// Root cause of the original "ghosts don't match between a gallery's main
+// and closeup view" bug: a gallery's `-main` and `-closeup` scenes are
+// different scene ids (world.js's buildGalleryScenes), and everything here
+// is (deliberately, see below) scoped by exact scene id. Two visitors
+// standing in what's conceptually the same room (one looking at the wide
+// shot, one zoomed into one painting) never shared an exact scene id, so a
+// naive "same room" check never matched them.
+//
+// Fix: `sceneCounts`/`visitorsInScene` stay exact-scene-scoped here — a
+// cameo's anchor placement genuinely needs the exact framing (main/closeup
+// have different `visitorAnchors` layouts; there's no principled spot to
+// stand a peer from the OTHER exact scene), and so does the focus broadcast
+// (server.js's `sceneIdForVisitor` + `broadcastToScene` — "which object"
+// only makes sense within the exact scene someone focused it in). The
+// headcount label and the always-visible visitor list, which DO need to
+// treat a gallery's main+closeup as one logical room (world.js's
+// `roomIdForScene`), are aggregated client-side instead (see app.js's own
+// `visitorsInRoom`/`currentRoomId`, mirroring the grouping
+// public/world/floor-plan.js already did for the floor plan) by combining
+// the exact-scene rosters this module already broadcasts for both scenes
+// of a room. That aggregation is only correct if every client's cache of
+// "who's in each scene" starts complete and stays complete — true here
+// because (a) `GET /api/events`'s `hello` now hydrates a fresh connection
+// with `allSceneVisitors()`, a full per-scene snapshot, not just the
+// connecting visitor's own scene, and (b) every subsequent `scene-presence`
+// broadcast already goes to every open connection unconditionally (see
+// `broadcast()` below — it never filters by the recipient's own scene), so
+// a client's cached roster for a scene it isn't currently in still gets
+// kept live.
 const clients = new Map(); // res -> { visitorId, sceneId, publicKey, displayName }
 
 export function addClient(res, visitorId, sceneId, publicKey, displayName) {
@@ -75,6 +105,23 @@ export function visitorsInScene(sceneId) {
     byKey.set(publicKey, { publicKey, displayName, visitorId });
   }
   return [...byKey.values()].map(({ publicKey, displayName }) => ({ publicKey, displayName }));
+}
+
+// Every scene currently holding a roster, in one snapshot — used only to
+// hydrate a freshly-(re)connected client's own per-scene cache (see
+// server.js's `hello` handler). Without this, a client's cache of "who's in
+// each scene" would start with only its own current scene populated; since
+// the client aggregates a gallery's main+closeup rosters into one room
+// count/list itself (app.js, mirroring the grouping
+// public/world/floor-plan.js already did), a blank cache for the scene it
+// *isn't* currently in would silently under-count its own room until some
+// unrelated broadcast happened to fill it in.
+export function allSceneVisitors() {
+  const bySceneId = {};
+  for (const sceneId of new Set([...clients.values()].map((c) => c.sceneId).filter(Boolean))) {
+    bySceneId[sceneId] = visitorsInScene(sceneId);
+  }
+  return bySceneId;
 }
 
 // The scene a visitor is currently tagged with (their most recent

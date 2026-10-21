@@ -1119,13 +1119,43 @@ window.addEventListener("resize", () => {
   cameoClampResizeTimer = setTimeout(clampCameosIntoViewport, 120);
 });
 
+// The "logical room" a scene belongs to for presence purposes — a
+// gallery's `-main` and `-closeup` scenes are the same physical room
+// (closeup is just a zoomed-in look at one painted object within it, not a
+// separate space), so the headcount and "who else is here" list treat them
+// as one room even though they're different exact scene ids. Mirrors
+// public/world/floor-plan.js's own roomIdForScene, reading the same
+// galleryId field /api/world already puts on every scene rather than
+// re-deriving it by regex. A cameo's own rendered anchor position stays
+// exact-scene-scoped (see renderCameos) — see server/src/sse.js's doc
+// comment for the full reasoning.
+function roomIdForScene(sceneId) {
+  const scene = world?.scenes.find((s) => s.id === sceneId);
+  return scene?.galleryId ?? sceneId;
+}
+
+// Every distinct visitor (deduped by publicKey, so a visitor open in two
+// tabs — even across the room's two exact scenes — counts once) currently
+// in any exact scene belonging to this room.
+function visitorsInRoom(roomId) {
+  const byKey = new Map();
+  for (const scene of world?.scenes ?? []) {
+    if (roomIdForScene(scene.id) !== roomId) continue;
+    for (const v of lastSceneVisitors[scene.id] ?? []) byKey.set(v.publicKey, v);
+  }
+  return [...byKey.values()];
+}
+
 // A small "who else is here" list, reachable without hovering every
 // silhouette individually — the brief's "or in a small visitor list"
-// alternative to hover-reveal.
+// alternative to hover-reveal. Room-scoped (see roomIdForScene/
+// visitorsInRoom above): a peer in this gallery's other exact scene (main
+// vs. closeup) still shows up here even though they don't get a rendered
+// ghost in this one (see renderCameos).
 function renderVisitorList() {
   const list = el("visitor-list");
   if (!list) return;
-  const visitors = (lastSceneVisitors[currentSceneId] ?? []).filter((v) => v.publicKey !== myPublicKey);
+  const visitors = visitorsInRoom(roomIdForScene(currentSceneId)).filter((v) => v.publicKey !== myPublicKey);
   list.innerHTML = "";
   if (visitors.length === 0) {
     list.hidden = true;
@@ -1152,10 +1182,21 @@ function connectEvents() {
 
   let firstHello = true;
   eventSource.addEventListener("hello", async (e) => {
-    const { sceneCounts, visitors, yourPublicKey } = JSON.parse(e.data);
+    const { sceneCounts, visitors, sceneVisitors, yourPublicKey } = JSON.parse(e.data);
     lastSceneCounts = sceneCounts ?? {};
     if (yourPublicKey) myPublicKey = yourPublicKey;
-    if (visitors) lastSceneVisitors = { ...lastSceneVisitors, [currentSceneId]: visitors };
+    // `sceneVisitors` is the full per-scene roster snapshot (every scene
+    // with at least one connection, not just this connection's own scene —
+    // see sse.js's allSceneVisitors) — a full REPLACE of the cache, not a
+    // merge, since a scene that has since emptied out is correctly absent
+    // from this snapshot and a stale merge would leave its old roster
+    // behind. Without this, the cache would otherwise start with only
+    // `currentSceneId` populated and under-count its own room whenever the
+    // OTHER exact scene of that room (main vs. closeup) already had
+    // visitors in it before this connection ever opened. Fall back to the
+    // old single-scene shape defensively (`visitors`) in case of a stale
+    // cached client mid-deploy.
+    lastSceneVisitors = sceneVisitors ?? { ...lastSceneVisitors, [currentSceneId]: visitors ?? [] };
     updatePresenceLabel();
     renderCameos();
     renderVisitorList();
@@ -1174,13 +1215,20 @@ function connectEvents() {
 
   eventSource.addEventListener("scene-presence", (e) => {
     const { sceneId, count, visitors } = JSON.parse(e.data);
-    const previous = lastSceneCounts[sceneId] ?? 0;
+    // Room-scoped comparison (not just the exact scene) — a visitor
+    // arriving in this gallery's OTHER exact scene (main vs. closeup) is
+    // still "another visitor entering this room" and must update this
+    // room's own headcount/list/toast, even though `sceneId` itself won't
+    // equal `currentSceneId`.
+    const sameRoom = roomIdForScene(sceneId) === roomIdForScene(currentSceneId);
+    const previousRoomCount = sameRoom ? roomCount(currentSceneId) : 0;
     lastSceneCounts = { ...lastSceneCounts, [sceneId]: count };
     if (visitors) lastSceneVisitors = { ...lastSceneVisitors, [sceneId]: visitors };
-    if (sceneId === currentSceneId) {
+    if (sameRoom) {
       // Restrained: only a genuine increase in this room's own headcount
       // gets a toast, not every scene's count everywhere.
-      if (count > previous && previous > 0) toast("Another visitor has entered this room.");
+      const newRoomCount = roomCount(currentSceneId);
+      if (newRoomCount > previousRoomCount && previousRoomCount > 0) toast("Another visitor has entered this room.");
       updatePresenceLabel();
       renderCameos();
       renderVisitorList();
@@ -1258,8 +1306,25 @@ function connectEvents() {
   };
 }
 
+// The room-total headcount, including yourself — the sum of every exact
+// scene belonging to this room (see roomIdForScene), since `lastSceneCounts`
+// is still keyed by exact scene id (sceneCounts()/scene-presence stay exact-
+// scene-scoped server-side — see sse.js). Falls back to 1 (just yourself)
+// before any count has arrived yet, matching the old per-scene behaviour.
+function roomCount(sceneId) {
+  const roomId = roomIdForScene(sceneId);
+  let total = 0;
+  let any = false;
+  for (const scene of world?.scenes ?? []) {
+    if (roomIdForScene(scene.id) !== roomId) continue;
+    if (scene.id in lastSceneCounts) any = true;
+    total += lastSceneCounts[scene.id] ?? 0;
+  }
+  return any ? total : 1;
+}
+
 function updatePresenceLabel() {
-  const n = lastSceneCounts[currentSceneId] ?? 1;
+  const n = roomCount(currentSceneId);
   presenceEl.textContent = n <= 1 ? "You are alone in this room" : `${n} visitors in this room`;
 }
 
