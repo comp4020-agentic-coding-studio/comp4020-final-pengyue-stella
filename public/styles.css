@@ -1508,11 +1508,14 @@ a {
   background: rgba(198, 161, 107, 0.12);
 }
 
-/* --- architectural floor plan -------------------------------------------- */
-/* A real top-down plan — rectangular room floor areas, corridors, door
-   openings — replacing the old compass node-and-connector diagram. Shared
-   by the Rooms shortcut and the Guide's own Floor Plan section (one
-   renderer, see public/world/floor-plan.js). */
+/* --- enchanted parchment map ---------------------------------------------- */
+/* An original, hand-traced "living map" of the museum on aged parchment —
+   ink-wobbled room outlines, stains, folds, a compass rose and crest, and
+   footstep/wax-seal markers instead of plain dots/diamonds. Deliberately
+   NOT a clean architectural blueprint and NOT a copy of any specific
+   copyrighted map — no borrowed names, crests or layouts. Shared by the
+   Rooms shortcut and the Guide's own Floor Plan section (one renderer, see
+   public/world/floor-plan.js). */
 .floor-plan-wrap {
   position: relative;
   width: 100%;
@@ -1524,18 +1527,76 @@ a {
   width: 100%;
   aspect-ratio: 1 / 1;
   display: block;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(136, 101, 61, 0.4), 0 6px 22px rgba(0, 0, 0, 0.45);
+}
+
+/* Parchment backdrop: base tone, fractal-noise grain, ink stains, fold
+   creases — all decorative, all beneath the real room/marker geometry. */
+.floor-plan-parchment-base {
+  fill: #cdb989;
+}
+
+.floor-plan-parchment-grain {
+  fill: #000;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.floor-plan-stain {
+  fill: var(--mahogany);
+  opacity: 0.16;
+  mix-blend-mode: multiply;
+}
+
+.floor-plan-fold {
+  stroke: #000;
+  stroke-opacity: 0.08;
+  stroke-width: 3;
+}
+
+.floor-plan-compass-star {
+  fill: var(--mahogany);
+  opacity: 0.55;
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+
+.floor-plan-compass-pin {
+  fill: var(--ink);
+}
+
+.floor-plan-compass-label {
+  fill: var(--ink);
+  font-size: 13px;
+  font-style: italic;
+  font-family: Georgia, "Cormorant Garamond", serif;
+}
+
+.floor-plan-crest-shield {
+  fill: none;
+  stroke: var(--mahogany);
+  stroke-width: 2;
+  opacity: 0.6;
+}
+
+.floor-plan-crest-flame {
+  fill: var(--brass);
+  opacity: 0.55;
 }
 
 .floor-plan-corridor {
-  fill: rgba(17, 16, 15, 0.9);
-  stroke: rgba(198, 161, 107, 0.35);
+  fill: rgba(43, 36, 28, 0.35);
+  stroke: var(--ink);
+  stroke-opacity: 0.4;
   stroke-width: 2;
 }
 
 .floor-plan-room-floor {
-  fill: var(--obsidian);
-  stroke: var(--brass);
-  stroke-width: 3;
+  fill: rgba(43, 36, 28, 0.22);
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
 }
 
 .floor-plan-room {
@@ -1545,48 +1606,84 @@ a {
 .floor-plan-room:hover .floor-plan-room-floor,
 .floor-plan-room:focus-visible .floor-plan-room-floor {
   stroke: var(--rose);
+  stroke-width: 3.5;
   outline: none;
 }
 
 .floor-plan-room.current .floor-plan-room-floor {
   stroke: var(--gold);
+  stroke-width: 3.5;
 }
 
+/* "You are here" cue — a hand-drawn ring of ink around the current room,
+   reinterpreting the old dashed gold ring for a parchment map. */
 .floor-plan-here-ring {
   fill: none;
   stroke: var(--gold);
   stroke-width: 2;
-  stroke-dasharray: 6 4;
+  stroke-dasharray: 5 5;
   pointer-events: none;
 }
 
 .floor-plan-room-label {
-  fill: var(--parchment);
+  fill: var(--ink);
   font-size: 15px;
+  font-style: italic;
   font-family: Georgia, "Cormorant Garamond", serif;
+  letter-spacing: 0.02em;
   pointer-events: none;
 }
 
 .floor-plan-here-label {
-  fill: var(--gold);
+  fill: var(--rose);
   font-size: 10px;
+  font-style: italic;
+  font-family: Georgia, "Cormorant Garamond", serif;
   pointer-events: none;
 }
 
-.floor-plan-visitor-dot {
-  stroke: rgba(10, 8, 6, 0.8);
-  stroke-width: 1;
+/* Visitor footprints — a small paired-oval "footstep" mark, deterministically
+   placed per publicKey, that fades/pulses in to suggest movement without
+   ever implying a continuous tracked position (see docs/adr/0003). */
+.floor-plan-footprint-mark {
+  stroke: rgba(10, 8, 6, 0.75);
+  stroke-width: 0.6;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: floor-plan-footstep 2.4s ease-in-out infinite;
+  animation-delay: var(--floor-plan-footprint-delay, 0s);
 }
 
-.floor-plan-relic-marker {
-  fill: var(--gold);
-  stroke: rgba(10, 8, 6, 0.8);
-  stroke-width: 1;
+.floor-plan-footprint-mark:nth-child(3) {
+  animation-delay: calc(var(--floor-plan-footprint-delay, 0s) + 0.5s);
+}
+
+@keyframes floor-plan-footstep {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+/* Donated-relic markers — a small pressed-wax-seal blotch, distinct from a
+   visitor's footprints at a glance. */
+.floor-plan-relic-blotch {
+  fill: var(--rose);
+  stroke: var(--ink);
+  stroke-width: 0.8;
+  opacity: 0.85;
+}
+
+.floor-plan-relic-seal-ring {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 0.9;
+  opacity: 0.9;
+  pointer-events: none;
 }
 
 .floor-plan-overflow {
-  fill: rgba(233, 221, 197, 0.85);
+  fill: var(--ink);
   font-size: 9px;
+  font-style: italic;
   pointer-events: none;
 }
 
@@ -1600,20 +1697,49 @@ a {
   margin-top: 0.3rem;
 }
 
-.floor-plan-legend-dot {
+.floor-plan-legend-footprint {
+  width: 0.7rem;
+  height: 0.5rem;
+  display: inline-block;
+  position: relative;
+}
+
+.floor-plan-legend-footprint::before,
+.floor-plan-legend-footprint::after {
+  content: "";
+  position: absolute;
+  width: 0.26rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: var(--gold);
+  top: 0.04rem;
+}
+
+.floor-plan-legend-footprint::before {
+  left: 0;
+  transform: rotate(-18deg);
+}
+
+.floor-plan-legend-footprint::after {
+  right: 0;
+  top: -0.06rem;
+  transform: rotate(18deg);
+}
+
+.floor-plan-legend-seal {
   width: 0.6rem;
   height: 0.6rem;
   border-radius: 50%;
-  background: var(--gold);
+  background: var(--rose);
+  box-shadow: inset 0 0 0 1.5px var(--gold);
   display: inline-block;
 }
 
-.floor-plan-legend-diamond {
-  width: 0.55rem;
-  height: 0.55rem;
-  background: var(--gold);
-  transform: rotate(45deg);
-  display: inline-block;
+@media (prefers-reduced-motion: reduce) {
+  .floor-plan-footprint-mark {
+    animation: none;
+    opacity: 0.85;
+  }
 }
 
 /* The accessible textual room list — present regardless of whether the
