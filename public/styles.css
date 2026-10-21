@@ -438,10 +438,11 @@ a {
 }
 
 /* --- visitor cameos -------------------------------------------------------*/
-/* A restrained Gothic silhouette per OTHER visitor sharing this scene,
-   standing at a server-defined `visitorAnchors` spot (with a small depth
-   value for parallax scale) — not an embodied 3D avatar, not free-roam
-   movement; a stable per-visitor silhouette that drifts slightly for
+/* A restrained Gothic GHOST per OTHER visitor sharing this scene, standing
+   at a server-defined `visitorAnchors` spot (with a small depth value for
+   parallax scale) — not an embodied 3D avatar, not free-roam movement; a
+   translucent, softly-glowing silhouette in a colour stable per public key
+   (so the same visitor always reads as the same ghost), drifting gently for
    restrained idle motion, its name revealed only on hover/focus. */
 .cameo {
   position: absolute;
@@ -451,7 +452,7 @@ a {
   flex-direction: column;
   align-items: center;
   gap: 0.2rem;
-  animation: cameo-idle 5s ease-in-out infinite;
+  animation: cameo-idle 6s ease-in-out infinite;
   animation-delay: var(--cameo-delay, 0s);
   pointer-events: auto;
   cursor: default;
@@ -460,12 +461,19 @@ a {
 }
 
 .cameo-silhouette {
-  width: 1.9rem;
-  height: 3.4rem;
-  border-radius: 50% 50% 35% 35% / 60% 60% 30% 30%;
-  background: linear-gradient(180deg, rgba(10, 8, 6, 0.95), rgba(10, 8, 6, 0.75));
-  border: 1px solid var(--cameo-color, var(--gold));
-  box-shadow: 0 0 10px 1px color-mix(in srgb, var(--cameo-color, var(--gold)) 45%, transparent), 0 6px 10px rgba(0, 0, 0, 0.5);
+  width: 2rem;
+  height: 3.6rem;
+  border-radius: 50% 50% 40% 40% / 65% 65% 35% 35%;
+  background: radial-gradient(
+    ellipse 90% 80% at 50% 30%,
+    color-mix(in srgb, var(--cameo-color, var(--gold)) 55%, white 10%) 0%,
+    color-mix(in srgb, var(--cameo-color, var(--gold)) 35%, transparent) 55%,
+    transparent 100%
+  );
+  opacity: 0.62;
+  border: 1px solid color-mix(in srgb, var(--cameo-color, var(--gold)) 70%, transparent);
+  box-shadow: 0 0 16px 2px color-mix(in srgb, var(--cameo-color, var(--gold)) 40%, transparent), 0 6px 10px rgba(0, 0, 0, 0.35);
+  filter: blur(0.3px);
 }
 
 .cameo-name {
@@ -512,6 +520,28 @@ a {
 .cameo.attending .cameo-silhouette {
   filter: brightness(1.25);
   transform: rotate(-4deg);
+}
+
+/* The grouped overflow chip — shown on the last anchor instead of a real
+   ghost once more visitors share this scene than it has anchors for, so two
+   ghosts never render stacked exactly on top of each other. */
+.cameo-overflow .cameo-silhouette {
+  display: none;
+}
+
+.cameo-overflow-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: rgba(26, 20, 16, 0.85);
+  border: 1px solid var(--gold);
+  color: var(--parchment);
+  font-size: 0.68rem;
+  font-weight: 600;
+  box-shadow: 0 0 10px 1px rgba(198, 161, 107, 0.4);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1471,6 +1501,99 @@ a {
   }
 }
 
+/* --- entrance-hall onboarding ----------------------------------------------
+   A short first-visit guided intro: a small card that points at a real
+   control or object rather than a full-screen gate or a giant speech
+   bubble covering the artwork's centre. The overlay itself has no
+   background (never blocks the scene); only the compact card beneath the
+   pointed-at control/object is visible. */
+.onboarding-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.onboarding-overlay:not([hidden]) {
+  display: block;
+}
+
+.onboarding-card {
+  position: absolute;
+  left: var(--onboarding-x, 50%);
+  top: var(--onboarding-y, 50%);
+  transform: translate(-50%, 0);
+  width: min(280px, calc(100vw - 2rem));
+  background: linear-gradient(160deg, rgba(26, 20, 16, 0.97), rgba(17, 13, 10, 0.98));
+  color: var(--parchment);
+  border: 1px solid rgba(198, 161, 107, 0.5);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+}
+
+/* No anchor control for this step (e.g. "drag to look around") — the card
+   centres itself in the viewport instead of pointing at anything specific. */
+.onboarding-overlay.onboarding-centered .onboarding-card {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.onboarding-card p {
+  margin: 0 0 0.6rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.onboarding-card .gate-actions {
+  margin: 0;
+}
+
+/* The control or object the current tour step is describing — a soft gold
+   ring, the same visual language as the map's "current room" highlight,
+   never covering the thing itself. */
+.tour-highlight {
+  outline: none;
+}
+
+.persistent-action.tour-highlight,
+.sound-toggle.tour-highlight {
+  box-shadow: 0 0 0 3px rgba(198, 161, 107, 0.6), 0 0 16px 2px rgba(198, 161, 107, 0.5);
+  border-radius: 999px;
+}
+
+.interactive-object.tour-highlight .object-clip-art {
+  opacity: 1;
+  animation: object-pulse 1.4s ease-in-out infinite;
+}
+
+/* A subtle invitation to discover a clickable object, shown only after the
+   tour ends and only until the visitor opens their first real object —
+   removed for good at that point (app.js's markDiscoveredAnObject). */
+.interactive-object.ambient-shimmer .object-clip-art {
+  opacity: 0.22;
+  animation: ambient-shimmer 3.2s ease-in-out infinite;
+}
+
+@keyframes ambient-shimmer {
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interactive-object.tour-highlight .object-clip-art,
+  .interactive-object.ambient-shimmer .object-clip-art {
+    animation: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .onboarding-card {
+    width: calc(100vw - 2rem);
+  }
+}
 
 .gate-error {
   min-height: 1.1em;

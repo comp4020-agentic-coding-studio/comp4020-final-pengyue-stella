@@ -723,10 +723,187 @@ el("name-form").addEventListener("submit", async (e) => {
     markNamed();
     el("name-gate").hidden = true;
     updateWhoami();
-    viewport.focus();
+    if (!hasTouredBefore()) {
+      startTour();
+    } else {
+      viewport.focus();
+    }
   } catch (err) {
     console.error(err);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Entrance Hall onboarding: a short first-visit guided intro, run once after
+// the name gate (localStorage-gated, same per-viewer-convenience pattern as
+// `hasNamedBefore`/`markNamed` above), replayable later via the topbar "?"
+// button. Each step points at a real control or a real in-room object
+// rather than a generic product-tour overlay covering the artwork's centre —
+// a small card anchored near the thing it describes, never a modal blocking
+// the whole scene.
+const TOUR_STORAGE_KEY = "cursedMuseumToured";
+const TOUR_SHIMMER_KEY = "cursedMuseumDiscoveredObject";
+
+function hasTouredBefore() {
+  try {
+    return localStorage.getItem(TOUR_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function markToured() {
+  try {
+    localStorage.setItem(TOUR_STORAGE_KEY, "1");
+  } catch {
+    // Private browsing / blocked storage: the tour just replays next visit.
+  }
+}
+function hasDiscoveredAnObject() {
+  try {
+    return localStorage.getItem(TOUR_SHIMMER_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function markDiscoveredAnObject() {
+  try {
+    localStorage.setItem(TOUR_SHIMMER_KEY, "1");
+  } catch {
+    // Same per-viewer convenience — fine if it never sticks.
+  }
+}
+
+// Each step names an anchor element id (for the card's own position, via
+// `anchorEl`) or null to centre the card without pointing at anything, plus
+// which real control/object it highlights with a soft outline while active.
+function tourSteps() {
+  return [
+    {
+      text: "Drag to look around; scroll or pinch to move closer.",
+      anchorEl: null,
+      highlightEl: null,
+    },
+    {
+      text: "Objects that answer the light can be examined.",
+      anchorEl: null,
+      highlightObjectId: tourHighlightObjectId(),
+    },
+    {
+      text: "Use the map to visit another collection and see where other visitors are.",
+      anchorEl: "open-rooms",
+      highlightEl: "open-rooms",
+    },
+    {
+      text: "Leave a relic and story, or inspect the museum record.",
+      anchorEl: "open-donate",
+      highlightEl: "open-donate",
+    },
+  ];
+}
+
+// Picks a real lore object in the current (Entrance Hall) scene to light up
+// for step 2 — never an arbitrary element, always one of the scene's own
+// traced interactive objects.
+function tourHighlightObjectId() {
+  const scene = illustrator?.currentScene();
+  const candidate = scene?.interactiveObjects?.find((o) => o.type === "lore");
+  return candidate ? `object:${candidate.id}` : null;
+}
+
+let tourStepIndex = 0;
+let tourHighlightedNode = null;
+
+function clearTourHighlight() {
+  if (tourHighlightedNode) {
+    tourHighlightedNode.classList.remove("tour-highlight");
+    tourHighlightedNode = null;
+  }
+}
+
+function positionOnboardingCard(anchorElId) {
+  const card = el("onboarding-card");
+  const overlay = el("onboarding");
+  overlay.classList.toggle("onboarding-centered", !anchorElId);
+  if (!anchorElId) {
+    card.style.removeProperty("--onboarding-x");
+    card.style.removeProperty("--onboarding-y");
+    return;
+  }
+  const anchor = el(anchorElId);
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  const margin = 16;
+  // Measure the card's actual rendered width rather than assuming the
+  // un-clamped 280px — the mobile media query widens it to fill the
+  // viewport, and clamping against a stale estimate let the card (and its
+  // Next/Skip buttons) spill past the right edge there.
+  card.style.removeProperty("--onboarding-x");
+  const cardWidth = card.getBoundingClientRect().width || Math.min(280, window.innerWidth - margin * 2);
+  const estimatedCardHeight = card.getBoundingClientRect().height || 120;
+  const x = Math.min(Math.max(rect.left + rect.width / 2, margin + cardWidth / 2), window.innerWidth - margin - cardWidth / 2);
+  const y = Math.min(rect.bottom + 10, window.innerHeight - margin - estimatedCardHeight);
+  card.style.setProperty("--onboarding-x", `${x}px`);
+  card.style.setProperty("--onboarding-y", `${y}px`);
+}
+
+function renderTourStep() {
+  const steps = tourSteps();
+  const step = steps[tourStepIndex];
+  if (!step) {
+    endTour();
+    return;
+  }
+  clearTourHighlight();
+
+  if (step.highlightEl) {
+    const node = el(step.highlightEl);
+    if (node) {
+      node.classList.add("tour-highlight");
+      tourHighlightedNode = node;
+    }
+  } else if (step.highlightObjectId) {
+    const { objectLayer } = illustrator.activeLayers();
+    const node = objectLayer?.querySelector(`[data-object-id="${step.highlightObjectId}"]`);
+    if (node) {
+      node.classList.add("tour-highlight");
+      tourHighlightedNode = node;
+    }
+  }
+
+  el("onboarding-text").textContent = step.text;
+  el("onboarding-next").textContent = tourStepIndex === steps.length - 1 ? "Done" : "Next";
+  positionOnboardingCard(step.anchorEl);
+}
+
+function startTour() {
+  if (!illustrator || illustrator.currentScene().id !== "hall") return;
+  tourStepIndex = 0;
+  el("onboarding").hidden = false;
+  renderTourStep();
+}
+
+function advanceTour() {
+  tourStepIndex += 1;
+  if (tourStepIndex >= tourSteps().length) {
+    endTour();
+  } else {
+    renderTourStep();
+  }
+}
+
+function endTour() {
+  clearTourHighlight();
+  el("onboarding").hidden = true;
+  markToured();
+  refreshInteractiveObjects();
+  viewport.focus();
+}
+
+el("onboarding-next").addEventListener("click", advanceTour);
+el("onboarding-skip").addEventListener("click", endTour);
+el("replay-tour").addEventListener("click", () => {
+  if (anyOverlayOpen() || placement) return;
+  goToSceneThen("hall", startTour);
 });
 
 // ---------------------------------------------------------------------------
@@ -757,16 +934,12 @@ let recentActivityByKey = new Map(); // publicKey -> timestamp, for the activity
 let recentFocusByKey = new Map(); // publicKey -> objectId, for "their silhouette turns toward what they're looking at"
 
 // Deterministically distributes however many OTHER visitors are in this
-// scene across its fixed anchors, one each, by sorting on each visitor's
-// own hashed key rather than arrival order — so which anchor a given
-// visitor lands on is stable for them across re-renders, and two visitors
-// never collide on the same anchor as long as there are enough anchors
-// (CLAUDE.md: "prevent overlap").
-function assignAnchors(visitors, anchors) {
-  const sorted = [...visitors].sort((a, b) => hashKey(a.publicKey) - hashKey(b.publicKey));
-  return sorted.map((v, i) => ({ visitor: v, anchor: anchors[i % anchors.length] }));
-}
-
+// scene across its fixed anchors by sorting on each visitor's own hashed
+// key rather than arrival order — so which anchor a given visitor lands on
+// is stable for them across re-renders. When there are more visitors than
+// anchors, the last anchor becomes a small "+N" grouped-count chip instead
+// of letting two ghosts stack exactly on top of one another (CLAUDE.md:
+// "prevent overlap").
 function renderCameos() {
   const { cameoLayer } = illustrator.activeLayers();
   if (!cameoLayer) return;
@@ -774,9 +947,16 @@ function renderCameos() {
   const scene = illustrator.currentScene();
   const anchors = scene.visitorAnchors ?? [];
   const visitors = (lastSceneVisitors[currentSceneId] ?? []).filter((v) => v.publicKey !== myPublicKey);
-  if (anchors.length === 0) return;
+  if (anchors.length === 0 || visitors.length === 0) return;
 
-  for (const { visitor, anchor } of assignAnchors(visitors, anchors)) {
+  const sorted = [...visitors].sort((a, b) => hashKey(a.publicKey) - hashKey(b.publicKey));
+  const overflow = sorted.length > anchors.length;
+  const shownCount = overflow ? Math.max(0, anchors.length - 1) : sorted.length;
+  const shown = sorted.slice(0, shownCount);
+  const hiddenCount = sorted.length - shown.length;
+
+  shown.forEach((visitor, i) => {
+    const anchor = anchors[i];
     const cameo = document.createElement("div");
     cameo.className = "cameo";
     cameo.dataset.publicKey = visitor.publicKey;
@@ -806,6 +986,23 @@ function renderCameos() {
     cameo.appendChild(name);
 
     cameoLayer.appendChild(cameo);
+  });
+
+  if (overflow && hiddenCount > 0) {
+    const anchor = anchors[anchors.length - 1];
+    const chip = document.createElement("div");
+    chip.className = "cameo cameo-overflow";
+    chip.style.left = `${anchor.x}%`;
+    chip.style.top = `${anchor.y}%`;
+    chip.style.setProperty("--cameo-depth", String(anchor.depth ?? 1));
+    chip.tabIndex = 0;
+    chip.setAttribute("role", "img");
+    chip.setAttribute("aria-label", `${hiddenCount} more visitor${hiddenCount === 1 ? "" : "s"} here`);
+    const badge = document.createElement("span");
+    badge.className = "cameo-overflow-badge";
+    badge.textContent = `+${hiddenCount}`;
+    chip.appendChild(badge);
+    cameoLayer.appendChild(chip);
   }
 }
 
@@ -999,7 +1196,8 @@ function anyOverlayOpen() {
     !el("donate-receipt").hidden ||
     !el("archive-gate").hidden ||
     !el("name-gate").hidden ||
-    !el("rooms-menu").hidden
+    !el("rooms-menu").hidden ||
+    !el("onboarding").hidden
   );
 }
 
@@ -1023,6 +1221,12 @@ function setFocusedObject(objectId) {
 
 function handleObjectActivate(object) {
   if (anyOverlayOpen() || illustrator.isTransitioning || placement) return;
+  if (!hasDiscoveredAnObject()) {
+    markDiscoveredAnObject();
+    for (const node of illustrator.activeLayers().objectLayer?.querySelectorAll(".ambient-shimmer") ?? []) {
+      node.classList.remove("ambient-shimmer");
+    }
+  }
   if (object.type === "donate") {
     openDonateGate();
     return;
@@ -1231,7 +1435,19 @@ function buildObjectGlow(object, scene) {
   const labelNode = svgLabelFor(object.shape, object.label);
   node.appendChild(labelNode);
 
+  // After the tour (but before the visitor has ever opened a single real
+  // object), a subtle ambient shimmer invites discovery — removed for good
+  // the first time any object is activated (markDiscoveredAnObject), and
+  // skipped entirely under reduced-motion.
+  if (hasTouredBefore() && !hasDiscoveredAnObject() && !prefersReducedMotion()) {
+    node.classList.add("ambient-shimmer");
+  }
+
   return node;
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 
 // A real, persisted exhibit — rendered as its own illuminated silhouette at
@@ -1747,6 +1963,7 @@ window.addEventListener("keydown", (e) => {
     else if (!el("donate-receipt").hidden) closeReceipt();
     else if (!el("archive-gate").hidden) closeArchive();
     else if (!el("rooms-menu").hidden) closeRoomsMenu();
+    else if (!el("onboarding").hidden) endTour();
     else if (!el("lore-drawer").hidden) closeLoreCard();
     else illustrator.back();
     return;

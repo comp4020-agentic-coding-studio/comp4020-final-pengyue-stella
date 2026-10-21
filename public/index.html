@@ -74,9 +74,26 @@
             aria-label="Ambient sound is off. Click to turn on.">
             <span aria-hidden="true">&#128263;</span>
           </button>
+          <button type="button" id="replay-tour" class="sound-toggle" aria-label="Replay the introduction tour">
+            <span aria-hidden="true">?</span>
+          </button>
           <a class="about-link" href="/readme/">What is this?</a>
         </div>
       </header>
+
+      <!-- First-visit guided intro: a short sequence of cards that each point
+           at a real control or object rather than covering the artwork's
+           centre, auto-run once (localStorage-gated) after the name gate,
+           replayable later via the "?" topbar button. -->
+      <div id="onboarding" class="onboarding-overlay" hidden role="dialog" aria-labelledby="onboarding-text">
+        <div id="onboarding-card" class="onboarding-card">
+          <p id="onboarding-text"></p>
+          <div class="gate-actions">
+            <button type="button" id="onboarding-skip" class="secondary">Skip</button>
+            <button type="button" id="onboarding-next">Next</button>
+          </div>
+        </div>
+      </div>
 
       <!-- A small "Rooms" menu as an alternative way to reach any gallery
            directly, without turning through the hub one facing at a time. -->
