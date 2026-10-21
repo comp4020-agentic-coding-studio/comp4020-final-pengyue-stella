@@ -13,11 +13,19 @@ const baseUrl = inject("baseUrl");
 const url = (path: string): URL => new URL(path, baseUrl);
 
 describe("legacy visual backfill", () => {
-  it("every non-builtin exhibit has a non-null visualId after the startup backfill", async () => {
+  // The backfill only ever runs once, at server startup, against whatever
+  // exhibits existed at that moment — a freshly donated exhibit AFTER
+  // startup that explicitly skips the preset picker legitimately keeps
+  // visualId null forever (that's the "Classic"/no-curated-image path,
+  // covered by spec/relic-presets.test.ts's own "no visual at all" case),
+  // so this only asserts the backfill reached every exhibit that predates
+  // it — the Founding Collection seed, identified by its own fixed id
+  // pattern, same anchor spec/relic-presets.test.ts already uses.
+  it("every exhibit present at startup (the Founding Collection) has a non-null visualId after the backfill", async () => {
     const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
-    const nonBuiltin = exhibits.filter((e: { origin: string }) => e.origin !== "builtin");
-    expect(nonBuiltin.length).toBeGreaterThan(0);
-    for (const exhibit of nonBuiltin) {
+    const seededAtStartup = exhibits.filter((e: { id: string }) => e.id.startsWith("exhibit_founding_"));
+    expect(seededAtStartup.length).toBeGreaterThan(0);
+    for (const exhibit of seededAtStartup) {
       expect(exhibit.visualId, `exhibit ${exhibit.id} should have a non-null visualId`).not.toBeNull();
     }
   });
