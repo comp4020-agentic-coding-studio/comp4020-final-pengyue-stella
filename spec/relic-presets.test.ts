@@ -178,27 +178,80 @@ describe("the curated donated-relic visual catalog", () => {
   });
 
   it("donating with no visualId at all still succeeds, with visualId null in the response (the legacy-fallback path)", async () => {
-    const { gallery, slot, surface, u, v } = await freeSpotFor("specimen", "shelf");
-    const res = await donate({
-      galleryId: gallery.id,
-      slotId: slot.id,
-      surfaceId: surface.id,
-      u,
-      v,
-      subtype: surface.allowedRelicTypes[0],
-      title: "no visual at all",
-      originClaim: "x",
-      donorName: "Spec Visitor",
-    });
-    expect(res.status).toBe(201);
-    const { exhibit } = await res.json();
+    // Other spec files donate concurrently into the same small fixed slot
+    // pool — retry against a freshly re-queried free spot on a 409, same
+    // discipline the preset-donation test above already applies.
+    let res: Response | undefined;
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { gallery, slot, surface, u, v } = await freeSpotFor("specimen", "shelf");
+      res = await donate({
+        galleryId: gallery.id,
+        slotId: slot.id,
+        surfaceId: surface.id,
+        u,
+        v,
+        subtype: surface.allowedRelicTypes[0],
+        title: `no visual at all ${Date.now()}-${attempt}`,
+        originClaim: "x",
+        donorName: "Spec Visitor",
+      });
+      lastStatus = res.status;
+      if (res.status !== 409) break;
+    }
+    expect(lastStatus).toBe(201);
+    const { exhibit } = await res!.json();
     expect(exhibit.visualId).toBeNull();
   });
 
-  it("a pre-existing (seeded Founding Collection) exhibit has visualId null, never undefined or a crash", async () => {
+  // A seeded Founding Collection exhibit predates the preset catalog the
+  // same way a legacy donation would, so the startup backfill
+  // (server/src/db.js's backfillLegacyVisualIds) assigns it a category-
+  // matched curated visual rather than leaving it null forever — flagged
+  // explicitly as `visualIdBackfilled` so the dossier can disclose it's an
+  // archival stand-in, not the donor's own choice.
+  it("a pre-existing (seeded Founding Collection) exhibit gets a backfilled visualId, flagged as such", async () => {
     const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
     const founding = exhibits.find((e: { id: string }) => e.id.startsWith("exhibit_founding_"));
     expect(founding).toBeTruthy();
-    expect(founding.visualId).toBeNull();
+    expect(founding.visualId).toBeTypeOf("string");
+    expect(founding.visualIdBackfilled).toBe(true);
+  });
+
+  // Each of the 4 curated presets maps to exactly one category/gallery —
+  // looping all of them (not just one hard-coded "memento" case) proves the
+  // server's own donation validation isn't accidentally restricted to a
+  // single category the way the old CLIENT-side picker bug was.
+  it("accepts a donation using any of the four presets' own declared category/subtype/surface combo", async () => {
+    const { presets } = await (await fetch(url("/api/relic-presets"))).json();
+    for (const preset of presets) {
+      const galleries = (await (await fetch(url("/api/world"))).json()).galleries;
+      const gallery = galleries.find((g: { category: string }) => g.category === preset.category);
+      expect(gallery, `no gallery for preset category ${preset.category}`).toBeTruthy();
+      const surfaceType = preset.compatibleSurfaceTypes[0];
+
+      let res: Response | undefined;
+      let lastStatus = 0;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const { gallery: g, slot, surface, u, v } = await freeSpotFor(gallery.id, surfaceType);
+        res = await donate({
+          galleryId: g.id,
+          slotId: slot.id,
+          surfaceId: surface.id,
+          u,
+          v,
+          subtype: preset.subtype,
+          title: `all-presets test ${preset.id} ${Date.now()}-${attempt}`,
+          originClaim: "x",
+          donorName: "Spec Visitor",
+          visualId: preset.id,
+        });
+        lastStatus = res.status;
+        if (res.status !== 409) break;
+      }
+      expect(lastStatus, `preset ${preset.id} should donate successfully`).toBe(201);
+      const { exhibit } = await res!.json();
+      expect(exhibit.visualId).toBe(preset.id);
+    }
   });
 });
