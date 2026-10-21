@@ -92,7 +92,22 @@
         </button>
       </div>
 
-      <div id="rooms-menu" class="rooms-menu" hidden role="menu" aria-label="Jump to a room"></div>
+      <!-- The live museum map: replaces the plain Rooms dropdown with a
+           compact illustrated floor plan (Entrance Hall as the central hub,
+           the four galleries connected around it), each room node showing a
+           live visitor-count badge and small donated-relic markers. An
+           accessible textual room list (#map-room-list) stays available
+           alongside the visual map, so every room is reachable and
+           announced even without perceiving the graphic layout. -->
+      <div id="rooms-menu" class="overlay-gate" hidden>
+        <div class="gate-card map-card" role="dialog" aria-labelledby="map-title">
+          <button type="button" id="map-close" class="dossier-close" aria-label="Close map">&times;</button>
+          <p class="dossier-kicker">The Collection</p>
+          <h2 id="map-title">Museum Floor Plan</h2>
+          <div id="museum-map" class="museum-map" aria-hidden="true"></div>
+          <ul id="map-room-list" class="map-room-list" aria-label="Rooms"></ul>
+        </div>
+      </div>
 
       <footer class="bottom-bar">
         <p class="hint" id="control-hint">

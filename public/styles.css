@@ -815,46 +815,6 @@ a {
   background: rgba(102, 61, 67, 0.75);
 }
 
-/* `display` set only when NOT hidden — see CLAUDE.md's "a dedupe/seen-set
-   is scoped to one concern" sibling lesson for overlay chrome: a plain
-   `.rooms-menu { display: flex }` would outrank the `hidden` attribute. */
-.rooms-menu:not([hidden]) {
-  display: flex;
-}
-
-.rooms-menu {
-  position: absolute;
-  top: calc(5.0rem + env(safe-area-inset-top, 0px));
-  right: 1.1rem;
-  z-index: 7;
-  flex-direction: column;
-  gap: 0.2rem;
-  background: var(--parchment);
-  border: 2px solid var(--brass);
-  border-radius: 10px;
-  padding: 0.5rem;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
-  min-width: 11rem;
-}
-
-.rooms-menu-item {
-  font: inherit;
-  font-size: 0.86rem;
-  text-align: left;
-  padding: 0.45rem 0.6rem;
-  border-radius: 6px;
-  border: none;
-  background: none;
-  color: var(--ink);
-  cursor: pointer;
-}
-
-.rooms-menu-item:hover,
-.rooms-menu-item:focus-visible {
-  background: rgba(198, 161, 107, 0.25);
-  outline: none;
-}
-
 /* --- donation placement mode ----------------------------------------------*/
 .placement-banner,
 .placement-confirm {
@@ -1304,6 +1264,213 @@ a {
 .archive-card .archive-exhibit-row:focus-visible {
   background: rgba(198, 161, 107, 0.1);
 }
+
+/* --- live museum map --------------------------------------------------- */
+/* Replaces the old plain Rooms dropdown: a compact illustrated floor plan,
+   Entrance Hall as the central hub with the four galleries connected around
+   it, Gothic architectural lines on a dark parchment field, restrained
+   burgundy/brass accents — the same dark-panel family as `.archive-card`,
+   never a bare <ul> of links as the PRIMARY presentation (the accessible
+   text list still exists alongside it, see `.map-room-list`). */
+.map-card {
+  width: min(560px, 100%);
+  background: linear-gradient(160deg, rgba(26, 20, 16, 0.97), rgba(17, 13, 10, 0.98));
+  color: var(--parchment);
+  border: 1px solid rgba(198, 161, 107, 0.45);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(198, 161, 107, 0.12);
+}
+
+.map-card .dossier-kicker,
+.map-card h2 {
+  color: var(--gold);
+}
+
+.map-card h2 {
+  font-family: Georgia, "Cormorant Garamond", serif;
+}
+
+.museum-map {
+  position: relative;
+  width: 100%;
+  max-width: min(360px, 50vh);
+  aspect-ratio: 1 / 1;
+  margin: 0.6rem auto 0.8rem;
+  border: 1px solid rgba(198, 161, 107, 0.3);
+  border-radius: 10px;
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(198, 161, 107, 0.08) 0%, transparent 60%),
+    repeating-linear-gradient(0deg, rgba(198, 161, 107, 0.05) 0, rgba(198, 161, 107, 0.05) 1px, transparent 1px, transparent 40px),
+    repeating-linear-gradient(90deg, rgba(198, 161, 107, 0.05) 0, rgba(198, 161, 107, 0.05) 1px, transparent 1px, transparent 40px);
+}
+
+/* A straight connector line from the hub's own centre to each gallery node,
+   drawn with a CSS gradient along a rotated/scaled pseudo-element rather
+   than SVG — "represents rooms, connections... never exact walking
+   coordinates," so a plain straight line is honest about what it shows. */
+.map-connector {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(198, 161, 107, 0.5), rgba(198, 161, 107, 0.15));
+  transform-origin: left center;
+  /* length (%) and rotation (deg) are computed in JS (renderMuseumMap) and
+     set as inline --map-connector-length/--map-connector-angle custom
+     properties — simpler and more reliably supported than chaining CSS
+     sqrt()/atan2() math functions across mixed percentage units. */
+  width: var(--map-connector-length, 0%);
+  transform: rotate(var(--map-connector-angle, 0deg));
+  pointer-events: none;
+}
+
+.map-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.5rem 0.6rem;
+  min-width: 4.2rem;
+  max-width: 6rem;
+  border: 2px solid var(--brass);
+  border-radius: 8px;
+  background: rgba(26, 20, 16, 0.92);
+  color: var(--parchment);
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+.map-node-hub {
+  min-width: 5.2rem;
+  border-color: var(--gold);
+  background: rgba(40, 28, 16, 0.95);
+}
+
+.map-node:hover,
+.map-node:focus-visible {
+  outline: none;
+  border-color: var(--rose);
+  box-shadow: 0 0 0 3px rgba(198, 95, 110, 0.35), 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* The visitor's current room — a clear, calm highlight (a gold ring), never
+   relying on colour alone (the label also gets a small "(here)" via the
+   aria-label, read by assistive tech even though it isn't drawn visually
+   over the already-compact node). */
+.map-node.current {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(198, 161, 107, 0.55), 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+.map-node-label {
+  font-size: 0.72rem;
+  line-height: 1.15;
+}
+
+.map-node-badge {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  min-width: 1.3rem;
+  height: 1.3rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--rose);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.map-node-relics {
+  display: flex;
+  gap: 0.18rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 4rem;
+}
+
+.map-relic-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+.map-relic-more {
+  width: auto;
+  height: auto;
+  border-radius: 999px;
+  background: none;
+  color: rgba(233, 221, 197, 0.75);
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
+/* The accessible textual room list — present regardless of whether the
+   visual map is perceived, each a real focusable list item button, exactly
+   the keyboard-navigable "room list" the brief requires alongside the map. */
+.map-room-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border-top: 1px solid rgba(198, 161, 107, 0.25);
+  padding-top: 0.5rem;
+}
+
+.map-room-list-item {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--parchment);
+  cursor: pointer;
+}
+
+.map-room-list-item:hover,
+.map-room-list-item:focus-visible {
+  background: rgba(198, 161, 107, 0.14);
+  outline: none;
+}
+
+.map-room-list-item.current {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  .map-card {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+  }
+  .museum-map {
+    max-height: 300px;
+  }
+  .map-node {
+    min-width: 3.4rem;
+    max-width: 4.6rem;
+    padding: 0.4rem 0.4rem;
+  }
+  .map-node-label {
+    font-size: 0.64rem;
+  }
+}
+
 
 .gate-error {
   min-height: 1.1em;

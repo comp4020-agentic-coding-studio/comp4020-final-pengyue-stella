@@ -875,6 +875,7 @@ function connectEvents() {
       renderCameos();
       renderVisitorList();
     }
+    refreshMapIfOpen();
   });
 
   eventSource.addEventListener("presence-left", () => {
@@ -889,6 +890,7 @@ function connectEvents() {
     refreshInteractiveObjects();
     const gallery = world.galleries.find((g) => g.id === exhibit.galleryId);
     toast(`${exhibit.donorName} donated "${exhibit.title}" to ${gallery?.name ?? exhibit.galleryId}.`);
+    refreshMapIfOpen();
   });
 
   eventSource.addEventListener("account", (e) => {
@@ -1531,36 +1533,171 @@ function renderCornerNav(scene) {
 }
 
 // ---------------------------------------------------------------------------
-// Rooms menu: an alternative way to reach any gallery directly without
-// turning through the hub one facing at a time.
-function renderRoomsMenu() {
-  const menu = el("rooms-menu");
-  menu.innerHTML = "";
-  for (const gallery of world.galleries) {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "rooms-menu-item";
-    item.role = "menuitem";
-    item.textContent = gallery.name;
-    item.addEventListener("click", () => {
-      closeRoomsMenu();
-      illustrator.goToScene(`${gallery.id}-main`, { direction: "forward" });
-    });
-    menu.appendChild(item);
-  }
-  const hubItem = document.createElement("button");
-  hubItem.type = "button";
-  hubItem.className = "rooms-menu-item";
-  hubItem.role = "menuitem";
-  hubItem.textContent = "Entrance Hall";
-  hubItem.addEventListener("click", () => {
-    closeRoomsMenu();
-    illustrator.goToScene("hall", { direction: "back" });
-  });
-  menu.appendChild(hubItem);
+// Live museum map: replaces the plain Rooms dropdown with a compact
+// illustrated floor plan — the Entrance Hall as a central hub, the four
+// galleries connected around it. Reuses the existing SSE scene-presence
+// system (`lastSceneCounts`/`lastSceneVisitors`) rather than a second
+// presence channel: a gallery's own "room total" is its main scene's count
+// plus its close-up scene's count (a visitor "looking closer" at one
+// painting is still in that gallery, just not in its main-scene headcount).
+// Donated-relic markers come from the already-loaded `exhibitsById`, grouped
+// by galleryId — no separate map-specific fetch. The map re-renders on every
+// scene-presence/exhibit event exactly where those already trigger other UI
+// refreshes, so it never goes stale while open.
+
+// A small fixed compass layout — Entrance Hall centred, the four galleries
+// at the cardinal/ordinal positions a real wing off a central hall would
+// occupy. Percentages of the map's own square canvas.
+const MAP_LAYOUT = {
+  hall: { x: 50, y: 50 },
+  portraits: { x: 50, y: 14 },
+  memento: { x: 86, y: 50 },
+  specimen: { x: 50, y: 86 },
+  childhood: { x: 14, y: 50 },
+};
+
+function galleryRoomTotal(galleryId) {
+  return (lastSceneCounts[`${galleryId}-main`] ?? 0) + (lastSceneCounts[`${galleryId}-closeup`] ?? 0);
 }
+
+function currentRoomId() {
+  // The map treats every scene belonging to a gallery (main or close-up) as
+  // "in that room," and every hall-facing scene as the hub — matching
+  // galleryRoomTotal's own main+closeup aggregation.
+  const scene = illustrator?.currentScene();
+  return scene?.galleryId ?? "hall";
+}
+
+function exhibitsByGallery(galleryId) {
+  return [...exhibitsById.values()].filter((e) => e.galleryId === galleryId);
+}
+
+function buildMapNode({ id, label, x, y, count, exhibits, isHub }) {
+  const node = document.createElement("button");
+  node.type = "button";
+  node.className = `map-node${isHub ? " map-node-hub" : ""}`;
+  node.style.left = `${x}%`;
+  node.style.top = `${y}%`;
+  node.dataset.roomId = id;
+  if (id === currentRoomId()) node.classList.add("current");
+
+  const plaque = document.createElement("span");
+  plaque.className = "map-node-label";
+  plaque.textContent = label;
+  node.appendChild(plaque);
+
+  if (count > 0) {
+    const badge = document.createElement("span");
+    badge.className = "map-node-badge";
+    badge.textContent = String(count);
+    badge.setAttribute("aria-hidden", "true");
+    node.appendChild(badge);
+  }
+
+  if (exhibits.length > 0) {
+    const dots = document.createElement("span");
+    dots.className = "map-node-relics";
+    dots.setAttribute("aria-hidden", "true");
+    // Cap the visible dots so a heavily-donated gallery still reads calmly —
+    // the overflow count folds into one small grouped "+N" marker rather
+    // than stacking dots indefinitely.
+    const MAX_DOTS = 4;
+    for (const exhibit of exhibits.slice(0, MAX_DOTS)) {
+      const dot = document.createElement("span");
+      dot.className = "map-relic-dot";
+      dots.appendChild(dot);
+    }
+    if (exhibits.length > MAX_DOTS) {
+      const more = document.createElement("span");
+      more.className = "map-relic-dot map-relic-more";
+      more.textContent = `+${exhibits.length - MAX_DOTS}`;
+      dots.appendChild(more);
+    }
+    node.appendChild(dots);
+  }
+
+  const detailParts = [];
+  detailParts.push(count === 0 ? "Empty" : count === 1 ? "1 visitor" : `${count} visitors`);
+  if (exhibits.length > 0) {
+    detailParts.push(
+      `${exhibits.length} relic${exhibits.length === 1 ? "" : "s"}: ${exhibits
+        .slice(0, 6)
+        .map((e) => `${e.title} (donated by ${e.donorName})`)
+        .join("; ")}${exhibits.length > 6 ? "…" : ""}`,
+    );
+  }
+  node.setAttribute("aria-label", `${label}. ${detailParts.join(". ")}.${id === currentRoomId() ? " You are here." : ""}`);
+  node.title = detailParts.join(" · "); // native hover tooltip — the brief's "hover/focus detail"
+
+  node.addEventListener("click", () => {
+    closeRoomsMenu();
+    if (id === "hall") illustrator.goToScene("hall", { direction: "back" });
+    else illustrator.goToScene(`${id}-main`, { direction: "forward" });
+  });
+  return node;
+}
+
+function renderMuseumMap() {
+  const canvas = el("museum-map");
+  const list = el("map-room-list");
+  if (!canvas || !list) return;
+  canvas.innerHTML = "";
+  list.innerHTML = "";
+
+  const rooms = [
+    { id: "hall", label: "Entrance Hall", isHub: true },
+    ...world.galleries.map((g) => ({ id: g.id, label: g.name, isHub: false })),
+  ];
+
+  for (const room of rooms) {
+    const pos = MAP_LAYOUT[room.id] ?? { x: 50, y: 50 };
+    const count = room.id === "hall" ? lastSceneCounts.hall ?? 0 : galleryRoomTotal(room.id);
+    const exhibits = room.id === "hall" ? [] : exhibitsByGallery(room.id);
+    canvas.appendChild(buildMapNode({ id: room.id, label: room.label, x: pos.x, y: pos.y, count, exhibits, isHub: room.isHub }));
+
+    // Connecting line from the hub to each gallery — a straight SVG-free CSS
+    // line via a rotated/positioned div is enough for "which rooms connect
+    // to which," never claiming exact walking geometry.
+    if (!room.isHub) {
+      const hubPos = MAP_LAYOUT.hall;
+      const dx = pos.x - hubPos.x;
+      const dy = pos.y - hubPos.y;
+      const length = Math.hypot(dx, dy);
+      const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+      const line = document.createElement("span");
+      line.className = "map-connector";
+      line.style.left = `${hubPos.x}%`;
+      line.style.top = `${hubPos.y}%`;
+      line.style.setProperty("--map-connector-length", `${length}%`);
+      line.style.setProperty("--map-connector-angle", `${angleDeg}deg`);
+      canvas.appendChild(line);
+    }
+
+    // The accessible textual room list — present regardless of whether the
+    // visual map is perceived, each a real focusable list item button.
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "map-room-list-item";
+    if (room.id === currentRoomId()) btn.classList.add("current");
+    const countLabel = count === 0 ? "empty" : count === 1 ? "1 visitor" : `${count} visitors`;
+    btn.textContent = `${room.label} — ${countLabel}${exhibits.length > 0 ? `, ${exhibits.length} relic${exhibits.length === 1 ? "" : "s"}` : ""}`;
+    btn.addEventListener("click", () => {
+      closeRoomsMenu();
+      if (room.id === "hall") illustrator.goToScene("hall", { direction: "back" });
+      else illustrator.goToScene(`${room.id}-main`, { direction: "forward" });
+    });
+    li.appendChild(btn);
+    list.appendChild(li);
+  }
+}
+
+function refreshMapIfOpen() {
+  if (!el("rooms-menu").hidden) renderMuseumMap();
+}
+
 function openRoomsMenu() {
-  renderRoomsMenu();
+  renderMuseumMap();
   el("rooms-menu").hidden = false;
 }
 function closeRoomsMenu() {
@@ -1571,6 +1708,7 @@ el("open-rooms").addEventListener("click", () => {
   if (el("rooms-menu").hidden) openRoomsMenu();
   else closeRoomsMenu();
 });
+el("map-close").addEventListener("click", closeRoomsMenu);
 
 function onSceneChange(scene) {
   currentSceneId = scene.id;
