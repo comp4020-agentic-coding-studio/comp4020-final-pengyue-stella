@@ -139,6 +139,21 @@ so changing your mind just changes the row. A tied top verdict renders as
 **Disputed** rather than picking a winner arbitrarily. An account with no
 votes shows **Unclassified**, never a default verdict.
 
+**A donor manages their own relic.** Ownership is the HttpOnly visitor
+cookie that made the donation (`exhibits.donor_visitor_id`), never the
+free-text donor display name — a dossier only shows Edit/Withdraw to the
+cookie that actually donated it, checked server-side on every request, not
+inferred client-side. Editing the title is a direct field update; editing
+the origin claim goes through the same account-revision mechanism a
+counter-evidence submission uses, so an edited description is a new
+account row, never an overwrite of the original. Withdrawing is a
+transactional soft delete: the exhibit stops appearing anywhere (room,
+archive, dossier) for every visitor, its display slot is released for a
+new donation in the same transaction, and its accounts/votes/event history
+are kept forever, never deleted — broadcast to every connected client only
+after the delete commits. A built-in or Founding Collection exhibit has no
+recorded owner and never exposes these controls to anyone.
+
 ## Primary domain tables
 
 ```
@@ -211,10 +226,18 @@ announced to other visitors before it is durable.
 
 ## Known limitations (first version)
 
-- Exhibit models are a procedural library keyed to a donation's category and
-  subtype (one bespoke model family per subtype, varied per donation by a
-  seeded scale/rotation/tone PRNG), not bespoke art per individual donation
-  — documented, not hidden; see `ASSETS.md`.
+- A donation now requires choosing one of four curated relic-appearance
+  presets (`server/src/relic-presets.js`) — a donor picks the image, not
+  the model family. The procedural Three.js/Canvas renderer
+  (`ASSETS.md`'s original per-subtype generator) survives only as a
+  defensive fallback for a row that predates the preset catalog; every
+  exhibit present before the catalog existed was backfilled with a
+  category-matched preset at startup (`server/src/db.js`'s
+  `backfillLegacyVisualIds`), captioned honestly in its dossier as an
+  archival stand-in rather than the donor's own choice. A built-in museum
+  object's dossier preview is a real cropped detail from its own gallery
+  illustration (its hand-traced hotspot shape's bounding box against the
+  scene's own source image), not a relic preset or a procedural shape.
 - No moderation queue beyond length caps and rate limits — acceptable for a
   classroom-scale deployment, not for open public UGC at scale.
 - Spatial audio is the blueprint's explicitly optional item and is out of
