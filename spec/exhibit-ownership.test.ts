@@ -176,43 +176,61 @@ describe("owner-only exhibit delete", () => {
   });
 
   it("lets the owner delete: it vanishes from the list and its own GET, and the freed slot is donatable again", async () => {
-    const { exhibit, ownerCookie, placement } = await donateAsOwner(`Withdrawable Relic ${Date.now()}`);
+    // Other spec files donate concurrently (vitest runs spec files in
+    // parallel) and could grab this exact slotId the instant it's freed,
+    // before this test's own reclaim attempt lands — the same shared-slot-
+    // pool race spec/archive.test.ts's own donateRetrying() already
+    // documents, just on the "freed" side rather than the "never occupied"
+    // side. Retried end-to-end (fresh donate+delete+reclaim) rather than
+    // just re-POSTing, since once a concurrent test wins the exact freed
+    // slot it's gone for good — a short retry-the-whole-thing loop still
+    // proves the same invariant (the freed slot is immediately donatable)
+    // without being flaky under real parallel load.
+    let reclaimedSlotId: string | undefined;
+    let reclaimedExhibitId: string | undefined;
+    for (let attempt = 0; attempt < 5 && !reclaimedSlotId; attempt++) {
+      const { exhibit, ownerCookie, placement } = await donateAsOwner(`Withdrawable Relic ${Date.now()}-${attempt}`);
 
-    const del = await fetch(url(`/api/exhibits/${exhibit.id}`), {
-      method: "DELETE",
-      headers: { Cookie: ownerCookie },
-    });
-    expect(del.status).toBe(200);
+      const del = await fetch(url(`/api/exhibits/${exhibit.id}`), {
+        method: "DELETE",
+        headers: { Cookie: ownerCookie },
+      });
+      expect(del.status).toBe(200);
 
-    const getAfter = await fetch(url(`/api/exhibits/${exhibit.id}`));
-    expect(getAfter.status).toBe(404);
+      const getAfter = await fetch(url(`/api/exhibits/${exhibit.id}`));
+      expect(getAfter.status).toBe(404);
 
-    const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
-    expect(exhibits.some((e: { id: string }) => e.id === exhibit.id)).toBe(false);
+      const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
+      expect(exhibits.some((e: { id: string }) => e.id === exhibit.id)).toBe(false);
 
-    // The exact freed slotId must be donatable again immediately — a new
-    // donation targeting it directly (not just "some free slot") must
-    // succeed, proving the slot was actually released inside the delete's
-    // own transaction (CLAUDE.md: a unique constraint, not check-then-write).
-    const secondCookie = await freshCookie();
-    const second = await donate(
-      {
-        galleryId: placement.galleryId,
-        slotId: placement.slotId,
-        surfaceId: placement.surfaceId,
-        u: placement.u,
-        v: placement.v,
-        subtype: placement.subtype,
-        visualId: placement.visualId,
-        title: "Reclaimed the freed slot",
-        originClaim: "A new donation into the exact slot the withdrawn relic left behind.",
-        donorName: "Second Owner",
-      },
-      secondCookie,
-    );
-    expect(second.status).toBe(201);
-    const { exhibit: reclaimed } = await second.json();
-    expect(reclaimed.slotId).toBe(placement.slotId);
+      // The exact freed slotId must be donatable again immediately — a new
+      // donation targeting it directly (not just "some free slot") must
+      // succeed, proving the slot was actually released inside the delete's
+      // own transaction (CLAUDE.md: a unique constraint, not check-then-write).
+      const secondCookie = await freshCookie();
+      const second = await donate(
+        {
+          galleryId: placement.galleryId,
+          slotId: placement.slotId,
+          surfaceId: placement.surfaceId,
+          u: placement.u,
+          v: placement.v,
+          subtype: placement.subtype,
+          visualId: placement.visualId,
+          title: "Reclaimed the freed slot",
+          originClaim: "A new donation into the exact slot the withdrawn relic left behind.",
+          donorName: "Second Owner",
+        },
+        secondCookie,
+      );
+      if (second.status === 409) continue; // a concurrent spec file won this exact slot first — retry with a fresh one
+      expect(second.status).toBe(201);
+      const { exhibit: reclaimed } = await second.json();
+      reclaimedSlotId = reclaimed.slotId;
+      reclaimedExhibitId = placement.slotId;
+    }
+    expect(reclaimedSlotId, "expected the freed slot to be reclaimable within 5 attempts").toBeTruthy();
+    expect(reclaimedSlotId).toBe(reclaimedExhibitId);
   });
 });
 
