@@ -71,6 +71,41 @@ describe("unified dossier model: built-in museum objects", () => {
     expect(exhibit.placement).toBeNull();
   });
 
+  // The builtin-object dossier preview (public/app.js's
+  // renderBuiltinObjectVisual) needs the object's own owning sceneId + its
+  // hand-traced shape to CSS-crop the real painted item straight out of
+  // that scene's gallery art — server/src/db.js's fullExhibit attaches this
+  // as `cropInfo` for every builtin exhibit (server/src/world.js's
+  // builtinObjectCropInfo), never for a donated/founding one.
+  it("a builtin exhibit's own response carries cropInfo with a real sceneId and shape", async () => {
+    const { exhibit } = await (await fetch(url("/api/exhibits/exhibit_builtin_hall-chandelier"))).json();
+    expect(exhibit.cropInfo).toBeTruthy();
+    expect(exhibit.cropInfo.sceneId).toBe("hall");
+    expect(["polygon", "ellipse", "path"]).toContain(exhibit.cropInfo.shape.type);
+    if (exhibit.cropInfo.shape.type === "ellipse") {
+      expect(exhibit.cropInfo.shape.rx).toBeGreaterThan(0);
+      expect(exhibit.cropInfo.shape.ry).toBeGreaterThan(0);
+    } else if (exhibit.cropInfo.shape.type === "polygon") {
+      expect(exhibit.cropInfo.shape.points.length).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("a gallery-owned builtin exhibit's cropInfo names that gallery's own main scene, not the hall", async () => {
+    const { scenes, galleries } = await (await fetch(url("/api/world"))).json();
+    const gallery = galleries[0];
+    const main = scenes.find((s: { id: string }) => s.id === `${gallery.id}-main`);
+    const loreObject = main.interactiveObjects.find((o: { type: string }) => o.type === "lore");
+    const { exhibit } = await (await fetch(url(`/api/exhibits/exhibit_builtin_${loreObject.id}`))).json();
+    expect(exhibit.cropInfo.sceneId).toBe(`${gallery.id}-main`);
+  });
+
+  it("a non-builtin exhibit never carries cropInfo", async () => {
+    const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
+    const founding = exhibits.find((e: { id: string }) => e.id.startsWith("exhibit_founding_"));
+    expect(founding).toBeTruthy();
+    expect(founding.cropInfo).toBeNull();
+  });
+
   it("the per-gallery marquee closeup trigger is folded into the dossier model too, carrying its own closeupSceneId", async () => {
     const { scenes, galleries } = await (await fetch(url("/api/world"))).json();
     const gallery = galleries[0];

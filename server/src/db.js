@@ -8,7 +8,14 @@ import { DatabaseSync } from "node:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
-import { GALLERIES, surfaceById, legacySlotPlacement, surfacePointFromUv, allBuiltinLoreObjects } from "./world.js";
+import {
+  GALLERIES,
+  surfaceById,
+  legacySlotPlacement,
+  surfacePointFromUv,
+  allBuiltinLoreObjects,
+  builtinObjectCropInfo,
+} from "./world.js";
 import { pointInShape, shapeBounds } from "./geometry.js";
 import { VERDICTS } from "./constants.js";
 import { RELIC_PRESETS_BY_ID, RELIC_PRESETS } from "./relic-presets.js";
@@ -270,22 +277,25 @@ export function donateExhibit({
   const appliedScale = typeof scale === "number" && Number.isFinite(scale) ? scale : 1;
   if (appliedScale < surface.minScale || appliedScale > surface.maxScale) return { error: "invalid_scale" };
 
-  // visualId is optional (a donor may skip the picker entirely and keep the
-  // legacy procedural look), but if one is claimed it must be a real,
-  // allow-listed preset compatible with this exact category/subtype/surface
-  // combination — never trust the client's own picker filtering as the
-  // actual authority, the same discipline every other field here applies.
-  let appliedVisualId = null;
-  if (visualId !== undefined && visualId !== null) {
-    const preset = RELIC_PRESETS_BY_ID.get(visualId);
-    const valid =
-      preset &&
-      preset.category === galleryRow.category &&
-      preset.subtype === subtype &&
-      preset.compatibleSurfaceTypes.includes(surface.surfaceType);
-    if (!valid) return { error: "invalid_visual" };
-    appliedVisualId = visualId;
-  }
+  // visualId is now REQUIRED for a NEW donation (the "Classic" procedural-
+  // fallback path is retired as a visitor-facing choice — see
+  // public/app.js's populateDonateForm, which no longer offers a no-preset
+  // submit state) — a curated preset IS how a donor says what the relic
+  // looks like AND what subtype it is, so skipping it entirely is now a
+  // rejected donation, not a quietly-accepted one. This does NOT touch any
+  // already-persisted exhibit: a pre-existing row with visual_id = NULL
+  // (predating this requirement) keeps resolving exactly as before via
+  // backfillLegacyVisualIds()/the client's defensive procedural fallback —
+  // only the INSERT path below is affected.
+  if (visualId === undefined || visualId === null) return { error: "visual_required" };
+  const preset = RELIC_PRESETS_BY_ID.get(visualId);
+  const validVisual =
+    preset &&
+    preset.category === galleryRow.category &&
+    preset.subtype === subtype &&
+    preset.compatibleSurfaceTypes.includes(surface.surfaceType);
+  if (!validVisual) return { error: "invalid_visual" };
+  const appliedVisualId = visualId;
 
   const exhibitId = `exhibit_${randomUUID()}`;
   const accountId = `account_${randomUUID()}`;
@@ -479,6 +489,17 @@ function fullExhibit(exhibitId, visitorId) {
     origin: row.origin,
     visualIdBackfilled: !!row.visual_id_backfilled,
     closeupSceneId: row.closeup_scene_id ?? null,
+    // Builtin-object dossier preview support: the owning scene id + the
+    // object's own hand-traced `shape` (world.js's builtinObjectCropInfo),
+    // so the client can render a CSS background-image crop of the EXACT
+    // real painted object straight from that scene's own gallery art
+    // (public/app.js's renderBuiltinObjectVisual) instead of a generic
+    // procedural shape. `shape` is already public (the same shape served on
+    // every scene's `interactiveObjects`), so this adds no new server-only
+    // data — just the lookup a client would otherwise have to duplicate.
+    // Non-builtin exhibits never carry this field.
+    cropInfo:
+      row.origin === "builtin" ? builtinObjectCropInfo(row.id.replace(/^exhibit_builtin_/, "")) : null,
   };
 }
 

@@ -939,6 +939,25 @@ export function allBuiltinLoreObjects() {
   return out;
 }
 
+// Looks up a built-in lore object's own owning scene id + hand-traced shape
+// by its BARE world-object id (e.g. "hall-chandelier", not the exhibit id
+// `exhibit_builtin_hall-chandelier` db.js derives it from) — the one piece
+// of world-graph knowledge db.js's `fullExhibit()` needs to attach a
+// `cropInfo` field to a builtin exhibit's DTO, so the client can render the
+// EXACT real painted object (cropped from that scene's own background
+// image via CSS background-position/background-size) as its dossier
+// preview, rather than duplicating this scene/shape lookup itself. Returns
+// null if objectId doesn't name a real `type: "lore"` object anywhere in
+// the world (should never happen for an id shaped like a real builtin
+// exhibit's own id, but defensive regardless — see db.js's fullExhibit).
+export function builtinObjectCropInfo(objectId) {
+  for (const scene of SCENES) {
+    const object = scene.interactiveObjects.find((o) => o.id === objectId && o.type === "lore");
+    if (object) return { sceneId: scene.id, shape: object.shape };
+  }
+  return null;
+}
+
 // The shape a client needs to build the illustrated scenes and populate the
 // interactive-object/cameo overlay — nothing server-only (no DB ids beyond
 // what's already public).

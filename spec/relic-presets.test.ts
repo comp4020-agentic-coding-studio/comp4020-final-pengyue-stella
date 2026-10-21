@@ -177,10 +177,14 @@ describe("the curated donated-relic visual catalog", () => {
     expect(res.status).toBe(400);
   });
 
-  it("donating with no visualId at all still succeeds, with visualId null in the response (the legacy-fallback path)", async () => {
-    // Other spec files donate concurrently into the same small fixed slot
-    // pool — retry against a freshly re-queried free spot on a 409, same
-    // discipline the preset-donation test above already applies.
+  // A preset is now REQUIRED for a NEW donation (CLAUDE.md-aligned brief:
+  // "making a preset REQUIRED for new donations") — the old "Classic"
+  // no-image fallback is retired as a visitor-facing choice. A donation
+  // that omits visualId entirely must now be rejected outright, never
+  // silently accepted with visualId null the way it used to be (that
+  // behaviour is kept only for exhibits that already existed before this
+  // requirement shipped — see spec/legacy-visual-backfill.test.ts).
+  it("rejects a donation with no visualId at all — a preset is now required", async () => {
     let res: Response | undefined;
     let lastStatus = 0;
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -197,11 +201,31 @@ describe("the curated donated-relic visual catalog", () => {
         donorName: "Spec Visitor",
       });
       lastStatus = res.status;
+      // A 400 (visual_required) is the expected outcome everywhere except a
+      // genuine slot/surface race (409), which this retries past exactly
+      // like every other test in this file.
       if (res.status !== 409) break;
     }
-    expect(lastStatus).toBe(201);
-    const { exhibit } = await res!.json();
-    expect(exhibit.visualId).toBeNull();
+    expect(lastStatus).toBe(400);
+    const body = await res!.json();
+    expect(typeof body.error).toBe("string");
+  });
+
+  it("rejects a donation with visualId explicitly null, same as omitting it", async () => {
+    const { gallery, slot, surface, u, v } = await freeSpotFor("portraits", "wall");
+    const res = await donate({
+      galleryId: gallery?.id,
+      slotId: slot?.id,
+      surfaceId: surface?.id,
+      u,
+      v,
+      subtype: surface?.allowedRelicTypes?.[0],
+      title: "explicit null visual",
+      originClaim: "x",
+      donorName: "Spec Visitor",
+      visualId: null,
+    });
+    expect(res.status).toBe(400);
   });
 
   // A seeded Founding Collection exhibit predates the preset catalog the
@@ -252,6 +276,17 @@ describe("the curated donated-relic visual catalog", () => {
       expect(lastStatus, `preset ${preset.id} should donate successfully`).toBe(201);
       const { exhibit } = await res!.json();
       expect(exhibit.visualId).toBe(preset.id);
+
+      // The exact preset must round-trip through both read paths a real
+      // visitor uses: a single exhibit fetch and a full archive reload
+      // (CLAUDE.md-aligned brief: "survives... a page reload").
+      const { exhibit: fetchedOne } = await (await fetch(url(`/api/exhibits/${exhibit.id}`))).json();
+      expect(fetchedOne.visualId).toBe(preset.id);
+
+      const { exhibits: fetchedAll } = await (await fetch(url("/api/exhibits"))).json();
+      const fetchedFromList = fetchedAll.find((e: { id: string }) => e.id === exhibit.id);
+      expect(fetchedFromList, `donated exhibit ${exhibit.id} should appear in a full /api/exhibits reload`).toBeTruthy();
+      expect(fetchedFromList.visualId).toBe(preset.id);
     }
   });
 });

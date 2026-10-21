@@ -227,6 +227,11 @@ const server = createServer(async (req, res) => {
         visualId,
       });
 
+      if (result.error === "visual_required") {
+        logAction(identity, "donate", { gallery: galleryId }, "rejected:visual_required");
+        json(res, 400, { error: "choose a curated relic appearance before placing your relic" }, withCookies({}, identity));
+        return;
+      }
       if (result.error === "invalid_visual") {
         logAction(identity, "donate", { gallery: galleryId, visual: String(visualId) }, "rejected:invalid_visual");
         json(res, 400, { error: "that relic appearance isn't available for this gallery/surface" }, withCookies({}, identity));

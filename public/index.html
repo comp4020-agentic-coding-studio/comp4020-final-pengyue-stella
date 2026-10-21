@@ -215,15 +215,15 @@
                thumbnails (see server/src/relic-presets.js), always shown
                together regardless of the selected gallery — picking one
                drives the gallery/subtype choice (preset-first), rather than
-               being filtered down to a single match. No separate "Classic"
-               tile: changing the gallery directly reveals the subtype
-               select below as the plain fallback (the legacy procedural
-               renderer then draws that choice, with no curated image). -->
-          <span class="donate-field-label" id="donate-visual-label">Relic appearance</span>
+               being filtered down to a single match. A preset is now the
+               ONLY way to say what a donated relic is: there is no
+               "Classic"/no-image fallback tile, and no separate subtype
+               select — choosing a preset IS choosing the subtype (see
+               app.js's populateDonateForm). Submitting without a preset
+               chosen is blocked client-side (and rejected server-side) with
+               a message pointing back at this grid. -->
+          <span class="donate-field-label" id="donate-visual-label">Relic appearance (required)</span>
           <div id="donate-visual-grid" class="visual-preset-grid" role="radiogroup" aria-labelledby="donate-visual-label"></div>
-
-          <label for="donate-subtype" id="donate-subtype-label">Or choose a type without a curated image</label>
-          <select id="donate-subtype" name="subtype" required></select>
 
           <label for="donate-title">Title</label>
           <input id="donate-title" name="title" maxlength="80" required placeholder="The Spoon That Remembers" />

@@ -124,25 +124,23 @@ async function resyncExhibits() {
 // listed slot ids — see db.js's donateExhibit — placement mode just picks
 // which one visually instead of by label.
 
-const SUBTYPE_LABEL = {
-  painting: "Painting", sketch: "Sketch",
-  spoon: "Spoon", key: "Key", clock: "Clock", mirror: "Mirror", curiosity: "Curiosity",
-  botanical: "Botanical specimen", biological: "Biological specimen",
-  doll: "Doll", toy: "Toy", book: "Book or letter",
-};
-
-// The donor's chosen curated visual id, or null for "Classic" (the legacy
-// procedural look) — kept outside the form's own native fields since a
-// radio-grid of image tiles isn't a native form control the submit handler
-// can read via `form.someField.value` the way the plain <select>s are.
+// The donor's chosen curated visual id — a preset is now REQUIRED to submit
+// a donation (see CLAUDE.md-aligned brief: "require a preset for new
+// donations"); there is no "Classic"/no-image id any more. Kept outside the
+// form's own native fields since a radio-grid of image tiles isn't a native
+// form control the submit handler can read via `form.someField.value` the
+// way a plain <select> is. `selectedSubtype` is derived FROM the chosen
+// preset (a preset names exactly one subtype — see relic-presets.js) rather
+// than read from a separate control, since a preset IS the subtype choice
+// (decision: removed the subtype <select> fallback entirely rather than
+// just blocking submission with it still visible — the brief's option (b) —
+// so a donor is never shown two controls that could disagree about "what is
+// this").
 let selectedVisualId = null;
-
-const CLASSIC_VISUAL_ID = null;
+let selectedSubtype = null;
 
 function populateDonateForm() {
   const gallerySelect = el("donate-gallery");
-  const subtypeSelect = el("donate-subtype");
-  const subtypeLabel = el("donate-subtype-label");
   const visualGrid = el("donate-visual-grid");
   gallerySelect.innerHTML = "";
   for (const g of world.galleries) {
@@ -154,48 +152,31 @@ function populateDonateForm() {
   // Default to whichever gallery the visitor is currently looking at, if
   // any — a small convenience, not a restriction: every gallery stays
   // selectable regardless of current scene (CLAUDE.md: donation must be
-  // reachable from every main scene, not gated by orientation).
+  // reachable from every main scene, not gated by orientation). Superseded
+  // below by whichever gallery the default preset belongs to, if any.
   const scene = illustrator?.currentScene();
   if (scene?.galleryId) gallerySelect.value = scene.galleryId;
 
   function selectVisual(visualId, subtype) {
     selectedVisualId = visualId;
-    if (subtype) subtypeSelect.value = subtype;
+    selectedSubtype = subtype ?? null;
     for (const tile of visualGrid.querySelectorAll(".visual-preset-tile")) {
       tile.setAttribute("aria-checked", tile.dataset.visualId === String(visualId) ? "true" : "false");
     }
-    // A picked preset drives everything else; with none picked, the
-    // subtype select is the only way left to say what the relic is (the
-    // old "Classic" tile's effect, now just the natural fallback state
-    // rather than a dedicated clickable tile).
-    const hasPreset = visualId != null;
-    subtypeSelect.hidden = hasPreset;
-    subtypeLabel.hidden = hasPreset;
-  }
-
-  // Rebuilds just the subtype <select> for whichever gallery is currently
-  // chosen — independent of the preset grid below, which never changes
-  // once built (all 4 curated presets are always shown, regardless of
-  // gallery selection).
-  function refreshSubtypeSelect() {
-    const gallery = world.galleries.find((g) => g.id === gallerySelect.value);
-    subtypeSelect.innerHTML = "";
-    for (const subtype of gallery?.subtypes ?? []) {
-      const opt = document.createElement("option");
-      opt.value = subtype;
-      opt.textContent = SUBTYPE_LABEL[subtype] ?? subtype;
-      subtypeSelect.appendChild(opt);
-    }
+    el("donate-error").textContent = "";
   }
 
   // The visual picker: all four curated presets, always shown together,
   // regardless of which gallery happens to be selected — selecting one
   // DRIVES the gallery/subtype choice (preset-first), rather than being
   // filtered down to whichever single preset matches an already-chosen
-  // gallery (the old "only one preset + Classic" bug). "Classic" is no
-  // longer a user-facing tile; a donor who changes the gallery dropdown
-  // directly, without clicking a preset, simply sees the subtype select
-  // reappear as the fallback.
+  // gallery (the old "only one preset + Classic" bug). Changing the
+  // gallery dropdown directly (without clicking a preset) no longer clears
+  // the chosen preset to a "Classic" fallback — the picker and the gallery
+  // dropdown both just reflect the same preset's own category; a donor
+  // changing the dropdown away from that category is gently corrected back
+  // by reselecting the matching gallery whenever a tile is clicked, and the
+  // submit handler below refuses to submit a mismatch either way.
   function buildVisualGrid() {
     visualGrid.innerHTML = "";
     for (const preset of relicPresets) {
@@ -215,23 +196,13 @@ function populateDonateForm() {
       tile.addEventListener("click", () => {
         const targetGalleryId = world.galleries.find((g) => g.category === preset.category)?.id;
         if (targetGalleryId) gallerySelect.value = targetGalleryId;
-        refreshSubtypeSelect();
         selectVisual(preset.id, preset.subtype);
       });
       visualGrid.appendChild(tile);
     }
   }
 
-  gallerySelect.onchange = () => {
-    // A manual gallery change (not a preset click) clears any selected
-    // preset that no longer matches, revealing the subtype select again.
-    selectedVisualId = CLASSIC_VISUAL_ID;
-    refreshSubtypeSelect();
-    selectVisual(CLASSIC_VISUAL_ID, undefined);
-  };
-
   buildVisualGrid();
-  refreshSubtypeSelect();
   // Default to the first curated preset overall, so a donor sees an
   // integrated illustrated relic by default rather than having to discover
   // the picker — this also sets the gallery to match that preset's own
@@ -241,8 +212,9 @@ function populateDonateForm() {
     const first = relicPresets[0];
     const targetGalleryId = world.galleries.find((g) => g.category === first.category)?.id;
     if (targetGalleryId) gallerySelect.value = targetGalleryId;
-    refreshSubtypeSelect();
     selectVisual(first.id, first.subtype);
+  } else {
+    selectVisual(null, null);
   }
 }
 
@@ -265,10 +237,35 @@ el("donate-cancel").addEventListener("click", closeDonateGate);
 el("donate-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const form = e.target;
-  const galleryId = form.galleryId.value;
+  const errEl = el("donate-error");
+
+  // A preset is now REQUIRED to submit (CLAUDE.md-aligned brief: "a donor
+  // must NOT be able to submit a new donation without a valid curated
+  // preset chosen"). Blocked here with a specific message directing the
+  // donor back to the picker, rather than silently falling back to a
+  // "Classic" procedural look the way the old gallerySelect.onchange path
+  // used to. The server independently re-validates this (db.js's
+  // donateExhibit now rejects a missing visualId with "visual_required") —
+  // this check is a friendly, immediate client-side message, never the
+  // actual authority.
+  if (!selectedVisualId || !selectedSubtype) {
+    errEl.textContent = "Choose a relic appearance above before placing your relic.";
+    const firstTile = el("donate-visual-grid").querySelector(".visual-preset-tile");
+    firstTile?.focus();
+    return;
+  }
+
+  // The chosen preset's own category is what actually determines the
+  // gallery a preset-driven donation belongs to — read it back off the
+  // preset rather than trusting the gallery <select>'s current value,
+  // which a donor could in principle still have changed after picking a
+  // tile (buildVisualGrid's click handler already re-syncs it, but this is
+  // the authoritative source either way, consistent with "the preset IS
+  // the subtype/category choice").
+  const preset = presetById(selectedVisualId);
+  const galleryId = world.galleries.find((g) => g.category === preset?.category)?.id ?? form.galleryId.value;
   const gallery = world.galleries.find((g) => g.id === galleryId);
   const free = gallery.slots.filter((s) => !occupiedSlotIdsForGallery(galleryId).has(s.id));
-  const errEl = el("donate-error");
   if (free.length === 0) {
     errEl.textContent = "No free display spot in this gallery right now — try another gallery.";
     return;
@@ -276,7 +273,7 @@ el("donate-form").addEventListener("submit", (e) => {
   errEl.textContent = "";
   const exhibitForm = {
     galleryId,
-    subtype: form.subtype.value,
+    subtype: selectedSubtype,
     title: form.title.value.trim(),
     originClaim: form.originClaim.value.trim(),
     donorName: form.donorName.value.trim() || myIdentity?.name,
@@ -602,13 +599,22 @@ function renderDossier(exhibit) {
 
   if (dossierPreviewExhibitId !== exhibit.id) {
     dossierPreviewExhibitId = exhibit.id;
-    renderRelicVisual(el("dossier-preview"), {
-      visualId: exhibit.visualId,
-      category: exhibit.category,
-      subtype: exhibit.subtype,
-      accent: gallery?.accent ?? "#88653d",
-      exhibitId: exhibit.id,
-    });
+    // A built-in museum object (origin: "builtin") was never donated and
+    // never has a visualId — its dossier preview is instead a real CSS crop
+    // of the actual painted object straight from its own scene's gallery
+    // art (see renderBuiltinObjectVisual), never a generic procedural shape
+    // or an arbitrary donated-relic preset image.
+    if (exhibit.origin === "builtin") {
+      renderBuiltinObjectVisual(el("dossier-preview"), exhibit);
+    } else {
+      renderRelicVisual(el("dossier-preview"), {
+        visualId: exhibit.visualId,
+        category: exhibit.category,
+        subtype: exhibit.subtype,
+        accent: gallery?.accent ?? "#88653d",
+        exhibitId: exhibit.id,
+      });
+    }
   }
 
   // A backfilled visual (an exhibit donated/seeded before the curated
@@ -1596,6 +1602,87 @@ function sceneImageUrl(scene) {
     "cabinet-reference": "cabinet-reference.webp",
   };
   return `/assets/gallery-scenes/${IMAGE_FILES[scene.image] ?? IMAGE_FILES.hall}`;
+}
+
+// ---------------------------------------------------------------------------
+// Built-in object dossier preview: a CSS "sprite crop" straight out of the
+// object's own scene art, rather than a generic procedural shape or an
+// arbitrary donated-relic preset image (the bug this task fixes). A
+// built-in exhibit's own `cropInfo` (server/src/db.js's fullExhibit, backed
+// by world.js's builtinObjectCropInfo) carries the owning sceneId + the
+// object's own hand-traced `shape` in that scene's 1672x941 viewBox — this
+// derives `background-position`/`background-size` percentages from that
+// shape's bounding box (server/src/geometry.js's `shapeBounds`, mirrored
+// client-side by world/geometry.js's own copy already imported above) so
+// the preview shows the EXACT real painted region, pixel for pixel,
+// scaled up so that region fills the container.
+//
+// MARGIN pads the crop region outward by 18% of its own box size in each
+// dimension before computing background-size — several hand-traced
+// bounding boxes (e.g. a bust's plinth box, a mirror's tight ellipse) crop
+// right to the object's own silhouette with very little surrounding
+// context, which can read as an ambiguous close-up texture rather than a
+// recognisable object; a modest outward pad keeps a little of the
+// surrounding frame/shelf/wall in frame so the object still reads clearly
+// against its setting. 18% was chosen by spot-checking several objects
+// across different galleries (busts, the chandelier, mirrors, cabinets)
+// and is a single constant, not tuned per-object, so every builtin object
+// gets the same honest treatment.
+const BUILTIN_CROP_MARGIN = 0.18;
+
+function renderBuiltinObjectVisual(container, exhibit) {
+  container.innerHTML = "";
+  const cropInfo = exhibit.cropInfo;
+  const scene = cropInfo ? world?.scenes.find((s) => s.id === cropInfo.sceneId) : null;
+  if (!cropInfo || !scene) {
+    // Defensive fallback only — should never happen for a real builtin
+    // exhibit (every one of them has a real owning scene/shape), but keeps
+    // this resilient rather than leaving the preview blank.
+    const canvas = document.createElement("canvas");
+    canvas.width = 160;
+    canvas.height = 160;
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+    container.appendChild(canvas);
+    renderArtifactObject(canvas, { category: exhibit.category, subtype: exhibit.subtype, accent: "#88653d", exhibitId: exhibit.id });
+    return;
+  }
+
+  const { width: sceneWidth, height: sceneHeight } = viewBoxSize(cropInfo.shape.viewBox);
+  const b = shapeBounds(cropInfo.shape);
+  const boxW = Math.max(1, b.maxX - b.minX);
+  const boxH = Math.max(1, b.maxY - b.minY);
+  // Pad outward by BUILTIN_CROP_MARGIN of the box's own size, clamped to
+  // the scene image's own bounds so a near-edge object never asks for a
+  // crop region that would reach past the actual art.
+  const padX = boxW * BUILTIN_CROP_MARGIN;
+  const padY = boxH * BUILTIN_CROP_MARGIN;
+  const minX = Math.max(0, b.minX - padX);
+  const maxX = Math.min(sceneWidth, b.maxX + padX);
+  const minY = Math.max(0, b.minY - padY);
+  const maxY = Math.min(sceneHeight, b.maxY + padY);
+  const cropW = Math.max(1, maxX - minX);
+  const cropH = Math.max(1, maxY - minY);
+
+  const div = document.createElement("div");
+  div.className = "builtin-object-crop";
+  div.style.backgroundImage = `url(${sceneImageUrl(scene)})`;
+  // Scaling the FULL scene image up by (sceneWidth / cropW) horizontally
+  // and (sceneHeight / cropH) vertically makes the crop region exactly
+  // fill the container (background-size on the full image, not a sub-
+  // image) — then background-position places that scaled image so the
+  // crop region's own top-left lands at the container's own top-left.
+  // This is the standard CSS-sprite-crop technique: no server-side image
+  // cropping or new asset needed, just background-size/-position math
+  // derived from the shape's own bounding box.
+  const scaleX = sceneWidth / cropW;
+  const scaleY = sceneHeight / cropH;
+  div.style.backgroundSize = `${scaleX * 100}% ${scaleY * 100}%`;
+  const posX = cropW >= sceneWidth ? 0 : (minX / (sceneWidth - cropW)) * 100;
+  const posY = cropH >= sceneHeight ? 0 : (minY / (sceneHeight - cropH)) * 100;
+  div.style.backgroundPositionX = `${isFinite(posX) ? posX : 0}%`;
+  div.style.backgroundPositionY = `${isFinite(posY) ? posY : 0}%`;
+  container.appendChild(div);
 }
 
 // A built-in scene object (chandelier, guardian statue, portal door, etc.) —

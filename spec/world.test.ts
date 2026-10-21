@@ -329,7 +329,7 @@ describe("surface-aware free relic placement", () => {
 
   async function world() {
     return (await (await fetch(url("/api/world"))).json()) as {
-      galleries: Array<{ id: string; subtypes: string[]; slots: Array<{ id: string }>; placementSurfaces: Surface[] }>;
+      galleries: Array<{ id: string; category: string; subtypes: string[]; slots: Array<{ id: string }>; placementSurfaces: Surface[] }>;
     };
   }
 
@@ -418,6 +418,11 @@ describe("surface-aware free relic placement", () => {
         title: `placed painting ${Date.now()}`,
         originClaim: "x",
         donorName: "Spec Visitor",
+        // A preset is now REQUIRED for a NEW donation — see
+        // spec/relic-presets.test.ts's own dedicated tests for that rule;
+        // this test is about surface placement, not the preset system, so
+        // it supplies the one curated preset that matches portrait/painting.
+        visualId: "cursed-gilt-portrait",
       }),
     });
     expect(res.status).toBe(201);
@@ -506,6 +511,11 @@ describe("surface-aware free relic placement", () => {
     const surface = gallery.placementSurfaces[0];
     const centroid = centroidOf(surface.shape);
     const { u, v } = uvFromPoint(surface.shape, centroid.x, centroid.y);
+    const { presets } = await (await fetch(url("/api/relic-presets"))).json();
+    const preset = presets.find(
+      (p: { category: string; subtype: string }) =>
+        p.category === gallery.category && surface.allowedRelicTypes.includes(p.subtype),
+    );
 
     async function place() {
       const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
@@ -520,7 +530,14 @@ describe("surface-aware free relic placement", () => {
           surfaceId: surface.id,
           u,
           v,
-          subtype: surface.allowedRelicTypes[0],
+          // A preset is now REQUIRED for a NEW donation — see
+          // spec/relic-presets.test.ts's own dedicated tests for that rule;
+          // this test is about surface collision, not the preset system,
+          // so it supplies whichever curated preset actually matches this
+          // surface's allowed types, falling back to the surface's own
+          // first allowed type (with no visualId) only if none does.
+          subtype: preset?.subtype ?? surface.allowedRelicTypes[0],
+          visualId: preset?.id,
           title: `collision test ${Date.now()}-${Math.random()}`,
           originClaim: "x",
           donorName: "A",

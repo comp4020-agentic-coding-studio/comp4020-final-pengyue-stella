@@ -1,11 +1,13 @@
 // The curated donated-relic visual catalog — a small, fixed vocabulary (the
 // same "never free-form, always a known id" discipline as constants.js's
-// SUBTYPES_BY_CATEGORY) of real illustrated relic appearances a donor can
-// pick for their exhibit, replacing the low-detail procedural Three.js/
-// Canvas renderer as the DEFAULT look for a newly donated relic. The old
-// procedural renderer (public/world/artifacts.js) is kept only as a legacy
-// fallback for an exhibit donated before this catalog existed (no visualId
-// on the row at all) — see db.js's `placementFor`-adjacent `visualFor`.
+// SUBTYPES_BY_CATEGORY) of real illustrated relic appearances a donor picks
+// for their exhibit. A preset is now REQUIRED for a NEW donation (db.js's
+// donateExhibit rejects a missing visualId outright with "visual_required")
+// — the old "Classic" no-preset procedural look is retired as a visitor-
+// facing choice. The procedural renderer (public/world/artifacts.js) is
+// kept only as a defensive fallback for an exhibit that predates this
+// requirement (donated/seeded before the catalog existed, or the rare race
+// of a row inserted between migrations) — see db.js's `backfillLegacyVisualIds`.
 //
 // Each entry is validated server-side on donation (never trust a client-
 // supplied visualId blindly, same discipline as subtype/surfaceId): a

@@ -44,9 +44,27 @@ function uvFromPoint(shape: Surface["shape"], x: number, y: number): { u: number
 // itself (spec/world.test.ts's own collision test does that directly).
 const MIN_SURFACE_SEPARATION = 0.22;
 
-async function freeSlot(): Promise<{ galleryId: string; slotId: string; subtype: string; surfaceId: string; u: number; v: number }> {
+// A preset is now REQUIRED for a NEW donation (server/src/db.js's
+// donateExhibit rejects a missing visualId with "visual_required" — see
+// spec/relic-presets.test.ts's own dedicated tests for that rule itself).
+// This file's own donations aren't ABOUT the preset system, so freeSlot()
+// picks whichever subtype actually has a matching curated preset for the
+// gallery it lands on (falling back to the gallery's own first subtype,
+// and visualId undefined, only if a gallery genuinely has none — none
+// currently do) rather than every call site here having to know the
+// catalog itself.
+async function freeSlot(): Promise<{
+  galleryId: string;
+  slotId: string;
+  subtype: string;
+  surfaceId: string;
+  u: number;
+  v: number;
+  visualId?: string;
+}> {
   const { galleries } = await (await fetch(url("/api/world"))).json();
   const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
+  const { presets } = await (await fetch(url("/api/relic-presets"))).json();
   const occupiedSlots = new Set(exhibits.map((e: { slotId: string }) => e.slotId));
   // Try the gallery with the MOST free slots first, not always the same
   // fixed order — other spec files (and this one's own 8 call sites) also
@@ -59,9 +77,12 @@ async function freeSlot(): Promise<{ galleryId: string; slotId: string; subtype:
     return freeB - freeA;
   });
   for (const gallery of byFreeSlotsDesc) {
+    const galleryPreset = presets.find((p: { category: string }) => p.category === gallery.category);
+    const subtype =
+      galleryPreset && gallery.subtypes.includes(galleryPreset.subtype) ? galleryPreset.subtype : gallery.subtypes[0];
+    const visualId = galleryPreset?.subtype === subtype ? galleryPreset.id : undefined;
     for (const slot of gallery.slots) {
       if (occupiedSlots.has(slot.id)) continue;
-      const subtype = gallery.subtypes[0];
       const compatible = gallery.placementSurfaces.filter((s: Surface) => s.allowedRelicTypes.includes(subtype));
       for (const surface of compatible) {
         const taken = exhibits.filter((e: { galleryId: string; placement?: { surfaceId: string; u: number; v: number } }) =>
@@ -76,7 +97,7 @@ async function freeSlot(): Promise<{ galleryId: string; slotId: string; subtype:
             const clear = taken.every(
               (e: { placement: { u: number; v: number } }) => Math.hypot(e.placement.u - u, e.placement.v - v) >= MIN_SURFACE_SEPARATION,
             );
-            if (clear) return { galleryId: gallery.id, slotId: slot.id, subtype, surfaceId: surface.id, u, v };
+            if (clear) return { galleryId: gallery.id, slotId: slot.id, subtype, surfaceId: surface.id, u, v, visualId };
           }
         }
       }
