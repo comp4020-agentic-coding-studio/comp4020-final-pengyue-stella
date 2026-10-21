@@ -774,6 +774,60 @@ a {
   }
 }
 
+/* --- dossier drawer: an ornate archival record, not a beige utility panel -
+   The dossier is where a visitor spends the most time reading (accounts,
+   votes, provenance), so it gets its own dark Gothic treatment distinct
+   from the plain cream `.side-drawer` the lore-caption drawer still uses:
+   a translucent obsidian/mahogany surface, antique-brass framing, and a
+   warm ivory/parchment reading column for the long-form text, rather than
+   a flat beige rectangle floated over the room. */
+.dossier-drawer {
+  background: linear-gradient(165deg, rgba(27, 20, 15, 0.97) 0%, rgba(17, 13, 10, 0.98) 55%, rgba(12, 9, 7, 0.99) 100%);
+  color: var(--parchment);
+  border-left: 1px solid rgba(198, 161, 107, 0.5);
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(198, 161, 107, 0.14);
+  position: relative;
+}
+
+/* A restrained antique-brass corner flourish, echoing `.dossier-card`'s own
+   corner treatment in the lighter gate-card forms — kept small and low-
+   contrast so it reads as ornament, never gore or visual noise. */
+.dossier-drawer::before,
+.dossier-drawer::after {
+  content: "";
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  pointer-events: none;
+  opacity: 0.55;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold) 28%, transparent 30%);
+}
+.dossier-drawer::before {
+  top: 10px;
+  left: 10px;
+}
+.dossier-drawer::after {
+  bottom: 10px;
+  right: 10px;
+  transform: rotate(180deg);
+}
+
+.dossier-drawer h3 {
+  color: var(--gold);
+}
+
+.dossier-drawer .drawer-close {
+  background: rgba(53, 37, 28, 0.75);
+  border-color: rgba(198, 161, 107, 0.6);
+  color: var(--parchment);
+  backdrop-filter: blur(4px);
+}
+.dossier-drawer .drawer-close:hover,
+.dossier-drawer .drawer-close:focus-visible {
+  border-color: var(--gold);
+  outline: none;
+}
+
 .topbar {
   position: absolute;
   top: 0;
@@ -1206,11 +1260,27 @@ a {
 .gate-card textarea {
   font: inherit;
   font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1.4;
+  width: 100%;
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--brass);
   border-radius: 6px;
   background: #fffdf7;
   color: var(--ink);
+}
+
+/* A <textarea> has no natural height the way a single-line <input> does — an
+   un-sized one (just a `rows` attribute) can render at a visibly different,
+   sometimes tiny, height than the inputs around it depending on content and
+   browser, which read as inconsistent in the donation form (the "One-
+   sentence origin claim" field). A fixed min-height plus vertical-only
+   resize keeps it visually consistent with its neighbours while still
+   letting a visitor grow it for a longer claim; horizontal resize is
+   disabled so it can never spill past the card's own padding. */
+.gate-card textarea {
+  min-height: 4.5rem;
+  resize: vertical;
 }
 
 .gate-card input:focus-visible,
@@ -1793,10 +1863,24 @@ a {
   color: var(--brass);
 }
 
+.dossier-drawer .dossier-kicker {
+  color: var(--gold);
+}
+
+.dossier-drawer #dossier-title {
+  color: var(--parchment);
+  font-family: Georgia, "Cormorant Garamond", serif;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
 .dossier-meta {
   margin: -0.2rem 0 0.3rem;
   font-size: 0.85rem;
   color: #5b4f3d;
+}
+
+.dossier-drawer .dossier-meta {
+  color: rgba(233, 221, 197, 0.72);
 }
 
 /* Disclosure for an exhibit whose preview image was assigned by the legacy
@@ -1812,6 +1896,10 @@ a {
 }
 .dossier-visual-note:empty {
   display: none;
+}
+
+.dossier-drawer .dossier-visual-note {
+  color: var(--gold);
 }
 
 .dossier-inspect-closer {
@@ -1833,6 +1921,21 @@ a {
   outline: none;
 }
 
+.dossier-drawer .dossier-inspect-closer {
+  border-color: rgba(198, 161, 107, 0.6);
+  color: var(--parchment);
+}
+.dossier-drawer .dossier-inspect-closer:hover,
+.dossier-drawer .dossier-inspect-closer:focus-visible {
+  border-color: var(--gold);
+  background: rgba(198, 161, 107, 0.1);
+}
+
+.dossier-drawer .receipt-preview {
+  background: radial-gradient(circle at 50% 38%, rgba(53, 37, 28, 0.9), rgba(10, 8, 6, 0.95));
+  border-color: rgba(198, 161, 107, 0.5);
+}
+
 .dossier-accounts {
   display: flex;
   flex-direction: column;
@@ -1842,6 +1945,15 @@ a {
   margin-bottom: 0.3rem;
 }
 
+.dossier-drawer .dossier-accounts {
+  border-top-color: rgba(198, 161, 107, 0.35);
+}
+
+/* Each account reads on its own small parchment card within the otherwise
+   dark drawer — a warm, readable surface for the long-form testimony text,
+   the one place in the dossier where extended prose needs high-contrast
+   ivory rather than parchment-on-obsidian, matching the brief's "parchment
+   or warm ivory reading areas" without turning the whole drawer light. */
 .account-block {
   border-left: 3px solid var(--brass);
   padding-left: 0.65rem;
@@ -1850,6 +1962,23 @@ a {
 .account-block.disputed {
   border-left: 3px dashed var(--rose);
   background: rgba(102, 61, 67, 0.06);
+}
+
+.dossier-drawer .account-block {
+  border-left: 3px solid var(--brass);
+  background: linear-gradient(160deg, rgba(233, 221, 197, 0.97), rgba(223, 209, 183, 0.97));
+  color: var(--ink);
+  border-radius: 0 6px 6px 0;
+  padding: 0.6rem 0.75rem;
+}
+
+.dossier-drawer .account-block.disputed {
+  border-left: 3px dashed var(--rose);
+  background: linear-gradient(160deg, rgba(233, 211, 214, 0.95), rgba(223, 197, 201, 0.95));
+}
+
+.dossier-drawer .account-byline {
+  color: #6b5d47;
 }
 
 .account-kind {
@@ -1947,6 +2076,53 @@ a {
   margin: 0 0 0.2rem;
   font-size: 1rem;
   color: var(--mahogany);
+}
+
+/* The counter-evidence form stays dark/Gothic like the rest of the drawer
+   around it (rather than switching back to the light `.gate-card` field
+   style), with its own ivory-on-obsidian inputs so it still reads clearly
+   against the dark page it's embedded in. */
+.dossier-drawer .account-form {
+  border-top-color: rgba(198, 161, 107, 0.4);
+}
+.dossier-drawer .account-form h3 {
+  color: var(--gold);
+}
+.dossier-drawer .account-form label {
+  color: rgba(233, 221, 197, 0.85);
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-top: 0.3rem;
+}
+.dossier-drawer .account-form select,
+.dossier-drawer .account-form textarea,
+.dossier-drawer .account-form input {
+  font: inherit;
+  font-size: 0.95rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid rgba(198, 161, 107, 0.5);
+  border-radius: 6px;
+  background: rgba(233, 221, 197, 0.95);
+  color: var(--ink);
+}
+.dossier-drawer .account-form textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+.dossier-drawer .account-form select:focus-visible,
+.dossier-drawer .account-form textarea:focus-visible,
+.dossier-drawer .account-form input:focus-visible {
+  outline: 2px solid var(--gold);
+}
+.dossier-drawer .account-form button.secondary {
+  background: none;
+  color: var(--parchment);
+  border: 1px solid rgba(198, 161, 107, 0.5);
+}
+.dossier-drawer .account-form button.secondary:hover,
+.dossier-drawer .account-form button.secondary:focus-visible {
+  border-color: var(--gold);
 }
 
 .toasts {
