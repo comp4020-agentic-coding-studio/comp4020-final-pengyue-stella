@@ -27,6 +27,14 @@ const PORT = Number(process.env.PORT ?? 8080);
 // comment for why this is safe against the free-slot tests and real donors
 // alike (it only ever claims each gallery's first slot).
 db.seedFoundingCollection();
+// Every built-in museum object (chandelier, busts, mirrors, etc.) becomes a
+// real seeded exhibit too, so it gets the same dossier/accounts/votes
+// machinery a donated relic does — see db.js's own comment.
+db.seedBuiltinLoreExhibits();
+// Backfill a curated visual onto any exhibit donated/seeded before the
+// preset catalog existed, so no primitive procedural model ever renders in
+// a visible illustrated gallery — see db.js's own comment.
+db.backfillLegacyVisualIds();
 
 const lastDonateAt = new Map(); // visitorId -> epoch ms
 const lastAccountAt = new Map();

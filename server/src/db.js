@@ -8,10 +8,10 @@ import { DatabaseSync } from "node:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
-import { GALLERIES, surfaceById, legacySlotPlacement, surfacePointFromUv } from "./world.js";
+import { GALLERIES, surfaceById, legacySlotPlacement, surfacePointFromUv, allBuiltinLoreObjects } from "./world.js";
 import { pointInShape, shapeBounds } from "./geometry.js";
 import { VERDICTS } from "./constants.js";
-import { RELIC_PRESETS_BY_ID } from "./relic-presets.js";
+import { RELIC_PRESETS_BY_ID, RELIC_PRESETS } from "./relic-presets.js";
 
 const DB_FILE = process.env.MUSEUM_DB_FILE ?? "/data/museum.db";
 
@@ -133,6 +133,39 @@ if (!exhibitColumnsAfterSurface.some((c) => c.name === "visual_id")) {
   db.exec("ALTER TABLE exhibits ADD COLUMN visual_id TEXT");
 }
 
+// Additive migration: `origin` distinguishes a visitor-donated exhibit from
+// the seeded Founding Collection and from a built-in museum object turned
+// into a real exhibit (see `seedBuiltinLoreExhibits` below) — a labelling
+// field only, never a different permission set (accounts/votes work
+// identically regardless of origin). Existing rows default to 'donated';
+// the one-time backfill below promotes the Founding Collection's own fixed
+// ids to 'founding', matching what they already are.
+const exhibitColumnsAfterVisual = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumnsAfterVisual.some((c) => c.name === "origin")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN origin TEXT NOT NULL DEFAULT 'donated'");
+  db.exec("UPDATE exhibits SET origin = 'founding' WHERE id LIKE 'exhibit_founding_%'");
+}
+
+// Additive migration: `visual_id_backfilled` distinguishes a donor's own
+// curated preset choice from a visual `backfillLegacyVisualIds()` assigned
+// after the fact purely as an archival stand-in — the dossier uses this to
+// caption a backfilled image honestly rather than presenting it as the
+// donor's own choice.
+const exhibitColumnsAfterOrigin = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumnsAfterOrigin.some((c) => c.name === "visual_id_backfilled")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN visual_id_backfilled INTEGER NOT NULL DEFAULT 0");
+}
+
+// Additive migration: `closeup_scene_id` — set only by
+// `seedBuiltinLoreExhibits()` for the handful of built-in objects that are
+// themselves a gallery's own marquee "look closer" trigger (folded into the
+// unified dossier model so they get real seeded content too), never
+// user-writable. Powers the dossier's "Inspect Closer" action.
+const exhibitColumnsAfterBackfillFlag = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumnsAfterBackfillFlag.some((c) => c.name === "closeup_scene_id")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN closeup_scene_id TEXT");
+}
+
 // Seed galleries + slots from the static world layout, idempotently — this
 // is config, never written to via the public API, so re-seeding on every
 // boot (INSERT OR IGNORE) just confirms the schema matches the current
@@ -149,6 +182,12 @@ for (const gallery of GALLERIES) {
     insertSlot.run(slot.id, gallery.id, slot.x, slot.z, slot.rotationY);
   }
 }
+
+// A synthetic `hall` row, purely to satisfy exhibits.gallery_id's FK for
+// the Entrance Hall's own built-in objects (which belong to no real
+// gallery) — never shown as a donation destination, never counted among
+// the four real galleries the client's `/api/world` reports.
+insertGallery.run("hall", "Entrance Hall", "hall", -1);
 
 function logEvent(actorId, eventType, payload) {
   db.prepare(
@@ -435,8 +474,11 @@ function fullExhibit(exhibitId, visitorId) {
     createdAt: row.created_at,
     accounts,
     classification: classifyExhibit(accounts),
-    placement: placementFor(row),
+    placement: row.origin === "builtin" ? null : placementFor(row),
     visualId: row.visual_id ?? null,
+    origin: row.origin,
+    visualIdBackfilled: !!row.visual_id_backfilled,
+    closeupSceneId: row.closeup_scene_id ?? null,
   };
 }
 
@@ -519,5 +561,76 @@ export function seedFoundingCollection() {
       db.exec("ROLLBACK");
       throw err;
     }
+  }
+}
+
+// Every built-in museum object (world.js's `allBuiltinLoreObjects()` — the
+// chandelier, the busts, the folded map's silent neighbours, and so on)
+// becomes a real, persisted `exhibits` row here, exactly like a donated or
+// Founding Collection one — same table, same accounts/votes machinery, the
+// only difference is `origin = 'builtin'` and a stable id derived from the
+// world object's own id (`exhibit_builtin_<objectId>`), so re-running this
+// on every boot is a no-op once seeded (same `existing` guard pattern as
+// `seedFoundingCollection` above).
+//
+// A built-in object has no gallery/slot/surface placement of its own — it
+// renders at its world-authored `shape`, never a second surface-anchored
+// glow (see public/app.js's `refreshInteractiveObjects`, which excludes
+// `origin: 'builtin'` exhibits from the donated-relic render loop). But
+// `exhibits.slot_id` is `NOT NULL UNIQUE REFERENCES display_slots(id)`, so
+// each builtin exhibit still gets its own tiny virtual slot (never rendered,
+// never counted toward a gallery's real donation capacity) purely to
+// satisfy that constraint without relaxing it.
+export function seedBuiltinLoreExhibits() {
+  const now = new Date().toISOString();
+  const insertVirtualSlot = db.prepare(
+    "INSERT OR IGNORE INTO display_slots (id, gallery_id, x, z, rotation_y) VALUES (?, ?, 0, 0, 0)",
+  );
+  for (const object of allBuiltinLoreObjects()) {
+    const exhibitId = `exhibit_builtin_${object.id}`;
+    const existing = db.prepare("SELECT id FROM exhibits WHERE id = ?").get(exhibitId);
+    if (existing) continue;
+
+    const virtualSlotId = `${object.id}_virtual_slot`;
+    const accountId = `account_builtin_${object.id}`;
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      insertVirtualSlot.run(virtualSlotId, object.galleryId);
+      db.prepare(
+        "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype, origin, closeup_scene_id) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'builtin', ?)",
+      ).run(exhibitId, object.galleryId, virtualSlotId, object.category, object.label, "Museum collection", now, object.closeupSceneId);
+      db.prepare("UPDATE display_slots SET occupied_exhibit_id = ? WHERE id = ?").run(exhibitId, virtualSlotId);
+      db.prepare(
+        "INSERT INTO accounts (id, exhibit_id, parent_id, kind, body, author_name, author_id, created_at) VALUES (?, ?, NULL, 'original', ?, ?, ?, ?)",
+      ).run(accountId, exhibitId, object.text, "Museum collection", "", now);
+      db.exec("COMMIT");
+    } catch (err) {
+      db.exec("ROLLBACK");
+      throw err;
+    }
+  }
+}
+
+// Idempotent startup backfill: every exhibit donated/seeded before the
+// curated relic-preset catalog existed has `visual_id = NULL` forever
+// (never migrated, per `placementFor`'s own "never migrate, only derive"
+// discipline elsewhere in this file) — EXCEPT this one field, which this
+// pass explicitly asks to backfill so no primitive procedural model ever
+// renders in a visible, illustrated gallery. Matches purely on the
+// exhibit's own category (there is exactly one curated preset per
+// category, not per subtype), so this is an "archival representative
+// image," not a claim the image depicts the exact original subtype —
+// `visual_id_backfilled` lets the client caption that honestly. Never
+// touches title/subtype/accounts/votes/placement. Builtin exhibits are
+// excluded — they render via their own world-object shape, never a relic
+// image.
+export function backfillLegacyVisualIds() {
+  const rows = db
+    .prepare("SELECT id, category FROM exhibits WHERE visual_id IS NULL AND origin != 'builtin'")
+    .all();
+  for (const row of rows) {
+    const preset = RELIC_PRESETS.find((p) => p.category === row.category);
+    if (!preset) continue;
+    db.prepare("UPDATE exhibits SET visual_id = ?, visual_id_backfilled = 1 WHERE id = ?").run(preset.id, row.id);
   }
 }

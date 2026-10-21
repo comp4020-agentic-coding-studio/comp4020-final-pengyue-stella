@@ -323,8 +323,10 @@ const GALLERY_LAYOUT = [
     // left/centre/right so panning the room keeps revealing more of them.
     objects: [
       {
-        type: "closeup",
+        type: "lore",
         label: "Look closer: The Watching Portrait",
+        text: "The mirror fogs from the edges inward, never from breath. Conservation notes say the fog always clears last around whoever has already looked away.",
+        closeupSceneId: "portraits-closeup",
         shape: polygon([[670, 235], [820, 235], [820, 610], [670, 610]]),
       },
       {
@@ -405,8 +407,10 @@ const GALLERY_LAYOUT = [
     },
     objects: [
       {
-        type: "closeup",
+        type: "lore",
         label: "Look closer: The Long Cabinet",
+        text: "Every drawer is catalogued; no two catalogues agree on a date. Objects That Remember keeps the disagreements as carefully as the objects.",
+        closeupSceneId: "memento-closeup",
         shape: polygon([[700, 480], [1000, 480], [1000, 650], [700, 650]]),
       },
       {
@@ -483,8 +487,10 @@ const GALLERY_LAYOUT = [
     },
     objects: [
       {
-        type: "closeup",
+        type: "lore",
         label: "Look closer: Under Glass",
+        text: "Logged as botanical in 1911, biological in 1958, and 'undetermined — do not reclassify again' in 2003. The jar has not been opened since.",
+        closeupSceneId: "specimen-closeup",
         shape: polygon([[850, 400], [1080, 400], [1080, 560], [850, 560]]),
       },
       {
@@ -561,8 +567,10 @@ const GALLERY_LAYOUT = [
     },
     objects: [
       {
-        type: "closeup",
+        type: "lore",
         label: "Look closer: The Shelf That Waits",
+        text: "The shelf is dusted every week, the gap on the third row included, around whatever used to sit there.",
+        closeupSceneId: "childhood-closeup",
         shape: polygon([[470, 120], [650, 120], [650, 350], [470, 350]]),
       },
       {
@@ -606,6 +614,48 @@ const GALLERY_LAYOUT = [
         label: "A branched silver candelabra",
         text: "Its candles have never been lit, and never collect dust either, in a room where every other surface keeps a thin coat of it faithfully.",
         shape: polygon([[780, 380], [850, 380], [850, 520], [780, 520]]),
+      },
+      {
+        type: "lore",
+        label: "A vase of peacock feathers",
+        text: "Replaced each season from a bird nobody on staff has ever been asked to locate. The feathers never fade, and the vase has never once needed water.",
+        shape: polygon([[1225, 430], [1320, 430], [1320, 590], [1225, 590]]),
+      },
+      {
+        type: "lore",
+        label: "A dark trunk bound in gilt",
+        text: "Logged in every inventory as 'empty, pending contents.' It has been logged that way since the gallery opened, and no curator has thought to correct it.",
+        shape: polygon([[555, 565], [735, 565], [735, 675], [555, 675]]),
+      },
+      {
+        type: "lore",
+        label: "A painted round-topped chest",
+        text: "The painted scene on its lid changes very slightly between inventories — a window open that was shut, a figure a few steps further along a path — never enough that two staff members agree it happened at all.",
+        shape: polygon([[1005, 660], [1135, 660], [1135, 770], [1005, 770]]),
+      },
+      {
+        type: "lore",
+        label: "A small music box left on the table",
+        text: "It plays a lullaby nobody has been able to name, in a key no two listeners transcribe the same way.",
+        shape: polygon([[35, 755], [165, 755], [165, 870], [35, 870]]),
+      },
+      {
+        type: "lore",
+        label: "The worn teddy bear on the shelf",
+        text: "Seated in the same spot every morning regardless of who last moved it the evening before — staff have stopped noting it in the handover log.",
+        shape: polygon([[505, 378], [590, 378], [590, 450], [505, 450]]),
+      },
+      {
+        type: "lore",
+        label: "A second carousel, unglassed",
+        text: "Its twin sits sealed under glass nearby; this one has no dome at all, and turns exactly as slowly, exactly as unexplainably.",
+        shape: polygon([[505, 255], [615, 255], [615, 345], [505, 345]]),
+      },
+      {
+        type: "lore",
+        label: "A doll behind the cabinet glass",
+        text: "Catalogued separately from the doll on the opposite shelf, though conservation's own notes describe them in identical handwriting, word for word, down to the punctuation.",
+        shape: polygon([[1560, 250], [1655, 250], [1655, 420], [1560, 420]]),
       },
     ],
     closeupObjects: [
@@ -749,7 +799,7 @@ const HALL_LORE_OBJECTS = [
   },
   {
     id: "hall-map",
-    type: "lore",
+    type: "guide",
     label: "The antique map",
     text: "A folded map of a coastline that matches no surveyed country. It has been re-folded along the same creases for as long as anyone has worked here, though no one admits to doing it.",
     shape: polygon([[1290, 400], [1430, 405], [1430, 620], [1290, 615]]),
@@ -857,6 +907,36 @@ export const DEFAULT_SCENE_ID = "hall";
 
 export function sceneById(id) {
   return SCENES.find((s) => s.id === id);
+}
+
+// Every `type: "lore"` interactive object across the whole world (hall +
+// every gallery's main/closeup scenes) — the flat list db.js's
+// `seedBuiltinLoreExhibits()` iterates to derive one real exhibit row per
+// object, so world.js stays the single source of truth for which objects
+// exist and db.js never re-derives gallery/scene structure itself. A
+// gallery-owned object's `category` is its gallery's own category; a
+// hall-owned object (no gallery) gets the synthetic `"hall"` category/
+// gallery id db.js seeds purely to satisfy the exhibits table's FK.
+export function allBuiltinLoreObjects() {
+  const out = [];
+  for (const scene of SCENES) {
+    const galleryId = scene.galleryId ?? "hall";
+    const gallery = scene.galleryId ? galleryById(scene.galleryId) : null;
+    const category = gallery?.category ?? "hall";
+    for (const object of scene.interactiveObjects) {
+      if (object.type !== "lore") continue;
+      out.push({
+        id: object.id,
+        sceneId: scene.id,
+        galleryId,
+        category,
+        label: object.label,
+        text: object.text,
+        closeupSceneId: object.closeupSceneId ?? null,
+      });
+    }
+  }
+  return out;
 }
 
 // The shape a client needs to build the illustrated scenes and populate the
