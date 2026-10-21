@@ -21,7 +21,7 @@ import {
 
 const PREFERS_REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
-export function createSceneCamera({ container, layers }) {
+export function createSceneCamera({ container, layers, onTransform }) {
   // layers: array of { el, parallax } — parallax 1.0 = moves fully with the
   // camera (the main art), smaller values = subtler movement (decor/dust),
   // 0 = fixed (the foreground vignette/frame, which must never shift or it
@@ -40,10 +40,17 @@ export function createSceneCamera({ container, layers }) {
   let rafHandle = null;
   let enabled = true;
 
+  // `onTransform` fires after every pan/zoom change (not just on scene
+  // change or an SSE presence event) — lets app.js re-clamp any visitor
+  // cameo into the viewport whenever the camera actually moves, closing the
+  // gap where a cameo positioned against one transform state was never
+  // revisited after the camera panned/zoomed further (see renderCameos'
+  // viewport-clamp safety net).
   function apply() {
     for (const { el, parallax } of layers) {
       el.style.transform = transformFor(pan, zoom, parallax);
     }
+    onTransform?.();
   }
 
   function setPan(next) {

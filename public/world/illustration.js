@@ -52,7 +52,7 @@ function roomLayers(layer) {
   };
 }
 
-export function createIllustrationController({ layerA, layerB, world, onSceneChange }) {
+export function createIllustrationController({ layerA, layerB, world, onSceneChange, onCameraTransform }) {
   const scenesById = new Map(world.scenes.map((s) => [s.id, s]));
   let current = scenesById.get(world.defaultSceneId);
   let front = layerA;
@@ -64,6 +64,7 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
       { el: roomLayers(layerA).room, parallax: 1 },
       { el: roomLayers(layerA).dust, parallax: 0.55 },
     ],
+    onTransform: onCameraTransform,
   });
   let backCamera = null;
 
@@ -137,6 +138,7 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
         { el: roomLayers(back).room, parallax: 1 },
         { el: roomLayers(back).dust, parallax: 0.55 },
       ],
+      onTransform: onCameraTransform,
     });
     backCamera.configure(next.camera);
     back.hidden = false;
