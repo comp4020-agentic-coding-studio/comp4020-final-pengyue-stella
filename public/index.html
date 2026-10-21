@@ -142,7 +142,16 @@
           <label for="donate-gallery">Gallery</label>
           <select id="donate-gallery" name="galleryId" required></select>
 
-          <label for="donate-subtype">Relic type</label>
+          <!-- Visual preset picker: a grid of real relic-appearance
+               thumbnails (see server/src/relic-presets.js), replacing the
+               plain subtype <select> as the primary way a donor chooses what
+               their relic looks like. "Classic" (no curated image for this
+               category/subtype yet) keeps the old subtype dropdown visible
+               underneath, which the legacy procedural renderer then draws. -->
+          <span class="donate-field-label" id="donate-visual-label">Relic appearance</span>
+          <div id="donate-visual-grid" class="visual-preset-grid" role="radiogroup" aria-labelledby="donate-visual-label"></div>
+
+          <label for="donate-subtype" id="donate-subtype-label">Relic type</label>
           <select id="donate-subtype" name="subtype" required></select>
 
           <label for="donate-title">Title</label>
@@ -188,7 +197,7 @@
           <p class="dossier-kicker">Relic Archived</p>
           <h2 id="receipt-title"></h2>
           <p class="dossier-meta" id="receipt-meta"></p>
-          <canvas id="receipt-preview" class="receipt-preview" width="420" height="260"></canvas>
+          <div id="receipt-preview" class="receipt-preview"></div>
           <div class="gate-actions">
             <button type="button" id="receipt-browse" class="secondary">Keep Browsing</button>
             <button type="button" id="receipt-view">View My Relic</button>
@@ -202,7 +211,7 @@
            information is open"). -->
       <div id="dossier" class="side-drawer dossier-drawer" hidden role="dialog" aria-labelledby="dossier-title">
         <button type="button" id="dossier-close" class="drawer-close" aria-label="Close dossier (Esc)">&times;</button>
-        <canvas id="dossier-preview" class="receipt-preview" width="420" height="220"></canvas>
+        <div id="dossier-preview" class="receipt-preview"></div>
         <p class="dossier-kicker" id="dossier-kicker"></p>
         <h2 id="dossier-title"></h2>
         <p class="dossier-meta" id="dossier-meta"></p>

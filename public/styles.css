@@ -329,6 +329,31 @@ a {
   pointer-events: auto;
 }
 
+/* A curated relic preset's own image (see server/src/relic-presets.js) —
+   `object-fit: contain` is what keeps the asset's real aspect ratio intact
+   at any footprint size (CLAUDE.md-aligned brief: never stretch an asset),
+   with a warm drop-shadow standing in for "sits integrated in the room,"
+   never a white box, card background, or visible canvas square. A "wall"
+   anchor (paintings) gets a flatter, more diffuse shadow reading as hung
+   flush to a wall; a "resting" anchor (everything else) gets a tighter,
+   lower shadow reading as an object sitting on a surface with its own
+   footprint. */
+.relic-visual-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+.relic-visual-wall {
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55));
+}
+
+.relic-visual-resting {
+  filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 18px rgba(198, 161, 107, 0.18));
+}
+
 .object-label-wrap {
   pointer-events: none;
   overflow: visible;
@@ -1163,6 +1188,84 @@ a {
   filter: brightness(1.08);
 }
 
+.donate-field-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--mahogany);
+  margin-top: 0.3rem;
+}
+
+/* The curated relic-appearance picker: a small grid of real thumbnails, not
+   a dropdown of text labels — each tile is a genuine <button role="radio">
+   so keyboard/Tab+Enter selects exactly like clicking, matching the same
+   "every control is a real focusable element" rule interactive objects in
+   the scene itself follow. The "Classic" tile (no curated art for this
+   category yet) keeps the legacy procedural look selectable rather than
+   forcing a choice that doesn't exist. */
+.visual-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 0.5rem;
+  margin: 0.2rem 0 0.3rem;
+}
+
+.visual-preset-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem;
+  border: 2px solid rgba(136, 101, 61, 0.35);
+  border-radius: 8px;
+  background: #fffdf7;
+  cursor: pointer;
+  font: inherit;
+}
+
+.visual-preset-tile img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  background: #e9ddc5;
+  border-radius: 4px;
+}
+
+.visual-preset-tile .visual-preset-swatch {
+  width: 64px;
+  height: 64px;
+  border-radius: 4px;
+  background: linear-gradient(160deg, #e9ddc5, #c6a16b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  color: var(--mahogany);
+  text-align: center;
+  padding: 0.2rem;
+}
+
+.visual-preset-tile span.visual-preset-name {
+  font-size: 0.68rem;
+  color: var(--ink);
+  text-align: center;
+  line-height: 1.15;
+}
+
+.visual-preset-tile:hover {
+  border-color: var(--rose);
+}
+
+.visual-preset-tile[aria-checked="true"] {
+  border-color: var(--rose);
+  box-shadow: 0 0 0 2px rgba(198, 95, 110, 0.35);
+  background: #fff6ef;
+}
+
+.visual-preset-tile:focus-visible {
+  outline: 2px solid var(--rose);
+  outline-offset: 2px;
+}
+
 /* Archive: a forbidden-museum catalogue, not a settings menu — deliberately
    its own dark panel (not the cream `.gate-card` every form/receipt/dossier
    uses), since the Archive is a bound ledger of the whole collection, not a
@@ -1225,6 +1328,22 @@ a {
   border: 1px solid var(--brass);
   background: radial-gradient(circle at 50% 40%, #241a12, #0f0b08);
   margin: 0.3rem 0 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.receipt-preview canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.receipt-preview img {
+  max-width: 88%;
+  max-height: 88%;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.6));
 }
 
 /* --- dossier -------------------------------------------------------------- */

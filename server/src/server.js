@@ -5,6 +5,7 @@ import * as db from "./db.js";
 import * as sse from "./sse.js";
 import { serveStatic } from "./static.js";
 import { renderReadmePage } from "./readme-page.js";
+import { RELIC_PRESETS } from "./relic-presets.js";
 import {
   ACCOUNT_KIND_SET,
   VERDICT_SET,
@@ -104,6 +105,14 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // The curated donated-relic visual catalog (see relic-presets.js) — a
+    // small, fixed, server-authored list, exactly like /api/world's own
+    // galleries/subtypes, never something a client assembles itself.
+    if (req.method === "GET" && pathname === "/api/relic-presets") {
+      json(res, 200, { presets: RELIC_PRESETS });
+      return;
+    }
+
     if (req.method === "GET" && pathname === "/api/me") {
       const identity = identify(req);
       db.upsertVisitor(identity.id, identity.name);
@@ -167,6 +176,7 @@ const server = createServer(async (req, res) => {
       }
 
       const { galleryId, slotId, surfaceId, subtype } = payload;
+      const visualId = typeof payload.visualId === "string" ? payload.visualId : undefined;
       const title = typeof payload.title === "string" ? payload.title.trim() : "";
       const originClaim = typeof payload.originClaim === "string" ? payload.originClaim.trim() : "";
       const donorName = typeof payload.donorName === "string" ? payload.donorName.trim() : identity.name;
@@ -206,8 +216,14 @@ const server = createServer(async (req, res) => {
         originClaim,
         donorName,
         visitorId: identity.id,
+        visualId,
       });
 
+      if (result.error === "invalid_visual") {
+        logAction(identity, "donate", { gallery: galleryId, visual: String(visualId) }, "rejected:invalid_visual");
+        json(res, 400, { error: "that relic appearance isn't available for this gallery/surface" }, withCookies({}, identity));
+        return;
+      }
       if (result.error === "not_found") {
         logAction(identity, "donate", { gallery: galleryId, slot: slotId }, "rejected:unknown_gallery_or_slot");
         json(res, 400, { error: "unknown gallery, slot or surface" }, withCookies({}, identity));

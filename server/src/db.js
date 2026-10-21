@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { GALLERIES, surfaceById, legacySlotPlacement, surfacePointFromUv } from "./world.js";
 import { pointInShape, shapeBounds } from "./geometry.js";
 import { VERDICTS } from "./constants.js";
+import { RELIC_PRESETS_BY_ID } from "./relic-presets.js";
 
 const DB_FILE = process.env.MUSEUM_DB_FILE ?? "/data/museum.db";
 
@@ -120,6 +121,18 @@ if (!exhibitColumnsAfterSubtype.some((c) => c.name === "surface_id")) {
   db.exec("ALTER TABLE exhibits ADD COLUMN placement_scale REAL");
 }
 
+// Additive migration: `visual_id` (the curated relic-preset image catalog —
+// see relic-presets.js), added after this table first shipped. An exhibit
+// donated before this column existed simply has visual_id = NULL forever
+// (never backfilled); the client falls back to the old procedural renderer
+// for exactly those rows (see `visualFor` below) — the same "never migrate,
+// only derive at read time" discipline `placementFor`'s own legacy-slot
+// comment already describes.
+const exhibitColumnsAfterSurface = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumnsAfterSurface.some((c) => c.name === "visual_id")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN visual_id TEXT");
+}
+
 // Seed galleries + slots from the static world layout, idempotently — this
 // is config, never written to via the public API, so re-seeding on every
 // boot (INSERT OR IGNORE) just confirms the schema matches the current
@@ -196,6 +209,7 @@ export function donateExhibit({
   originClaim,
   donorName,
   visitorId,
+  visualId,
 }) {
   const slotRow = db
     .prepare("SELECT * FROM display_slots WHERE id = ? AND gallery_id = ?")
@@ -216,6 +230,23 @@ export function donateExhibit({
 
   const appliedScale = typeof scale === "number" && Number.isFinite(scale) ? scale : 1;
   if (appliedScale < surface.minScale || appliedScale > surface.maxScale) return { error: "invalid_scale" };
+
+  // visualId is optional (a donor may skip the picker entirely and keep the
+  // legacy procedural look), but if one is claimed it must be a real,
+  // allow-listed preset compatible with this exact category/subtype/surface
+  // combination — never trust the client's own picker filtering as the
+  // actual authority, the same discipline every other field here applies.
+  let appliedVisualId = null;
+  if (visualId !== undefined && visualId !== null) {
+    const preset = RELIC_PRESETS_BY_ID.get(visualId);
+    const valid =
+      preset &&
+      preset.category === galleryRow.category &&
+      preset.subtype === subtype &&
+      preset.compatibleSurfaceTypes.includes(surface.surfaceType);
+    if (!valid) return { error: "invalid_visual" };
+    appliedVisualId = visualId;
+  }
 
   const exhibitId = `exhibit_${randomUUID()}`;
   const accountId = `account_${randomUUID()}`;
@@ -241,8 +272,8 @@ export function donateExhibit({
     }
 
     db.prepare(
-      "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype, surface_id, placement_u, placement_v, placement_scale) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(exhibitId, galleryId, slotId, galleryRow.category, title, donorName, now, subtype, surfaceId, u, v, appliedScale);
+      "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype, surface_id, placement_u, placement_v, placement_scale, visual_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(exhibitId, galleryId, slotId, galleryRow.category, title, donorName, now, subtype, surfaceId, u, v, appliedScale, appliedVisualId);
 
     db.prepare("UPDATE display_slots SET occupied_exhibit_id = ? WHERE id = ?").run(
       exhibitId,
@@ -405,6 +436,7 @@ function fullExhibit(exhibitId, visitorId) {
     accounts,
     classification: classifyExhibit(accounts),
     placement: placementFor(row),
+    visualId: row.visual_id ?? null,
   };
 }
 

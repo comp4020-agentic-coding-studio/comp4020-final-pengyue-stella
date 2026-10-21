@@ -1,4 +1,4 @@
-import { renderArtifactPreview, renderArtifactObject } from "./world/artifacts.js";
+import { renderArtifactObject } from "./world/artifacts.js";
 import { createIllustrationController } from "./world/illustration.js";
 import { createAmbientSoundscape } from "./world/ambient.js";
 import { pointInShape, shapeBounds, snapIntoShape, surfaceUvFromPoint, surfacePointFromUv, surfaceCentroidUv, expandShape } from "./world/geometry.js";
@@ -17,6 +17,7 @@ const toastsEl = el("toasts");
 let myIdentity = null;
 let myPublicKey = null;
 let world = null;
+let relicPresets = []; // the curated donated-relic visual catalog — see server/src/relic-presets.js
 let exhibitsById = new Map(); // exhibitId -> exhibit (with accounts)
 let illustrator = null;
 let lastSceneCounts = {};
@@ -84,6 +85,12 @@ async function loadWorld() {
   world = await res.json();
 }
 
+async function loadRelicPresets() {
+  const res = await fetch("/api/relic-presets");
+  const { presets } = await res.json();
+  relicPresets = presets;
+}
+
 async function loadExhibits() {
   const res = await fetch("/api/exhibits");
   const { exhibits } = await res.json();
@@ -123,9 +130,19 @@ const SUBTYPE_LABEL = {
   doll: "Doll", toy: "Toy", book: "Book or letter",
 };
 
+// The donor's chosen curated visual id, or null for "Classic" (the legacy
+// procedural look) — kept outside the form's own native fields since a
+// radio-grid of image tiles isn't a native form control the submit handler
+// can read via `form.someField.value` the way the plain <select>s are.
+let selectedVisualId = null;
+
+const CLASSIC_VISUAL_ID = null;
+
 function populateDonateForm() {
   const gallerySelect = el("donate-gallery");
   const subtypeSelect = el("donate-subtype");
+  const subtypeLabel = el("donate-subtype-label");
+  const visualGrid = el("donate-visual-grid");
   gallerySelect.innerHTML = "";
   for (const g of world.galleries) {
     const opt = document.createElement("option");
@@ -140,6 +157,14 @@ function populateDonateForm() {
   const scene = illustrator?.currentScene();
   if (scene?.galleryId) gallerySelect.value = scene.galleryId;
 
+  function selectVisual(visualId, subtype) {
+    selectedVisualId = visualId;
+    subtypeSelect.value = subtype;
+    for (const tile of visualGrid.querySelectorAll(".visual-preset-tile")) {
+      tile.setAttribute("aria-checked", tile.dataset.visualId === String(visualId) ? "true" : "false");
+    }
+  }
+
   function refreshSubtypes() {
     const gallery = world.galleries.find((g) => g.id === gallerySelect.value);
     subtypeSelect.innerHTML = "";
@@ -148,6 +173,65 @@ function populateDonateForm() {
       opt.value = subtype;
       opt.textContent = SUBTYPE_LABEL[subtype] ?? subtype;
       subtypeSelect.appendChild(opt);
+    }
+
+    // The visual picker: every curated preset for this gallery's category,
+    // plus a trailing "Classic" tile that falls back to the old procedural
+    // model and lets the donor freely pick any subtype via the select below.
+    visualGrid.innerHTML = "";
+    const presetsForGallery = relicPresets.filter((p) => p.category === gallery?.category);
+    for (const preset of presetsForGallery) {
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "visual-preset-tile";
+      tile.setAttribute("role", "radio");
+      tile.dataset.visualId = preset.id;
+      const img = document.createElement("img");
+      img.src = preset.assetPath;
+      img.alt = preset.name;
+      tile.appendChild(img);
+      const name = document.createElement("span");
+      name.className = "visual-preset-name";
+      name.textContent = preset.name;
+      tile.appendChild(name);
+      tile.addEventListener("click", () => {
+        selectVisual(preset.id, preset.subtype);
+        subtypeSelect.hidden = true;
+        subtypeLabel.hidden = true;
+      });
+      visualGrid.appendChild(tile);
+    }
+    const classicTile = document.createElement("button");
+    classicTile.type = "button";
+    classicTile.className = "visual-preset-tile";
+    classicTile.setAttribute("role", "radio");
+    classicTile.dataset.visualId = "null";
+    const swatch = document.createElement("span");
+    swatch.className = "visual-preset-swatch";
+    swatch.textContent = "Classic";
+    classicTile.appendChild(swatch);
+    const classicName = document.createElement("span");
+    classicName.className = "visual-preset-name";
+    classicName.textContent = "Choose a type below";
+    classicTile.appendChild(classicName);
+    classicTile.addEventListener("click", () => {
+      selectVisual(CLASSIC_VISUAL_ID, subtypeSelect.value);
+      subtypeSelect.hidden = false;
+      subtypeLabel.hidden = false;
+    });
+    visualGrid.appendChild(classicTile);
+
+    // Default to the gallery's first curated preset if it has one, so a
+    // donor sees an integrated illustrated relic by default rather than
+    // having to discover the picker; "Classic" otherwise.
+    if (presetsForGallery.length > 0) {
+      selectVisual(presetsForGallery[0].id, presetsForGallery[0].subtype);
+      subtypeSelect.hidden = true;
+      subtypeLabel.hidden = true;
+    } else {
+      selectVisual(CLASSIC_VISUAL_ID, subtypeSelect.value);
+      subtypeSelect.hidden = false;
+      subtypeLabel.hidden = false;
     }
   }
   gallerySelect.onchange = refreshSubtypes;
@@ -188,6 +272,7 @@ el("donate-form").addEventListener("submit", (e) => {
     title: form.title.value.trim(),
     originClaim: form.originClaim.value.trim(),
     donorName: form.donorName.value.trim() || myIdentity?.name,
+    visualId: selectedVisualId,
   };
   closeDonateGate();
   startPlacement(exhibitForm);
@@ -286,14 +371,12 @@ function openReceipt(exhibit) {
   el("receipt-meta").textContent =
     `Exhibit #${exhibit.number} · ${gallery?.name ?? exhibit.galleryId} · donated by ${exhibit.donorName}`;
 
-  const canvas = el("receipt-preview");
-  renderArtifactPreview(canvas, {
+  renderRelicVisual(el("receipt-preview"), {
+    visualId: exhibit.visualId,
     category: exhibit.category,
     subtype: exhibit.subtype,
     accent: gallery?.accent ?? "#88653d",
     exhibitId: exhibit.id,
-    title: exhibit.title,
-    donorName: exhibit.donorName,
   });
 
   el("donate-receipt").hidden = false;
@@ -507,13 +590,12 @@ function renderDossier(exhibit) {
 
   if (dossierPreviewExhibitId !== exhibit.id) {
     dossierPreviewExhibitId = exhibit.id;
-    renderArtifactPreview(el("dossier-preview"), {
+    renderRelicVisual(el("dossier-preview"), {
+      visualId: exhibit.visualId,
       category: exhibit.category,
       subtype: exhibit.subtype,
       accent: gallery?.accent ?? "#88653d",
       exhibitId: exhibit.id,
-      title: exhibit.title,
-      donorName: exhibit.donorName,
     });
   }
 
@@ -1077,6 +1159,44 @@ function attachHotspotBehaviour(node, { onActivate, objectId }) {
   node.addEventListener("mouseleave", () => node.classList.remove("hovered"));
 }
 
+// ---------------------------------------------------------------------------
+// Curated relic visuals: a real illustrated image asset (see
+// server/src/relic-presets.js) replaces the low-detail procedural Three.js
+// model as a donated exhibit's rendered appearance whenever one was chosen
+// at donation time. An exhibit with no visualId (every exhibit donated
+// before this catalog existed) still falls back to the exact same
+// procedural `renderArtifactObject` path as before — this is the ONLY
+// thing that path is still used for in-room; it's untouched otherwise.
+
+function presetById(visualId) {
+  return relicPresets.find((p) => p.id === visualId);
+}
+
+// Fills `container` (a plain DOM node, not necessarily an SVG one — used
+// inside a <foreignObject> both here and in the placement preview) with
+// either the curated image (object-fit: contain, so the asset's own aspect
+// ratio is always preserved and it is never stretched to fill a square
+// footprint) or, lacking a visualId, the legacy procedural canvas.
+function renderRelicVisual(container, { visualId, category, subtype, accent, exhibitId }) {
+  container.innerHTML = "";
+  const preset = visualId ? presetById(visualId) : null;
+  if (preset) {
+    const img = document.createElement("img");
+    img.src = preset.assetPath;
+    img.alt = "";
+    img.className = `relic-visual-img relic-visual-${preset.anchor}`;
+    container.appendChild(img);
+    return;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = 160;
+  canvas.height = 160;
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  container.appendChild(canvas);
+  renderArtifactObject(canvas, { category, subtype, accent, exhibitId });
+}
+
 function sceneImageUrl(scene) {
   const IMAGE_FILES = {
     hall: "entrance-hall-v2.png",
@@ -1136,25 +1256,32 @@ function buildExhibitObject(exhibit, gallery, scene) {
   // A footprint sized relative to its surface's own extent, scaled by the
   // placement's own `scale` — large enough to be a comfortable click
   // target, small enough to read as sitting ON the surface rather than
-  // covering it.
+  // covering it. A curated preset keeps its own real aspect ratio (never
+  // stretched — CLAUDE.md-aligned brief) rather than forcing a square
+  // footprint the way the old procedural canvas used; a "resting" preset's
+  // own visual base sits at the surface point (like an object standing on a
+  // shelf), while a "wall" preset centres on it (like a hung frame).
   const b = shapeBounds(surface.shape);
-  const footprint = Math.max(60, Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.55) * scale;
-  const half = footprint / 2;
+  const preset = exhibit.visualId ? presetById(exhibit.visualId) : null;
+  const baseSize = Math.max(60, Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.55) * scale;
+  const aspect = preset ? preset.naturalWidth / preset.naturalHeight : 1;
+  const width = aspect >= 1 ? baseSize : baseSize * aspect;
+  const height = aspect >= 1 ? baseSize / aspect : baseSize;
+  const half = Math.max(width, height) / 2;
 
   const fo = document.createElementNS(SVG_NS, "foreignObject");
-  fo.setAttribute("x", String(point.x - half));
-  fo.setAttribute("y", String(point.y - half));
-  fo.setAttribute("width", String(footprint));
-  fo.setAttribute("height", String(footprint));
+  fo.setAttribute("x", String(point.x - width / 2));
+  fo.setAttribute("y", String(preset?.anchor === "resting" ? point.y - height : point.y - height / 2));
+  fo.setAttribute("width", String(width));
+  fo.setAttribute("height", String(height));
   fo.setAttribute("class", "object-hit");
-  const canvas = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
-  canvas.width = 160;
-  canvas.height = 160;
-  canvas.style.width = "100%";
-  canvas.style.height = "100%";
-  fo.appendChild(canvas);
+  const container = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
+  container.style.width = "100%";
+  container.style.height = "100%";
+  fo.appendChild(container);
   g.appendChild(fo);
-  renderArtifactObject(canvas, {
+  renderRelicVisual(container, {
+    visualId: exhibit.visualId,
     category: exhibit.category,
     subtype: exhibit.subtype,
     accent: gallery.accent,
@@ -1234,28 +1361,33 @@ function renderPlacementSurfaces(objectLayer, scene) {
   const defaultUv = surfaceCentroidUv(surface);
   const point = placement.point ?? surfacePointFromUv(surface, defaultUv.u, defaultUv.v);
   const b = shapeBounds(surface.shape);
-  const footprint = Math.max(60, Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.55);
-  const half = footprint / 2;
+  // The exact same curated preset (if one was chosen) the final placed relic
+  // will render with, at the exact same aspect ratio — a drag preview is
+  // never a generic ghost box, and never a different asset than the one
+  // that actually gets persisted.
+  const preset = placement.exhibitForm.visualId ? presetById(placement.exhibitForm.visualId) : null;
+  const baseSize = Math.max(60, Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.55);
+  const aspect = preset ? preset.naturalWidth / preset.naturalHeight : 1;
+  const width = aspect >= 1 ? baseSize : baseSize * aspect;
+  const height = aspect >= 1 ? baseSize / aspect : baseSize;
 
   const fo = document.createElementNS(SVG_NS, "foreignObject");
   fo.setAttribute("id", "placement-preview");
-  fo.setAttribute("x", String(point.x - half));
-  fo.setAttribute("y", String(point.y - half));
-  fo.setAttribute("width", String(footprint));
-  fo.setAttribute("height", String(footprint));
+  fo.setAttribute("x", String(point.x - width / 2));
+  fo.setAttribute("y", String(preset?.anchor === "resting" ? point.y - height : point.y - height / 2));
+  fo.setAttribute("width", String(width));
+  fo.setAttribute("height", String(height));
   fo.setAttribute("class", "placement-preview");
-  const canvas = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
-  canvas.width = 160;
-  canvas.height = 160;
-  canvas.style.width = "100%";
-  canvas.style.height = "100%";
-  fo.appendChild(canvas);
+  const container = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
+  container.style.width = "100%";
+  container.style.height = "100%";
+  fo.appendChild(container);
   objectLayer.appendChild(fo);
-  const gallery2 = gallery;
-  renderArtifactObject(canvas, {
-    category: gallery2.category,
+  renderRelicVisual(container, {
+    visualId: placement.exhibitForm.visualId,
+    category: gallery.category,
     subtype,
-    accent: gallery2.accent,
+    accent: gallery.accent,
     exhibitId: `placement-preview:${subtype}`,
   });
 
@@ -1501,6 +1633,7 @@ async function boot() {
   updateWhoami();
 
   await loadWorld();
+  await loadRelicPresets();
   await loadExhibits();
 
   illustrator = createIllustrationController({
