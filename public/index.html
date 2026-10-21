@@ -288,6 +288,52 @@
         <h2 id="dossier-title"></h2>
         <p class="dossier-meta" id="dossier-meta"></p>
         <button type="button" id="dossier-inspect-closer" class="dossier-inspect-closer" hidden>Inspect Closer</button>
+
+        <!-- Owner-only controls: shown only when the server's own per-
+             requester `isOwnedByRequester` field says this visitor is the
+             one who actually donated this exhibit (see app.js's
+             renderDossier) — never shown for a builtin/founding exhibit or
+             someone else's donation, and the server independently re-checks
+             ownership on every PATCH/DELETE regardless of what the client
+             shows. -->
+        <div id="dossier-owner-controls" class="dossier-owner-controls" hidden>
+          <button type="button" id="dossier-edit" class="secondary">Edit</button>
+          <button type="button" id="dossier-delete" class="secondary dossier-delete-btn">Withdraw&hellip;</button>
+        </div>
+
+        <!-- Inline "really withdraw?" confirmation, shown in place of the
+             two buttons above rather than a blocking native confirm() — this
+             project's other destructive-feeling actions (donate, publish an
+             account) are all inline forms with their own Cancel, so this
+             matches that existing convention instead of introducing the
+             first native dialog in the app. -->
+        <div id="dossier-delete-confirm" class="dossier-delete-confirm" hidden role="alertdialog" aria-labelledby="dossier-delete-confirm-text">
+          <p id="dossier-delete-confirm-text">Really withdraw this relic? This removes it from every visitor's museum. Its history is kept, never shown again.</p>
+          <div class="gate-actions">
+            <button type="button" id="dossier-delete-cancel" class="secondary">Cancel</button>
+            <button type="button" id="dossier-delete-confirm-btn" class="dossier-delete-btn">Withdraw</button>
+          </div>
+          <p class="gate-error" id="dossier-delete-error" role="alert"></p>
+        </div>
+
+        <!-- Inline edit form: title is a direct field update; "origin claim"
+             publishes a brand-new revision account (never an overwrite of
+             the original — see server/src/db.js's addOwnerDescriptionRevision)
+             alongside the exhibit's existing account history below. -->
+        <form id="dossier-edit-form" class="account-form" hidden>
+          <h3>Edit Your Relic</h3>
+          <label for="dossier-edit-title">Title</label>
+          <input id="dossier-edit-title" name="title" maxlength="80" required />
+          <label for="dossier-edit-claim">Revise the origin claim (published as a new account, the original stays)</label>
+          <textarea id="dossier-edit-claim" name="originClaim" maxlength="240" rows="3"
+            placeholder="Leave blank to only change the title&hellip;"></textarea>
+          <div class="gate-actions">
+            <button type="button" id="dossier-edit-cancel" class="secondary">Cancel</button>
+            <button type="submit">Save</button>
+          </div>
+          <p class="gate-error" id="dossier-edit-error" role="alert"></p>
+        </form>
+
         <div id="dossier-accounts" class="dossier-accounts"></div>
 
         <form id="account-form" class="account-form">

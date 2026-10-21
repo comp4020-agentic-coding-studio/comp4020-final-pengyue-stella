@@ -43,6 +43,10 @@ export const MAX_CLAIM_LENGTH = 240;
 // Cheap per-visitor spam guard, not a moderation system.
 export const DONATE_COOLDOWN_MS = 4000;
 export const ACCOUNT_COOLDOWN_MS = 2000;
+// Shared between PATCH (edit) and DELETE on an owned exhibit — both are rare,
+// deliberate actions, so one shared cooldown (not two) is enough to stop a
+// rapid-fire retry loop without being a real obstacle to normal use.
+export const EXHIBIT_EDIT_COOLDOWN_MS = 2000;
 
 // Scene-presence reports: bounded frequency. A visitor who posts faster
 // than this is simply dropped until the window passes — the server stays

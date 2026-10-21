@@ -173,6 +173,34 @@ if (!exhibitColumnsAfterBackfillFlag.some((c) => c.name === "closeup_scene_id"))
   db.exec("ALTER TABLE exhibits ADD COLUMN closeup_scene_id TEXT");
 }
 
+// Additive migration: `donor_visitor_id` records which visitor's cookie
+// actually donated an exhibit — the true ownership fact `donor_name` (a
+// free-text field anyone could type identically) can never serve as (see
+// CLAUDE.md). Populated going forward by `donateExhibit`'s INSERT below;
+// NULL on every row that predates this column, including the entire
+// Founding Collection and every built-in museum object (neither has a real
+// owner) AND every real donation made before this feature shipped — those
+// older donations simply have no recorded owner forever (never backfilled,
+// per this file's "never migrate, only derive" discipline), so "no edit/
+// delete available because this donation predates ownership tracking" is
+// the honest, expected state for them, not a bug.
+const exhibitColumnsAfterCloseup = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumnsAfterCloseup.some((c) => c.name === "donor_visitor_id")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN donor_visitor_id TEXT");
+}
+
+// Additive migration: `deleted_at` — a soft-delete marker set only by
+// `softDeleteExhibit` (the owner withdrawing their own donation). NULL means
+// "not deleted" (every existing row). A soft-deleted row is excluded from
+// `allExhibits()`/`exhibitById()`'s normal lookup so the REST API simply
+// stops returning it to every visitor, including its own former owner — but
+// the row, and every account/vote/event ever attached to it, stays in the
+// database forever (CLAUDE.md: historical data is retained, never erased).
+const exhibitColumnsAfterDonorVisitor = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumnsAfterDonorVisitor.some((c) => c.name === "deleted_at")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN deleted_at TEXT");
+}
+
 // Seed galleries + slots from the static world layout, idempotently — this
 // is config, never written to via the public API, so re-seeding on every
 // boot (INSERT OR IGNORE) just confirms the schema matches the current
@@ -225,7 +253,7 @@ const MIN_SURFACE_SEPARATION = 0.22;
 function surfaceCollision(galleryId, surfaceId, u, v) {
   const rows = db
     .prepare(
-      "SELECT placement_u AS u, placement_v AS v FROM exhibits WHERE gallery_id = ? AND surface_id = ?",
+      "SELECT placement_u AS u, placement_v AS v FROM exhibits WHERE gallery_id = ? AND surface_id = ? AND deleted_at IS NULL",
     )
     .all(galleryId, surfaceId);
   return rows.some((r) => Math.hypot(r.u - u, r.v - v) < MIN_SURFACE_SEPARATION);
@@ -321,8 +349,8 @@ export function donateExhibit({
     }
 
     db.prepare(
-      "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype, surface_id, placement_u, placement_v, placement_scale, visual_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(exhibitId, galleryId, slotId, galleryRow.category, title, donorName, now, subtype, surfaceId, u, v, appliedScale, appliedVisualId);
+      "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype, surface_id, placement_u, placement_v, placement_scale, visual_id, donor_visitor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(exhibitId, galleryId, slotId, galleryRow.category, title, donorName, now, subtype, surfaceId, u, v, appliedScale, appliedVisualId, visitorId ?? null);
 
     db.prepare("UPDATE display_slots SET occupied_exhibit_id = ? WHERE id = ?").run(
       exhibitId,
@@ -340,7 +368,12 @@ export function donateExhibit({
     throw err;
   }
 
-  return { exhibit: fullExhibit(exhibitId) };
+  // visitorId here so the donor's own immediate REST response correctly
+  // reports isOwnedByRequester: true (server.js strips this field again
+  // before the shared `exhibit` SSE broadcast — see its own comment there —
+  // so no OTHER connected visitor ever receives it as true for someone
+  // else's fresh donation).
+  return { exhibit: fullExhibit(exhibitId, visitorId) };
 }
 
 // The normalized placement a client should actually render an exhibit at —
@@ -361,7 +394,10 @@ export function placementFor(exhibitRow) {
 
 // Returns { account } or { error: "not_found" }.
 export function addAccount({ exhibitId, kind, body, challengedAccountId, authorName, visitorId }) {
-  const exhibitRow = db.prepare("SELECT id FROM exhibits WHERE id = ?").get(exhibitId);
+  // A soft-deleted exhibit (see softDeleteExhibit) is excluded here too — it
+  // no longer exists from the API's point of view, so it can't accept new
+  // accounts either, same as a genuinely unknown exhibit id.
+  const exhibitRow = db.prepare("SELECT id FROM exhibits WHERE id = ? AND deleted_at IS NULL").get(exhibitId);
   if (!exhibitRow) return { error: "not_found" };
 
   if (challengedAccountId) {
@@ -379,6 +415,104 @@ export function addAccount({ exhibitId, kind, body, challengedAccountId, authorN
   logEvent(visitorId, "account.created", { accountId, exhibitId, kind });
 
   return { account: fullAccount(accountId), exhibitClassification: classifyExhibit(fullExhibit(exhibitId).accounts) };
+}
+
+// Owner-only exhibit edit/delete — a brand new feature, additive to the
+// donate/account/vote machinery above, never a second parallel path for any
+// of it. Ownership is always checked against the real `donor_visitor_id`
+// column (never the free-text `donor_name` — see that column's own migration
+// comment), and a builtin/founding exhibit (donor_visitor_id IS NULL always)
+// can therefore never pass this check for anyone, which is the whole
+// belt-and-braces story CLAUDE.md asks for: the primary defense is real
+// ownership, origin is just never going to match for those rows.
+//
+// Returns { exhibit } or { error: "not_found" | "forbidden" | "invalid_title" }.
+// Title is a direct field update (exhibits.title is not an account, so
+// CLAUDE.md's "an account is never mutated" rule doesn't reach it), logged
+// via logEvent for an audit trail exactly like every other write here.
+export function updateExhibitTitle({ exhibitId, visitorId, title }) {
+  const row = db.prepare("SELECT donor_visitor_id FROM exhibits WHERE id = ? AND deleted_at IS NULL").get(exhibitId);
+  if (!row) return { error: "not_found" };
+  if (!visitorId || !row.donor_visitor_id || row.donor_visitor_id !== visitorId) return { error: "forbidden" };
+
+  const trimmed = typeof title === "string" ? title.trim() : "";
+  if (!trimmed) return { error: "invalid_title" };
+
+  db.prepare("UPDATE exhibits SET title = ? WHERE id = ?").run(trimmed, exhibitId);
+  logEvent(visitorId, "exhibit.title_edited", { exhibitId, title: trimmed });
+
+  return { exhibit: fullExhibit(exhibitId, visitorId) };
+}
+
+// The owner's "edit description" action never overwrites the original
+// account's own body (CLAUDE.md: "an account is never mutated or deleted
+// once published") — it reuses the exact same mechanism an unrelated
+// visitor's counter-evidence already uses: a brand new `accounts` row with
+// `kind: "revision"` and `challengedAccountId` pointing at the account being
+// revised, authored as the owner. The only thing distinguishing an owner's
+// own revision from anyone else's is `authorId === donor_visitor_id`, which
+// the client can already see via `isOwnedByRequester` plus the account's own
+// `authorName` — no new account kind or table needed.
+//
+// Returns { account } or { error: "not_found" | "forbidden" }. `not_found`
+// covers both an unknown exhibit and an unknown/foreign `challengedAccountId`
+// (addAccount already guards the latter).
+export function addOwnerDescriptionRevision({ exhibitId, visitorId, body, authorName, challengedAccountId }) {
+  const row = db.prepare("SELECT donor_visitor_id FROM exhibits WHERE id = ? AND deleted_at IS NULL").get(exhibitId);
+  if (!row) return { error: "not_found" };
+  if (!visitorId || !row.donor_visitor_id || row.donor_visitor_id !== visitorId) return { error: "forbidden" };
+
+  return addAccount({
+    exhibitId,
+    kind: "revision",
+    body,
+    challengedAccountId,
+    authorName,
+    visitorId,
+  });
+}
+
+// Soft delete: the row (and every account/vote/event attached to it) is
+// never removed — only `deleted_at` is set, which `fullExhibit`/`allExhibits`
+// already exclude on every normal read, so a withdrawn exhibit disappears
+// from the API exactly as if it never existed, while its full history stays
+// physically in the database forever (CLAUDE.md: retain historical data).
+// The display slot it occupied is released in the SAME transaction, so a new
+// donation can claim it immediately once this commits. Returns { ok: true }
+// or { error: "not_found" | "forbidden" }.
+//
+// `exhibits.slot_id` is `NOT NULL UNIQUE REFERENCES display_slots(id)` —
+// freeing the real slot (`occupied_exhibit_id = NULL`) alone is NOT enough to
+// let a new exhibit claim it, because the soft-deleted row would still
+// permanently hold that same slot_id forever (a second row can never take a
+// slot_id another row still references, deleted or not). So the deleted
+// row's own slot_id is re-pointed to a fresh, never-rendered tombstone slot —
+// exactly the same "a row still needs *some* unique slot to satisfy the FK,
+// even though it holds no real display position" reasoning
+// seedBuiltinLoreExhibits' own virtual slots already use — before the real
+// slot is released, so the UNIQUE constraint is never violated.
+export function softDeleteExhibit({ exhibitId, visitorId }) {
+  const row = db.prepare("SELECT donor_visitor_id, slot_id, gallery_id FROM exhibits WHERE id = ? AND deleted_at IS NULL").get(exhibitId);
+  if (!row) return { error: "not_found" };
+  if (!visitorId || !row.donor_visitor_id || row.donor_visitor_id !== visitorId) return { error: "forbidden" };
+
+  const now = new Date().toISOString();
+  const tombstoneSlotId = `${exhibitId}_withdrawn_slot`;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(
+      "INSERT INTO display_slots (id, gallery_id, x, z, rotation_y, occupied_exhibit_id) VALUES (?, ?, 0, 0, 0, ?)",
+    ).run(tombstoneSlotId, row.gallery_id, exhibitId);
+    db.prepare("UPDATE exhibits SET slot_id = ?, deleted_at = ? WHERE id = ?").run(tombstoneSlotId, now, exhibitId);
+    db.prepare("UPDATE display_slots SET occupied_exhibit_id = NULL WHERE id = ?").run(row.slot_id);
+    logEvent(visitorId, "exhibit.deleted", { exhibitId });
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+
+  return { ok: true };
 }
 
 // Returns { vote } or { error: "not_found" }.
@@ -466,7 +600,12 @@ function classifyExhibit(accounts) {
 }
 
 function fullExhibit(exhibitId, visitorId) {
-  const row = db.prepare("SELECT *, rowid AS number FROM exhibits WHERE id = ?").get(exhibitId);
+  // Soft-deleted rows (see `deleted_at`'s own migration comment above) are
+  // excluded here, not just filtered client-side — the REST API simply
+  // stops returning a withdrawn exhibit to anyone, including its own former
+  // owner, while the row and its full account/vote/event history stay
+  // physically in the database forever.
+  const row = db.prepare("SELECT *, rowid AS number FROM exhibits WHERE id = ? AND deleted_at IS NULL").get(exhibitId);
   if (!row) return null;
   const accountRows = db
     .prepare("SELECT id FROM accounts WHERE exhibit_id = ? ORDER BY created_at ASC")
@@ -489,6 +628,15 @@ function fullExhibit(exhibitId, visitorId) {
     origin: row.origin,
     visualIdBackfilled: !!row.visual_id_backfilled,
     closeupSceneId: row.closeup_scene_id ?? null,
+    // Per-requester only (never broadcast globally — see server.js's
+    // donate/edit/delete handlers, which strip this before an `sse.broadcast`
+    // so no OTHER visitor's client ever receives a stale/wrong value for a
+    // peer's own exhibit): true exactly when the requesting visitor is the
+    // one who actually donated this exhibit, checked against the real
+    // `donor_visitor_id` column, never the free-text `donor_name`. Always
+    // false for `founding`/`builtin` exhibits (donor_visitor_id is NULL for
+    // both) and for any donation made before this column existed.
+    isOwnedByRequester: !!visitorId && !!row.donor_visitor_id && row.donor_visitor_id === visitorId,
     // Builtin-object dossier preview support: the owning scene id + the
     // object's own hand-traced `shape` (world.js's builtinObjectCropInfo),
     // so the client can render a CSS background-image crop of the EXACT
@@ -508,7 +656,9 @@ export function exhibitById(exhibitId, visitorId) {
 }
 
 export function allExhibits(visitorId) {
-  const rows = db.prepare("SELECT id FROM exhibits ORDER BY created_at ASC").all();
+  const rows = db
+    .prepare("SELECT id FROM exhibits WHERE deleted_at IS NULL ORDER BY created_at ASC")
+    .all();
   return rows.map((r) => fullExhibit(r.id, visitorId));
 }
 

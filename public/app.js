@@ -646,6 +646,18 @@ function renderDossier(exhibit) {
     container.appendChild(renderAccountBlock(account, exhibit));
   }
   el("account-challenged").value = exhibit.accounts[exhibit.accounts.length - 1]?.id ?? "";
+
+  // Owner-only controls: `isOwnedByRequester` is computed server-side, per
+  // requester, by comparing the exhibit's real donor_visitor_id against this
+  // visitor's own identity cookie — never derived from donorName (a
+  // free-text field anyone could type) and never trusted from anywhere but
+  // this server response. A builtin/founding exhibit's donor_visitor_id is
+  // always NULL, so this is always false for those regardless of who asks.
+  el("dossier-owner-controls").hidden = !exhibit.isOwnedByRequester;
+  if (!exhibit.isOwnedByRequester) {
+    closeDossierEdit();
+    closeDossierDeleteConfirm();
+  }
 }
 
 function openDossier(exhibitId) {
@@ -666,6 +678,8 @@ function openDossier(exhibitId) {
 function closeDossier() {
   openDossierExhibitId = null;
   el("dossier").hidden = true;
+  closeDossierEdit();
+  closeDossierDeleteConfirm();
   setFocusedObject(null);
   viewport.focus();
 }
@@ -717,6 +731,98 @@ function applyAccountUpdate(exhibitId, account, { isNew = false } = {}) {
     // exhibit's overall classification, not on every single vote cast.
     toast(`"${exhibit.title}" is now classified ${exhibit.classification}.`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Owner-only edit/delete (a brand new feature). Controls only ever render
+// when the server's own `isOwnedByRequester` said so (see renderDossier) —
+// but every PATCH/DELETE below still relies on the server to re-check real
+// ownership; nothing here is itself a security boundary.
+
+function openDossierEdit() {
+  if (!openDossierExhibitId) return;
+  const exhibit = exhibitsById.get(openDossierExhibitId);
+  if (!exhibit) return;
+  closeDossierDeleteConfirm();
+  el("dossier-edit-title").value = exhibit.title;
+  el("dossier-edit-claim").value = "";
+  el("dossier-edit-error").textContent = "";
+  el("dossier-edit-form").hidden = false;
+  el("dossier-edit-title").focus();
+}
+function closeDossierEdit() {
+  el("dossier-edit-form").hidden = true;
+  el("dossier-edit-error").textContent = "";
+}
+el("dossier-edit").addEventListener("click", openDossierEdit);
+el("dossier-edit-cancel").addEventListener("click", closeDossierEdit);
+
+el("dossier-edit-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!openDossierExhibitId) return;
+  const title = el("dossier-edit-title").value.trim();
+  const originClaim = el("dossier-edit-claim").value.trim();
+  const errEl = el("dossier-edit-error");
+  if (!title) {
+    errEl.textContent = "Title can't be empty.";
+    return;
+  }
+  const payload = { title };
+  if (originClaim) payload.originClaim = originClaim;
+  const res = await fetch(`/api/exhibits/${openDossierExhibitId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    errEl.textContent = data.error ?? "Could not save those changes.";
+    return;
+  }
+  exhibitsById.set(data.exhibit.id, data.exhibit);
+  closeDossierEdit();
+  if (openDossierExhibitId === data.exhibit.id) renderDossier(data.exhibit);
+  refreshInteractiveObjects(); // the title shown on the in-room label/card may have changed
+  toast(`"${data.exhibit.title}" updated.`);
+});
+
+function openDossierDeleteConfirm() {
+  closeDossierEdit();
+  el("dossier-delete-error").textContent = "";
+  el("dossier-delete-confirm").hidden = false;
+  el("dossier-delete-cancel").focus();
+}
+function closeDossierDeleteConfirm() {
+  el("dossier-delete-confirm").hidden = true;
+  el("dossier-delete-error").textContent = "";
+}
+el("dossier-delete").addEventListener("click", openDossierDeleteConfirm);
+el("dossier-delete-cancel").addEventListener("click", closeDossierDeleteConfirm);
+
+el("dossier-delete-confirm-btn").addEventListener("click", async () => {
+  if (!openDossierExhibitId) return;
+  const exhibitId = openDossierExhibitId;
+  const res = await fetch(`/api/exhibits/${exhibitId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    el("dossier-delete-error").textContent = data.error ?? "Could not withdraw that relic.";
+    return;
+  }
+  removeExhibitLocally(exhibitId, "You withdrew this relic from the museum.");
+});
+
+// Shared by both the owner's own successful DELETE and an `exhibit.deleted`
+// SSE broadcast from someone else's tab/session — one path, not two, for
+// "this exhibit no longer exists anywhere in local state."
+function removeExhibitLocally(exhibitId, toastMessage) {
+  const exhibit = exhibitsById.get(exhibitId);
+  exhibitsById.delete(exhibitId);
+  if (openDossierExhibitId === exhibitId) closeDossier();
+  refreshInteractiveObjects();
+  refreshGuideFloorPlanIfOpen();
+  if (!el("archive-gate").hidden) renderArchiveList();
+  if (toastMessage) toast(toastMessage);
+  else if (exhibit) toast(`"${exhibit.title}" was withdrawn by its donor.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -1265,6 +1371,30 @@ function connectEvents() {
   eventSource.addEventListener("vote", (e) => {
     const account = JSON.parse(e.data);
     applyAccountUpdate(account.exhibitId, account);
+  });
+
+  // Owner-edited elsewhere (another tab/session for the SAME visitor, or —
+  // once ownership transfer ever existed — someone else's view of it): the
+  // broadcast payload never carries `isOwnedByRequester` (server.js strips
+  // it before broadcasting, since that field is only ever correct for one
+  // specific requester) — merge everything else, but keep this client's own
+  // previously-known value for that one field rather than treating the
+  // broadcast's absence of it as "not mine".
+  eventSource.addEventListener("exhibit.updated", (e) => {
+    const incoming = JSON.parse(e.data);
+    const existing = exhibitsById.get(incoming.id);
+    const merged = { ...existing, ...incoming, isOwnedByRequester: existing?.isOwnedByRequester ?? false };
+    exhibitsById.set(incoming.id, merged);
+    if (openDossierExhibitId === incoming.id) renderDossier(merged);
+    refreshInteractiveObjects(); // the title shown on the in-room label/card may have changed
+    refreshGuideFloorPlanIfOpen();
+    if (!el("archive-gate").hidden) renderArchiveList();
+    toast(`"${merged.title}" was updated by its donor.`);
+  });
+
+  eventSource.addEventListener("exhibit.deleted", (e) => {
+    const { exhibitId } = JSON.parse(e.data);
+    removeExhibitLocally(exhibitId);
   });
 
   // A restrained activity cue tied to the visitor who caused it — "when

@@ -2078,6 +2078,84 @@ a {
   border-color: rgba(198, 161, 107, 0.5);
 }
 
+/* Owner-only edit/delete controls — visible only when the server's own
+   per-requester isOwnedByRequester says so (see app.js's renderDossier).
+   Styled as a quiet brass-outlined pair matching .dossier-inspect-closer,
+   not a loud/alarming treatment — editing your own donation is an ordinary
+   action here, not a destructive one (that's reserved for the confirm
+   step below). */
+/* `display` set only when NOT hidden (the same `:not([hidden])` fix used
+   elsewhere in this file, e.g. `.visitor-list`/`.corner-nav`) — a plain
+   `display: flex` here would outrank the UA's `[hidden] { display: none }`
+   on specificity-tiebreak-by-source-order and defeat `hidden` entirely. */
+.dossier-owner-controls:not([hidden]) {
+  display: flex;
+  gap: 0.5rem;
+  align-self: flex-start;
+  margin: -0.1rem 0 0.4rem;
+}
+
+.dossier-owner-controls button {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(198, 161, 107, 0.6);
+  background: none;
+  color: var(--parchment);
+  cursor: pointer;
+}
+.dossier-owner-controls button:hover,
+.dossier-owner-controls button:focus-visible {
+  border-color: var(--gold);
+  background: rgba(198, 161, 107, 0.1);
+  outline: none;
+}
+.dossier-owner-controls .dossier-delete-btn {
+  border-color: rgba(164, 32, 31, 0.6);
+  color: var(--rose);
+}
+.dossier-owner-controls .dossier-delete-btn:hover,
+.dossier-owner-controls .dossier-delete-btn:focus-visible {
+  border-color: var(--rose);
+  background: rgba(164, 32, 31, 0.12);
+}
+
+/* Inline "really withdraw?" step — a small alert-toned card in place of a
+   blocking native confirm(), consistent with every other confirmation
+   surface in this app (donate, publish an account) already being an inline
+   form with its own Cancel rather than a dialog. */
+.dossier-delete-confirm:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: -0.1rem 0 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px dashed var(--rose);
+  border-radius: 6px;
+  background: rgba(164, 32, 31, 0.08);
+}
+.dossier-delete-confirm p {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--parchment);
+}
+.dossier-delete-confirm .dossier-delete-btn {
+  border: 1px solid var(--rose);
+  background: var(--rose);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.dossier-delete-confirm .dossier-delete-btn:hover,
+.dossier-delete-confirm .dossier-delete-btn:focus-visible {
+  filter: brightness(1.1);
+  outline: none;
+}
+
 .dossier-accounts {
   display: flex;
   flex-direction: column;
@@ -2206,7 +2284,11 @@ a {
   border-color: var(--rose);
 }
 
-.account-form {
+/* `:not([hidden])` guard (see `.dossier-owner-controls`'s own comment) —
+   `#account-form` itself is never toggled hidden, but `#dossier-edit-form`
+   shares this class and IS toggled, so the plain-`display: flex` version of
+   this rule would defeat its `hidden` attribute. */
+.account-form:not([hidden]) {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;

@@ -16,6 +16,7 @@ import {
   MAX_CLAIM_LENGTH,
   DONATE_COOLDOWN_MS,
   ACCOUNT_COOLDOWN_MS,
+  EXHIBIT_EDIT_COOLDOWN_MS,
   PRESENCE_MIN_INTERVAL_MS,
   FOCUS_MIN_INTERVAL_MS,
 } from "./constants.js";
@@ -40,6 +41,7 @@ const lastDonateAt = new Map(); // visitorId -> epoch ms
 const lastAccountAt = new Map();
 const lastPresenceAt = new Map();
 const lastFocusAt = new Map();
+const lastExhibitEditAt = new Map(); // shared cooldown for PATCH/DELETE on an owned exhibit
 
 // A focus object id is always rendered via textContent/attribute, never
 // HTML, on the client, and is only ever one of the fixed, server-authored
@@ -166,6 +168,160 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // Owner-only edit: a brand new feature, additive to the donate/account/
+    // vote routes above — PATCH { title?, originClaim? }. `title` is a direct
+    // field update (not an account); `originClaim`, if present, is published
+    // as a brand-new `kind: "revision"` account challenging the exhibit's
+    // current original account, never an overwrite of it (CLAUDE.md). Either
+    // field may be sent alone or both together in one request. Ownership is
+    // re-checked inside db.js against the real `donor_visitor_id` column —
+    // never trust a client-asserted "I own this" — so a non-owner (or anyone
+    // at all against a builtin/founding exhibit, which has no owner) always
+    // gets 403, and an unknown exhibit id gets 404.
+    if (req.method === "PATCH" && exhibitMatch) {
+      const identity = identify(req);
+      const exhibitId = exhibitMatch[1];
+      const last = lastExhibitEditAt.get(identity.id) ?? 0;
+      const now = Date.now();
+      if (now - last < EXHIBIT_EDIT_COOLDOWN_MS) {
+        json(res, 429, { error: "wait a moment before editing again" }, withCookies({}, identity));
+        return;
+      }
+
+      let payload;
+      try {
+        payload = await readJsonBody(req);
+      } catch {
+        json(res, 400, { error: "bad request body" }, withCookies({}, identity));
+        return;
+      }
+
+      const hasTitle = payload.title !== undefined;
+      const hasClaim = payload.originClaim !== undefined;
+      if (!hasTitle && !hasClaim) {
+        json(res, 400, { error: "nothing to update" }, withCookies({}, identity));
+        return;
+      }
+
+      const title = hasTitle && typeof payload.title === "string" ? payload.title.trim() : "";
+      const originClaim = hasClaim && typeof payload.originClaim === "string" ? payload.originClaim.trim() : "";
+      if (hasTitle && !isNonEmptyString(title, MAX_TITLE_LENGTH)) {
+        json(res, 400, { error: "invalid title" }, withCookies({}, identity));
+        return;
+      }
+      if (hasClaim && !isNonEmptyString(originClaim, MAX_CLAIM_LENGTH)) {
+        json(res, 400, { error: "invalid origin claim" }, withCookies({}, identity));
+        return;
+      }
+
+      let exhibit = null;
+
+      if (hasTitle) {
+        const result = db.updateExhibitTitle({ exhibitId, visitorId: identity.id, title });
+        if (result.error === "not_found") {
+          logAction(identity, "exhibit.edit", { exhibit: exhibitId.slice(0, 14) }, "rejected:not_found");
+          json(res, 404, { error: "no such exhibit" }, withCookies({}, identity));
+          return;
+        }
+        if (result.error === "forbidden") {
+          logAction(identity, "exhibit.edit", { exhibit: exhibitId.slice(0, 14) }, "rejected:forbidden");
+          json(res, 403, { error: "only the donor can edit this exhibit" }, withCookies({}, identity));
+          return;
+        }
+        if (result.error === "invalid_title") {
+          json(res, 400, { error: "invalid title" }, withCookies({}, identity));
+          return;
+        }
+        exhibit = result.exhibit;
+      }
+
+      if (hasClaim) {
+        const current = exhibit ?? db.exhibitById(exhibitId, identity.id);
+        if (!current) {
+          json(res, 404, { error: "no such exhibit" }, withCookies({}, identity));
+          return;
+        }
+        // Challenge the exhibit's own most recent account — the same
+        // "latest account" default the dossier's own counter-evidence form
+        // already pre-selects (public/app.js's `account-challenged`).
+        const challengedAccountId = current.accounts[current.accounts.length - 1]?.id ?? null;
+        const result = db.addOwnerDescriptionRevision({
+          exhibitId,
+          visitorId: identity.id,
+          body: originClaim,
+          authorName: current.donorName,
+          challengedAccountId,
+        });
+        if (result.error === "not_found") {
+          logAction(identity, "exhibit.edit", { exhibit: exhibitId.slice(0, 14) }, "rejected:not_found");
+          json(res, 404, { error: "no such exhibit" }, withCookies({}, identity));
+          return;
+        }
+        if (result.error === "forbidden") {
+          logAction(identity, "exhibit.edit", { exhibit: exhibitId.slice(0, 14) }, "rejected:forbidden");
+          json(res, 403, { error: "only the donor can edit this exhibit" }, withCookies({}, identity));
+          return;
+        }
+        sse.broadcast("account", { ...result.account, exhibitClassification: result.exhibitClassification });
+        exhibit = db.exhibitById(exhibitId, identity.id);
+      }
+
+      lastExhibitEditAt.set(identity.id, now);
+      logAction(identity, "exhibit.edit", { exhibit: exhibitId.slice(0, 14), title: hasTitle, claim: hasClaim });
+
+      // Never broadcast the per-requester `isOwnedByRequester` field to every
+      // OTHER connected client — strip it before the shared `exhibit.updated`
+      // broadcast (same privacy rule as `myVote` elsewhere in this DTO), and
+      // only include the correct, requester-specific value in this direct
+      // REST response, where the requester is unambiguous.
+      const { isOwnedByRequester, ...publicExhibit } = exhibit;
+      // The acting visitor's own tab already applied this change from the
+      // direct REST response below — exclude them from the broadcast (same
+      // "don't double-announce to the actor" pattern the focus signal uses)
+      // so they don't also get a redundant "updated by its donor" toast.
+      sse.broadcast("exhibit.updated", publicExhibit, { exceptVisitorId: identity.id });
+      json(res, 200, { exhibit }, withCookies({}, identity));
+      return;
+    }
+
+    // Owner-only delete (soft): a brand new feature. Ownership re-checked
+    // server-side exactly as PATCH does above — never trust the client.
+    // Broadcasts only AFTER db.softDeleteExhibit's own transaction has
+    // committed (CLAUDE.md: never announce a change before it's durable),
+    // and the broadcast payload is intentionally just the bare id — no other
+    // visitor needs anything more to drop it from their own local state.
+    if (req.method === "DELETE" && exhibitMatch) {
+      const identity = identify(req);
+      const exhibitId = exhibitMatch[1];
+      const last = lastExhibitEditAt.get(identity.id) ?? 0;
+      const now = Date.now();
+      if (now - last < EXHIBIT_EDIT_COOLDOWN_MS) {
+        json(res, 429, { error: "wait a moment before trying again" }, withCookies({}, identity));
+        return;
+      }
+
+      const result = db.softDeleteExhibit({ exhibitId, visitorId: identity.id });
+      if (result.error === "not_found") {
+        logAction(identity, "exhibit.delete", { exhibit: exhibitId.slice(0, 14) }, "rejected:not_found");
+        json(res, 404, { error: "no such exhibit" }, withCookies({}, identity));
+        return;
+      }
+      if (result.error === "forbidden") {
+        logAction(identity, "exhibit.delete", { exhibit: exhibitId.slice(0, 14) }, "rejected:forbidden");
+        json(res, 403, { error: "only the donor can withdraw this exhibit" }, withCookies({}, identity));
+        return;
+      }
+
+      lastExhibitEditAt.set(identity.id, now);
+      logAction(identity, "exhibit.delete", { exhibit: exhibitId.slice(0, 14) });
+      // Same "don't double-announce to the actor" reasoning as the PATCH
+      // handler above — the owner's own tab already removes it locally from
+      // the DELETE response itself.
+      sse.broadcast("exhibit.deleted", { exhibitId }, { exceptVisitorId: identity.id });
+      json(res, 200, { ok: true }, withCookies({}, identity));
+      return;
+    }
+
     if (req.method === "POST" && pathname === "/api/exhibits") {
       const identity = identify(req);
       const last = lastDonateAt.get(identity.id) ?? 0;
@@ -268,7 +424,12 @@ const server = createServer(async (req, res) => {
         return;
       }
 
-      sse.broadcast("exhibit", result.exhibit);
+      // Strip the per-requester isOwnedByRequester before the shared
+      // broadcast — every OTHER connected client would otherwise receive
+      // `true`, which is only correct for the donor's own direct response
+      // below (same privacy rule server.js's PATCH/DELETE handlers follow).
+      const { isOwnedByRequester, ...publicNewExhibit } = result.exhibit;
+      sse.broadcast("exhibit", publicNewExhibit);
       sse.broadcast("activity", { publicKey: publicKeyFor(identity.id), kind: "donate", exhibitTitle: result.exhibit.title });
       lastDonateAt.set(identity.id, now);
       logAction(identity, "donate", { gallery: galleryId, exhibit: result.exhibit.id.slice(0, 14) });
