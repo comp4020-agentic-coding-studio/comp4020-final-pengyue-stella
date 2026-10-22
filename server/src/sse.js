@@ -42,10 +42,10 @@
 // `broadcast()` below — it never filters by the recipient's own scene), so
 // a client's cached roster for a scene it isn't currently in still gets
 // kept live.
-const clients = new Map(); // res -> { visitorId, sceneId, publicKey, displayName }
+const clients = new Map(); // res -> { visitorId, sceneId, publicKey, displayName, ghostType }
 
-export function addClient(res, visitorId, sceneId, publicKey, displayName) {
-  clients.set(res, { visitorId, sceneId, publicKey, displayName });
+export function addClient(res, visitorId, sceneId, publicKey, displayName, ghostType) {
+  clients.set(res, { visitorId, sceneId, publicKey, displayName, ghostType: ghostType ?? null });
 }
 
 export function removeClient(res) {
@@ -94,17 +94,19 @@ export function sceneCounts() {
 
 // The visible roster for one scene: one entry per distinct visitor currently
 // tagged with it (a visitor open in two tabs counts once), each only a
-// stable public key, a display name, and a colour — never the raw visitor
-// cookie value, never a position. This is what restores visible cameos
-// without reintroducing anything the scene-exploration pivot deliberately
-// removed (see docs/adr/0003-scene-exploration.md).
+// stable public key, a display name, and their chosen ghost template id
+// (null for a legacy visitor who never picked one, so the client falls back
+// to its own hash-based assignment) — never the raw visitor cookie value,
+// never a position. This is what restores visible cameos without
+// reintroducing anything the scene-exploration pivot deliberately removed
+// (see docs/adr/0003-scene-exploration.md).
 export function visitorsInScene(sceneId) {
   const byKey = new Map();
-  for (const { sceneId: s, visitorId, publicKey, displayName } of clients.values()) {
+  for (const { sceneId: s, visitorId, publicKey, displayName, ghostType } of clients.values()) {
     if (s !== sceneId || !publicKey) continue;
-    byKey.set(publicKey, { publicKey, displayName, visitorId });
+    byKey.set(publicKey, { publicKey, displayName, visitorId, ghostType });
   }
-  return [...byKey.values()].map(({ publicKey, displayName }) => ({ publicKey, displayName }));
+  return [...byKey.values()].map(({ publicKey, displayName, ghostType }) => ({ publicKey, displayName, ghostType }));
 }
 
 // Every scene currently holding a roster, in one snapshot — used only to
@@ -145,12 +147,18 @@ export function connectedCount() {
 // they left and the scene they entered, so every other client's headcount
 // and visible cameos update within one SSE round-trip — no polling, no
 // reload.
-export function setVisitorScene(visitorId, sceneId, publicKey, displayName) {
+export function setVisitorScene(visitorId, sceneId, publicKey, displayName, ghostType) {
   let previousSceneId = null;
   for (const [res, entry] of clients.entries()) {
     if (entry.visitorId !== visitorId) continue;
     previousSceneId = entry.sceneId;
-    clients.set(res, { visitorId, sceneId, publicKey: publicKey ?? entry.publicKey, displayName: displayName ?? entry.displayName });
+    clients.set(res, {
+      visitorId,
+      sceneId,
+      publicKey: publicKey ?? entry.publicKey,
+      displayName: displayName ?? entry.displayName,
+      ghostType: ghostType ?? entry.ghostType ?? null,
+    });
   }
   const counts = sceneCounts();
   if (previousSceneId && previousSceneId !== sceneId) {

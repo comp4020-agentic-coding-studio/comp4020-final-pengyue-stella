@@ -63,11 +63,11 @@ async function fetchMe() {
   return res.json();
 }
 
-async function setDisplayName(name) {
+async function setDisplayName(name, ghostType) {
   const res = await fetch("/api/me", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(ghostType !== undefined ? { name, ghostType } : { name }),
   });
   if (!res.ok) throw new Error((await res.json()).error ?? "could not set name");
   return res.json();
@@ -76,7 +76,6 @@ async function setDisplayName(name) {
 function updateWhoami() {
   if (!myIdentity) return;
   whoamiEl.textContent = `You are ${myIdentity.name}`;
-  whoamiEl.style.color = myIdentity.color ?? "";
 }
 
 // ---------------------------------------------------------------------------
@@ -889,9 +888,10 @@ function hasNamedBefore() {
 el("name-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = el("name-input").value.trim();
-  if (!name) return;
+  const ghostType = new FormData(el("name-form")).get("ghostType");
+  if (!name || !ghostType) return;
   try {
-    myIdentity = await setDisplayName(name);
+    myIdentity = await setDisplayName(name, ghostType);
     markNamed();
     el("name-gate").hidden = true;
     updateWhoami();
@@ -1156,18 +1156,26 @@ function cameoGlowFor(publicKey) {
 // glow (`--cameo-glow-opacity`) and animation timing (`--cameo-delay`,
 // already set in renderCameos) vary per visitor — the character art itself
 // is identical for every visitor who lands on the same template.
-const APPARITION_TEMPLATES = [
-  "/assets/ui/visitor-ghost-feminine.png",
-  "/assets/ui/visitor-ghost-masculine.png",
-  "/assets/ui/visitor-ghost-small.png",
-];
+const APPARITION_TEMPLATES_BY_GHOST_TYPE = {
+  feminine: "/assets/ui/visitor-ghost-feminine.png",
+  masculine: "/assets/ui/visitor-ghost-masculine.png",
+  small: "/assets/ui/visitor-ghost-small.png",
+};
+const APPARITION_TEMPLATES = Object.values(APPARITION_TEMPLATES_BY_GHOST_TYPE);
 
-function apparitionTemplateFor(publicKey) {
+// A visitor's own chosen `ghostType` (see the name-gate's ghost picker)
+// decides their template directly. Only a visitor who connected before that
+// feature existed — and so carries no `ghostType` at all — falls back to the
+// old stable-hash-of-publicKey assignment, never the other way around.
+function apparitionTemplateFor(visitor) {
+  const chosen = APPARITION_TEMPLATES_BY_GHOST_TYPE[visitor?.ghostType];
+  if (chosen) return chosen;
+  const publicKey = typeof visitor === "string" ? visitor : visitor?.publicKey;
   return APPARITION_TEMPLATES[hashKey(`template:${publicKey}`) % APPARITION_TEMPLATES.length];
 }
 
-function buildApparitionFigure(publicKey) {
-  const template = apparitionTemplateFor(publicKey);
+function buildApparitionFigure(visitor) {
+  const template = apparitionTemplateFor(visitor);
 
   const wrap = document.createElement("div");
   wrap.className = "apparition";
@@ -1258,7 +1266,7 @@ function renderCameos() {
 
     const silhouette = document.createElement("div");
     silhouette.className = "cameo-silhouette";
-    silhouette.appendChild(buildApparitionFigure(visitor.publicKey));
+    silhouette.appendChild(buildApparitionFigure(visitor));
     cameo.appendChild(silhouette);
 
     // The name reveals only on hover/focus (CLAUDE.md: "do not show large
@@ -1346,42 +1354,6 @@ function roomIdForScene(sceneId) {
   return scene?.galleryId ?? sceneId;
 }
 
-// Every distinct visitor (deduped by publicKey, so a visitor open in two
-// tabs — even across the room's two exact scenes — counts once) currently
-// in any exact scene belonging to this room.
-function visitorsInRoom(roomId) {
-  const byKey = new Map();
-  for (const scene of world?.scenes ?? []) {
-    if (roomIdForScene(scene.id) !== roomId) continue;
-    for (const v of lastSceneVisitors[scene.id] ?? []) byKey.set(v.publicKey, v);
-  }
-  return [...byKey.values()];
-}
-
-// A small "who else is here" list, reachable without hovering every
-// silhouette individually — the brief's "or in a small visitor list"
-// alternative to hover-reveal. Room-scoped (see roomIdForScene/
-// visitorsInRoom above): a peer in this gallery's other exact scene (main
-// vs. closeup) still shows up here even though they don't get a rendered
-// ghost in this one (see renderCameos).
-function renderVisitorList() {
-  const list = el("visitor-list");
-  if (!list) return;
-  const visitors = visitorsInRoom(roomIdForScene(currentSceneId)).filter((v) => v.publicKey !== myPublicKey);
-  list.innerHTML = "";
-  if (visitors.length === 0) {
-    list.hidden = true;
-    return;
-  }
-  list.hidden = false;
-  for (const v of visitors) {
-    const chip = document.createElement("span");
-    chip.className = "visitor-chip";
-    chip.style.setProperty("--cameo-color", cameoColorFor(v.publicKey));
-    chip.textContent = v.displayName;
-    list.appendChild(chip);
-  }
-}
 
 // ---------------------------------------------------------------------------
 // The Séance panel: a compact Gothic interaction dialog opened from another
@@ -1695,7 +1667,6 @@ function connectEvents() {
     lastSceneVisitors = sceneVisitors ?? { ...lastSceneVisitors, [currentSceneId]: visitors ?? [] };
     updatePresenceLabel();
     renderCameos();
-    renderVisitorList();
 
     // The very first connection already hydrated from loadExhibits() in
     // boot(); every `hello` after that one means the stream reconnected,
@@ -1727,7 +1698,6 @@ function connectEvents() {
       if (newRoomCount > previousRoomCount && previousRoomCount > 0) toast("Another visitor has entered this room.");
       updatePresenceLabel();
       renderCameos();
-      renderVisitorList();
     }
     refreshGuideFloorPlanIfOpen();
   });
@@ -1792,7 +1762,6 @@ function connectEvents() {
     if (!publicKey || publicKey === myPublicKey) return;
     recentActivityByKey.set(publicKey, Date.now());
     renderCameos();
-    renderVisitorList();
   });
 
   // Ephemeral focus broadcast: another visitor in this same room opened or
@@ -2613,7 +2582,6 @@ function onSceneChange(scene) {
   postPresence(scene.id);
   updatePresenceLabel();
   renderCameos();
-  renderVisitorList();
   if (ambient.isOn) ambient.setGallery(scene.galleryId ?? null);
   if (scene.kind === "closeup" && scene.lore) {
     openLoreCard(scene.caption, scene.lore, null);
@@ -2690,7 +2658,15 @@ async function boot() {
   updatePresenceLabel();
   postPresence(currentSceneId);
 
-  if (!hasNamedBefore()) {
+  const namedBefore = hasNamedBefore();
+  // A visitor who already chose a name but connected before the ghost-form
+  // picker existed has no `ghostType` on their identity at all — show the
+  // gate again so they can pick one, with their existing chosen name
+  // pre-filled (never make them retype it). A brand new visitor still sees
+  // an empty input with its placeholder, not the server's whimsical
+  // fallback name.
+  if (!namedBefore || !myIdentity.ghostType) {
+    if (namedBefore) el("name-input").value = myIdentity.name ?? "";
     el("name-gate").hidden = false;
     el("name-input").focus();
   } else {

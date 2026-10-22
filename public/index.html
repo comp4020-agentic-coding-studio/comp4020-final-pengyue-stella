@@ -66,7 +66,6 @@
           <h1>The Cursed Museum</h1>
           <p class="scene-caption" id="gallery-title"></p>
           <p class="presence" id="presence" aria-live="polite"></p>
-          <div id="visitor-list" class="visitor-list" hidden aria-label="Other visitors in this room"></div>
           <p class="whoami" id="whoami"></p>
         </div>
         <div class="topbar-actions">
@@ -179,7 +178,11 @@
         <p id="lore-text"></p>
       </div>
 
-      <!-- Name-entry gate, shown until a display name is chosen. -->
+      <!-- Name-entry gate, shown until a display name AND a ghost form are
+           both chosen. A visitor who already has a name cookie but no
+           ghost-type cookie (a visitor from before this feature existed)
+           sees this again with the name pre-filled, needing only to pick a
+           form. -->
       <div id="name-gate" class="overlay-gate" hidden>
         <form id="name-form" class="gate-card">
           <h2>Welcome to The Cursed Museum</h2>
@@ -187,6 +190,28 @@
           <label for="name-input">What shall the archive call you?</label>
           <input id="name-input" name="name" maxlength="40" autocomplete="off" required
             placeholder="e.g. The Quiet Curator" />
+
+          <fieldset id="ghost-type-fieldset" class="ghost-type-fieldset">
+            <legend>Choose the form you'll wander the halls in</legend>
+            <div class="ghost-type-options" role="radiogroup" aria-label="Apparition form">
+              <label class="ghost-type-option">
+                <input type="radio" name="ghostType" value="feminine" required />
+                <img src="/assets/ui/visitor-ghost-feminine.png" alt="" aria-hidden="true" />
+                <span>Veiled Curator</span>
+              </label>
+              <label class="ghost-type-option">
+                <input type="radio" name="ghostType" value="masculine" />
+                <img src="/assets/ui/visitor-ghost-masculine.png" alt="" aria-hidden="true" />
+                <span>Night Archivist</span>
+              </label>
+              <label class="ghost-type-option">
+                <input type="radio" name="ghostType" value="small" />
+                <img src="/assets/ui/visitor-ghost-small.png" alt="" aria-hidden="true" />
+                <span>Little Wanderer</span>
+              </label>
+            </div>
+          </fieldset>
+
           <button type="submit">Enter the museum</button>
         </form>
       </div>

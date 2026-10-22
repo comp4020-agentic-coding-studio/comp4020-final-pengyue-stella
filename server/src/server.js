@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { identify, nameCookieFor, publicKeyFor } from "./identity.js";
+import { identify, nameCookieFor, ghostTypeCookieFor, publicKeyFor } from "./identity.js";
 import { galleryById, publicWorld, SCENE_IDS, DEFAULT_SCENE_ID, roomIdForScene } from "./world.js";
 import * as db from "./db.js";
 import * as sse from "./sse.js";
@@ -141,7 +141,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && pathname === "/api/me") {
       const identity = identify(req);
       db.upsertVisitor(identity.id, identity.name);
-      json(res, 200, { name: identity.name, color: identity.color }, withCookies({}, identity));
+      json(res, 200, { name: identity.name, color: identity.color, ghostType: identity.ghostType }, withCookies({}, identity));
       return;
     }
 
@@ -159,9 +159,23 @@ const server = createServer(async (req, res) => {
         json(res, 400, { error: "invalid display name" }, withCookies({}, identity));
         return;
       }
+      // `ghostType` is only sent/validated when the client includes it — the
+      // legacy-visitor re-prompt flow (name already chosen, ghost not yet)
+      // posts both together, but an older client that only ever posts
+      // `name` must keep working unchanged.
+      let ghostTypeCookie = null;
+      if (payload.ghostType !== undefined) {
+        ghostTypeCookie = ghostTypeCookieFor(payload.ghostType);
+        if (!ghostTypeCookie) {
+          json(res, 400, { error: "invalid ghost type" }, withCookies({}, identity));
+          return;
+        }
+      }
       const name = decodeURIComponent(nameCookie.split(";")[0].split("=")[1]);
       db.upsertVisitor(identity.id, name);
-      json(res, 200, { name, color: identity.color }, withCookies({}, identity, [nameCookie]));
+      const ghostType = ghostTypeCookie ? ghostTypeCookie.split(";")[0].split("=")[1] : identity.ghostType;
+      const cookies = ghostTypeCookie ? [nameCookie, ghostTypeCookie] : [nameCookie];
+      json(res, 200, { name, color: identity.color, ghostType }, withCookies({}, identity, cookies));
       return;
     }
 
@@ -579,7 +593,7 @@ const server = createServer(async (req, res) => {
       }
 
       lastPresenceAt.set(identity.id, now);
-      sse.setVisitorScene(identity.id, payload.sceneId, publicKeyFor(identity.id), identity.name);
+      sse.setVisitorScene(identity.id, payload.sceneId, publicKeyFor(identity.id), identity.name, identity.ghostType);
       json(res, 200, { ok: true }, withCookies({}, identity));
       return;
     }
@@ -758,7 +772,7 @@ const server = createServer(async (req, res) => {
       res.write(`retry: 2000\n\n`);
 
       const myPublicKey = publicKeyFor(identity.id);
-      sse.addClient(res, identity.id, initialSceneId, myPublicKey, identity.name);
+      sse.addClient(res, identity.id, initialSceneId, myPublicKey, identity.name, identity.ghostType);
 
       // Hydrate the new connection with current per-scene headcounts and its
       // own public key (so the client can tell its own cameo apart from

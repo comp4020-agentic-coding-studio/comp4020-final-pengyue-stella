@@ -665,25 +665,6 @@ a {
   }
 }
 
-.visitor-list:not([hidden]) {
-  display: flex;
-}
-
-.visitor-list {
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin: 0.15rem 0;
-}
-
-.visitor-chip {
-  font-size: 0.72rem;
-  color: var(--parchment);
-  background: rgba(53, 37, 28, 0.6);
-  border: 1px solid var(--cameo-color, var(--brass));
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
-}
-
 /* --- quiet corner navigation ----------------------------------------------*/
 /* Replaces a large bubble floated over the artwork's centre: a compact
    "enter the next room" control upper-left (clear of the museum title) and
@@ -943,7 +924,7 @@ a {
 .whoami {
   margin: 0;
   font-size: 0.74rem;
-  color: rgba(233, 221, 197, 0.7);
+  color: var(--gold);
   font-style: italic;
 }
 
@@ -1469,6 +1450,80 @@ a {
 @media (max-width: 480px) {
   .visual-preset-grid {
     grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  }
+}
+
+/* The name-gate's ghost-form picker: native radio inputs (not custom
+   role="radio" buttons — a plain <label><input type="radio">...</label>
+   group is already a real, Tab/Space-operable control with no extra
+   keyboard wiring needed) laid out as a row of thumbnail cards, matching
+   the donation form's own `.visual-preset-tile` visual language. */
+.ghost-type-fieldset {
+  border: 1px solid var(--brass);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem 0.7rem;
+  margin: 0.3rem 0 0;
+}
+
+.ghost-type-fieldset legend {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--mahogany);
+  padding: 0 0.3rem;
+}
+
+.ghost-type-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.ghost-type-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.5rem 0.4rem;
+  border: 1px solid var(--brass);
+  border-radius: 8px;
+  background: var(--obsidian);
+  cursor: pointer;
+  font-weight: 400 !important;
+  margin-top: 0 !important;
+}
+
+.ghost-type-option img {
+  width: 100%;
+  max-height: 64px;
+  object-fit: contain;
+}
+
+.ghost-type-option span {
+  font-size: 0.68rem;
+  color: var(--parchment);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.ghost-type-option input[type="radio"] {
+  width: auto;
+  margin: 0;
+}
+
+.ghost-type-option:has(input:checked) {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(198, 161, 107, 0.35), 0 0 14px rgba(198, 161, 107, 0.25);
+}
+
+.ghost-type-option:has(input:focus-visible) {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .ghost-type-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
   }
 }
 
@@ -2216,7 +2271,7 @@ a {
    action here, not a destructive one (that's reserved for the confirm
    step below). */
 /* `display` set only when NOT hidden (the same `:not([hidden])` fix used
-   elsewhere in this file, e.g. `.visitor-list`/`.corner-nav`) — a plain
+   elsewhere in this file, e.g. `.corner-nav`) — a plain
    `display: flex` here would outrank the UA's `[hidden] { display: none }`
    on specificity-tiebreak-by-source-order and defeat `hidden` entirely. */
 .dossier-owner-controls:not([hidden]) {

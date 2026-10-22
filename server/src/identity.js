@@ -75,8 +75,10 @@ function parseCookies(header) {
 
 const VISITOR_COOKIE = "visitor";
 const NAME_COOKIE = "visitor_name";
+const GHOST_TYPE_COOKIE = "visitor_ghost_type";
 const ONE_YEAR = 60 * 60 * 24 * 365;
 const NAME_RE = /^[\p{L}\p{N} '-]{1,40}$/u;
+const GHOST_TYPES = ["feminine", "masculine", "small"];
 
 // Reads the visitor cookie off the request, or mints one. If the visitor has
 // chosen a display name (a separate cookie, set via POST /api/me), that name
@@ -93,6 +95,9 @@ export function identify(req) {
   const chosenName = cookies.get(NAME_COOKIE);
   const name = chosenName && NAME_RE.test(chosenName) ? chosenName : nameFor(id);
 
+  const chosenGhostType = cookies.get(GHOST_TYPE_COOKIE);
+  const ghostType = GHOST_TYPES.includes(chosenGhostType) ? chosenGhostType : null;
+
   const headers = [];
   if (isNew) headers.push(`${VISITOR_COOKIE}=${id}; Path=/; Max-Age=${ONE_YEAR}; HttpOnly; SameSite=Lax`);
 
@@ -100,6 +105,7 @@ export function identify(req) {
     id,
     name,
     color: colorFor(id),
+    ghostType,
     isNew,
     setCookieHeaders: headers,
   };
@@ -111,4 +117,15 @@ export function nameCookieFor(candidate) {
   const trimmed = typeof candidate === "string" ? candidate.trim() : "";
   if (!NAME_RE.test(trimmed)) return null;
   return `${NAME_COOKIE}=${encodeURIComponent(trimmed)}; Path=/; Max-Age=${ONE_YEAR}; HttpOnly; SameSite=Lax`;
+}
+
+// Same allowlist-validate-or-null pattern as nameCookieFor, for the visitor's
+// chosen apparition template (public/assets/ui/visitor-ghost-*.png). Stored
+// as its own long-term HttpOnly cookie rather than a DB column — this is a
+// purely cosmetic per-visitor preference, not durable museum state, so it
+// doesn't need a migration (CLAUDE.md: zero-runtime-dependency, minimal
+// persistence surface).
+export function ghostTypeCookieFor(candidate) {
+  if (!GHOST_TYPES.includes(candidate)) return null;
+  return `${GHOST_TYPE_COOKIE}=${candidate}; Path=/; Max-Age=${ONE_YEAR}; HttpOnly; SameSite=Lax`;
 }
