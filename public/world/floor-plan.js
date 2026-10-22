@@ -148,6 +148,12 @@ function subPositions(rect, count, inset) {
   return points;
 }
 
+const MAX_FOOTPRINT_NAME_LENGTH = 18;
+function truncatedName(name) {
+  if (name.length <= MAX_FOOTPRINT_NAME_LENGTH) return name;
+  return `${name.slice(0, MAX_FOOTPRINT_NAME_LENGTH - 1)}…`;
+}
+
 function svg(tag, attrs = {}) {
   const node = document.createElementNS(SVG_NS, tag);
   for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
@@ -257,6 +263,20 @@ function buildSelfMarker(rect) {
   group.appendChild(svg("circle", { cx, cy, r: 30, class: "floor-plan-self-marker-glow" }));
   group.appendChild(svg("path", { d: starPath(cx, cy, 19, 8), class: "floor-plan-self-marker-star" }));
   group.appendChild(svg("circle", { cx, cy, r: 3.2, class: "floor-plan-self-marker-pin" }));
+  // "You are here" sits directly beneath the star itself (not up near the
+  // room name), horizontally centred on it with a small fixed gap past the
+  // star's own 19px outer radius — so it reads as a caption for the gold
+  // seal, not a second room-title line. Kept at the tight end of the
+  // 8-12px range since the star's own (unchanged) vertical position already
+  // sits close to where the relic marker band begins lower in the room.
+  const hereLabel = svg("text", {
+    x: cx,
+    y: cy + 19 + 8,
+    class: "floor-plan-here-label",
+    "text-anchor": "middle",
+  });
+  hereLabel.textContent = "You are here";
+  group.appendChild(hereLabel);
   return group;
 }
 
@@ -511,14 +531,8 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
     g.appendChild(label);
 
     if (isCurrent) {
-      const hereLabel = svg("text", {
-        x: rect.x + rect.w / 2,
-        y: rect.y + 36,
-        class: "floor-plan-here-label",
-        "text-anchor": "middle",
-      });
-      hereLabel.textContent = "You are here";
-      g.appendChild(hereLabel);
+      // "You are here" now renders as part of buildSelfMarker itself,
+      // directly beneath the gold star — never up near the room title.
       g.appendChild(buildSelfMarker(rect));
     }
 
@@ -590,6 +604,19 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
           transform: "rotate(18 8.5 -5.7)",
         }),
       );
+      // The visitor's display name, directly beneath the whole footstep
+      // pair — same local coordinate space and same group transform as the
+      // feet above, so it can never drift from them independently. Full
+      // name stays in the <title> tooltip above; the visible text is
+      // truncated so a long chosen name never spills across the parchment.
+      const nameLabel = svg("text", {
+        x: 0,
+        y: 17,
+        class: "floor-plan-footprint-name",
+        "text-anchor": "middle",
+      });
+      nameLabel.textContent = truncatedName(visitor.displayName);
+      footGroup.appendChild(nameLabel);
       g.appendChild(footGroup);
     });
     if (overflow) {

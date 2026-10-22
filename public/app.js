@@ -2590,6 +2590,17 @@ for (const btn of document.querySelectorAll(".guide-begin")) {
 }
 el("open-rooms").addEventListener("click", () => openMuseumGuide({ section: "floorplan" }));
 
+// A visitor who already named/formed themselves (so the tour never implies
+// the name/ghost gate is reopening) can deliberately replay the first-visit
+// guided intro from the Guide's own Welcome page — closes the Guide first,
+// then runs the exact same startTour() the automatic first-visit run uses,
+// without touching the "has toured before"/name/ghost localStorage flags
+// (a replay is a visitor's own choice, not a reset of first-visit state).
+el("guide-replay-tour").addEventListener("click", () => {
+  closeMuseumGuide();
+  startTour();
+});
+
 function onSceneChange(scene) {
   currentSceneId = scene.id;
   // A scene change is already underway — dismiss any lore drawer left over

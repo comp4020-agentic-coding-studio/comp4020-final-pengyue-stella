@@ -1636,6 +1636,33 @@ a {
   background: rgba(198, 161, 107, 0.12);
 }
 
+/* The Welcome panel's own pair of actions — "Begin exploring" (unchanged,
+   gold outline) plus a compact "Replay introduction" using this app's
+   existing dark wine-red/gold plaque language (matching #onboarding-next's
+   own treatment) rather than a new, larger control. */
+.guide-welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.guide-card #guide-replay-tour {
+  background: linear-gradient(160deg, #5a1414, #3a0d0d);
+  color: var(--parchment);
+  border: 1px solid rgba(198, 161, 107, 0.7);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+}
+
+.guide-card #guide-replay-tour:hover,
+.guide-card #guide-replay-tour:focus-visible {
+  filter: brightness(1.12);
+}
+
 /* --- enchanted parchment map ---------------------------------------------- */
 /* An original, hand-traced "living map" of the museum on aged parchment —
    ink-wobbled room outlines, stains, folds, a compass rose and crest, and
@@ -1755,7 +1782,8 @@ a {
 
 .floor-plan-room-label {
   fill: var(--ink);
-  font-size: 15px;
+  font-size: 17px;
+  font-weight: 700;
   font-style: italic;
   font-family: Georgia, "Cormorant Garamond", serif;
   letter-spacing: 0.02em;
@@ -1783,6 +1811,22 @@ a {
 
 .floor-plan-footprint-mark:nth-child(3) {
   animation-delay: calc(var(--floor-plan-footprint-delay, 0s) + 0.5s);
+}
+
+/* A peer's display name beneath their footstep pair — a thin parchment-
+   coloured stroke behind a dark ink fill (paint-order puts the stroke
+   under the fill) so it stays legible over the map's own busy ink-and-
+   grain texture without needing an opaque background chip. */
+.floor-plan-footprint-name {
+  fill: var(--ink);
+  font-size: 9.5px;
+  font-weight: 600;
+  font-family: Georgia, "Cormorant Garamond", serif;
+  paint-order: stroke;
+  stroke: rgba(233, 221, 197, 0.9);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+  pointer-events: none;
 }
 
 @keyframes floor-plan-footstep {
@@ -1837,8 +1881,8 @@ a {
 }
 
 @keyframes floor-plan-self-pulse {
-  0%, 100% { opacity: 0.25; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.15); }
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.55; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2835,7 +2879,8 @@ a {
 .cameo-reaction-burst {
   position: absolute;
   left: 50%;
-  top: 10%;
+  top: auto;
+  bottom: calc(100% + 0.3rem);
   transform: translateX(-50%);
   display: flex;
   align-items: center;
