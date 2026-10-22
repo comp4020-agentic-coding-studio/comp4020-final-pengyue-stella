@@ -540,9 +540,16 @@ a {
    buildApparitionSvg, pointing at a <linearGradient> with a unique id per
    cameo instance — never a fixed id here in CSS, since a fixed id would
    silently point every cameo at whichever instance's <defs> happened to be
-   first in the DOM (SVG gradient ids aren't scoped per <svg>). */
+   first in the DOM (SVG gradient ids aren't scoped per <svg>). A dark rim
+   stroke is the actual mechanism that separates this shape from the hood/
+   shoulders drawn on top of it and the room's own artwork behind it — a
+   gradient fill alone reads as one soft blob at cameo scale (confirmed via
+   a direct render: without a stroke, hood+shoulders+robe visually fuse
+   into a single rounded "egg" outline with no readable internal structure). */
 .apparition-robe {
   opacity: 0.97;
+  stroke: rgba(8, 6, 4, 0.55);
+  stroke-width: 1.4;
 }
 
 /* Subtle fold LINES (not a second flat shape) — thin strokes, slightly
@@ -578,15 +585,22 @@ a {
    each element (a unique-per-instance gradient id, same reasoning as
    `.apparition-robe` above) to a slightly different gradient from the
    robe's own, so the hood/collar reads as a distinct draped layer rather
-   than a continuation of the same flat shape. */
+   than a continuation of the same flat shape. Each also gets its own dark
+   rim stroke (same reasoning as `.apparition-robe`'s own) so the hood's
+   own outline is legible as a SEPARATE shape stacked over the shoulders,
+   rather than the two melting into one continuous silhouette. */
 .apparition-hood,
 .apparition-shoulders {
   opacity: 0.97;
+  stroke: rgba(8, 6, 4, 0.6);
+  stroke-width: 1.4;
 }
 
 .apparition-collar {
   fill: color-mix(in srgb, white 72%, var(--cameo-color, var(--gold)) 28%);
   opacity: 0.92;
+  stroke: rgba(8, 6, 4, 0.45);
+  stroke-width: 0.9;
 }
 
 /* A soft shadowed recess where a face would be — no features, just a dark
