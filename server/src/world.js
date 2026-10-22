@@ -743,17 +743,20 @@ export function hallConfig() {
 // painted item they represent. A visitor is always exactly "at" one scene
 // id; `POST /api/presence` reports which one (see server.js).
 
-// The hub's two real, visibly painted doorways (flanking the base of the
-// grand staircase in entrance-hall-v2.png) lead directly to two of the four
-// galleries as ordinary `type: "portal"` interactive objects, exactly like
-// any other in-room clickable item — never a special "hub mode" the other
-// two galleries don't get. The other two galleries (not in frame as a
-// doorway in this one composition) stay reachable the same way they always
-// were: the persistent, gallery-agnostic "Rooms" menu (`renderRoomsMenu()`
-// in app.js, unchanged by this pass).
+// All four galleries have a real, visibly painted doorway in
+// entrance-hall-v2.png, each wired as an ordinary `type: "portal"`
+// interactive object — never a special "hub mode" some galleries get and
+// others don't. Left to right: the near-left archway beside the donor
+// counter (portraits), the two doors flanking the grand staircase (memento,
+// specimen), and the far-right archway partly behind the antique map's
+// easel (childhood). Order matches `GALLERY_LAYOUT`'s `orderIndex`, and
+// every polygon below was traced against actual pixel positions in the
+// approved hall image, not a generic placeholder box.
 const HALL_PORTALS = [
-  { galleryId: "memento", doorShape: polygon([[480, 450], [700, 450], [700, 780], [480, 780]]) },
-  { galleryId: "specimen", doorShape: polygon([[970, 450], [1190, 450], [1190, 780], [970, 780]]) },
+  { galleryId: "portraits", doorShape: polygon([[318, 385], [396, 385], [396, 580], [318, 580]]) },
+  { galleryId: "memento", doorShape: polygon([[480, 422], [680, 422], [680, 640], [480, 640]]) },
+  { galleryId: "specimen", doorShape: polygon([[970, 422], [1190, 422], [1190, 640], [970, 640]]) },
+  { galleryId: "childhood", doorShape: polygon([[1300, 270], [1410, 270], [1410, 420], [1300, 420]]) },
 ];
 
 // galleryId -> the hall as "back" target for a gallery whose doorway isn't
@@ -802,7 +805,7 @@ const HALL_LORE_OBJECTS = [
     type: "guide",
     label: "The antique map",
     text: "A folded map of a coastline that matches no surveyed country. It has been re-folded along the same creases for as long as anyone has worked here, though no one admits to doing it.",
-    shape: polygon([[1290, 400], [1430, 405], [1430, 620], [1290, 615]]),
+    shape: polygon([[1295, 445], [1455, 445], [1455, 625], [1295, 625]]),
     hitPadding: 10,
   },
   {

@@ -23,23 +23,23 @@ const VIEWBOX = { width: 1000, height: 1000 };
 // sits low and central, acting as the fan's pivot, and the four galleries
 // are spread across a broad arc above it (an even angular spread across
 // ~120° of a semicircle centred on the hall), each at the same radius from
-// the hall's own centre. Which gallery id lands at which arc position is an
-// arbitrary but fixed choice (there's no remaining "north/south/east/west"
-// once the layout isn't a cross) — picked purely for a pleasant left-to-
-// right spread, documented here so it's not mistaken for a semantic
-// mapping. These are the *logical* bounds used for layout math (marker
-// grids, label placement, corridor anchors); the drawn outline below is a
-// hand-jittered trace of this rectangle, never a crisp rect itself.
+// the hall's own centre. Left-to-right arc position follows the SAME
+// canonical gallery order as the hall's own four doors (`HALL_PORTALS` in
+// server/src/world.js, and `GALLERY_LAYOUT`'s `orderIndex`): portraits,
+// memento, specimen, childhood — never an independent, map-only ordering.
+// These are the *logical* bounds used for layout math (marker grids, label
+// placement, corridor anchors); the drawn outline below is a hand-jittered
+// trace of this rectangle, never a crisp rect itself.
 const ROOMS = {
   hall: { x: 380, y: 720, w: 240, h: 200, label: "Entrance Hall" },
   // Outer-left arm of the fan.
-  childhood: { x: 26, y: 515, w: 220, h: 190 },
+  portraits: { x: 26, y: 515, w: 220, h: 190 },
   // Inner-left arm.
-  portraits: { x: 246, y: 330, w: 220, h: 190 },
+  memento: { x: 246, y: 330, w: 220, h: 190 },
   // Inner-right arm.
   specimen: { x: 534, y: 330, w: 220, h: 190 },
   // Outer-right arm.
-  memento: { x: 754, y: 515, w: 220, h: 190 },
+  childhood: { x: 754, y: 515, w: 220, h: 190 },
 };
 
 function rectCenter(rect) {
@@ -418,6 +418,14 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
 
   svgRoot.appendChild(buildParchmentBackdrop());
 
+  // Every room, corridor and position marker is drawn into ONE group and
+  // shifted upward as a single transform — not per-element y-offsets — so
+  // the fan layout sits visually centred on the parchment rather than
+  // crowding its lower half (the hall's own rect, same as every gallery's,
+  // stays defined in ROOMS' original coordinate space; this group is the
+  // only place the vertical recentring happens).
+  const layout = svg("g", { class: "floor-plan-layout", transform: "translate(0, -120)" });
+
   const currentRoomId = roomIdForScene(currentSceneId) ?? "hall";
   const rooms = [
     { id: "hall", name: "Entrance Hall" },
@@ -429,7 +437,7 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
   // `ROOMS`' own static layout (see its own comment above) — its `d` is
   // already a full path string, not a rect to re-derive here.
   for (const corridor of FAN_CORRIDORS) {
-    svgRoot.appendChild(
+    layout.appendChild(
       svg("path", {
         d: corridor.d,
         class: "floor-plan-corridor",
@@ -447,11 +455,13 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
     const isCurrent = room.id === currentRoomId;
     const roomVisitors = visitorsInRoom(room.id, sceneVisitors);
     const visitors = roomVisitors.filter((v) => v.publicKey !== myPublicKey);
-    // The current room's total includes the visitor themself (never reported
-    // back by the server as a presence row), so the summary doesn't silently
-    // undercount "how many people are actually here" by only ever naming
-    // OTHER visitors.
-    const totalInRoom = isCurrent ? roomVisitors.length + 1 : roomVisitors.length;
+    // `roomVisitors` already includes the current visitor's own SSE presence
+    // row (they're a connected client reporting this scene like anyone
+    // else), so the current room's total is "every OTHER visitor, plus
+    // exactly one for yourself" — never `roomVisitors.length + 1`, which
+    // double-counted the visitor already present in that list (the reported
+    // bug: 2 real people showing as "3 visitors").
+    const totalInRoom = isCurrent ? visitors.length + 1 : roomVisitors.length;
     const exhibits =
       room.id === "hall" ? [] : [...exhibitsById.values()].filter((e) => e.galleryId === room.id && e.origin !== "builtin");
 
@@ -537,29 +547,33 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
       const title = svg("title", {});
       title.textContent = visitor.displayName;
       footGroup.appendChild(title);
-      // Left footstep, nudged back-left and rotated outward.
+      // Left footstep, nudged back-left and rotated outward. Sized ~1.9x a
+      // single plain dot (and with a dark outline + soft glow via the CSS
+      // class) so a peer's mark reads clearly against the busy parchment
+      // art — while staying visibly smaller than the self-marker's own
+      // 19px-outer-radius star, which must remain the most prominent mark.
       footGroup.appendChild(
         svg("ellipse", {
-          cx: p.x - 4.5,
-          cy: p.y + 3,
-          rx: 3.2,
-          ry: 5.2,
+          cx: p.x - 8.5,
+          cy: p.y + 5.7,
+          rx: 6,
+          ry: 9.8,
           fill: color,
           class: "floor-plan-footprint-mark",
-          transform: `rotate(-18 ${p.x - 4.5} ${p.y + 3})`,
+          transform: `rotate(-18 ${p.x - 8.5} ${p.y + 5.7})`,
         }),
       );
       // Right footstep, ahead and rotated the opposite way — the pair reads
       // as a stride.
       footGroup.appendChild(
         svg("ellipse", {
-          cx: p.x + 4.5,
-          cy: p.y - 3,
-          rx: 3.2,
-          ry: 5.2,
+          cx: p.x + 8.5,
+          cy: p.y - 5.7,
+          rx: 6,
+          ry: 9.8,
           fill: color,
           class: "floor-plan-footprint-mark",
-          transform: `rotate(18 ${p.x + 4.5} ${p.y - 3})`,
+          transform: `rotate(18 ${p.x + 8.5} ${p.y - 5.7})`,
         }),
       );
       g.appendChild(footGroup);
@@ -605,7 +619,7 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
         select();
       }
     });
-    svgRoot.appendChild(g);
+    layout.appendChild(g);
 
     const li = document.createElement("li");
     const btn = document.createElement("button");
@@ -618,6 +632,7 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
     list.appendChild(li);
   }
 
+  svgRoot.appendChild(layout);
   wrap.appendChild(svgRoot);
 
   const legend = document.createElement("div");
