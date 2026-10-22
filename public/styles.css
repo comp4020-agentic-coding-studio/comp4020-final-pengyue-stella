@@ -580,20 +580,22 @@ a {
   opacity: 0.6;
 }
 
-/* Hood, shoulders and collar sit OUTSIDE the hem's fade mask — the upper
-   body never dissolves, only the lower robe does. Fill is set directly on
-   each element (a unique-per-instance gradient id, same reasoning as
-   `.apparition-robe` above) to a slightly different gradient from the
-   robe's own, so the hood/collar reads as a distinct draped layer rather
-   than a continuation of the same flat shape. Each also gets its own dark
-   rim stroke (same reasoning as `.apparition-robe`'s own) so the hood's
-   own outline is legible as a SEPARATE shape stacked over the shoulders,
-   rather than the two melting into one continuous silhouette. */
-.apparition-hood,
-.apparition-shoulders {
+/* The cloak — hood, shoulders and neck cutout traced as ONE continuous
+   outline (see APPARITION_VARIANTS in app.js) — sits OUTSIDE the hem's
+   fade mask: the upper body never dissolves, only the lower robe does.
+   Fill is set directly on the element (a unique-per-instance gradient id,
+   same reasoning as `.apparition-robe` above) to a slightly different
+   gradient from the robe's own, so it reads as a distinct draped layer
+   rather than a continuation of the same flat shape. Earlier this was two
+   separately-stroked shapes (a lens-shaped "hood" stacked on a separate
+   "shoulders" band); direct full-scale rendering showed that pairing reads
+   as a single eye-like blob, not a figure — one continuous cloak outline
+   with its own dark rim stroke gives a legible head/shoulders silhouette
+   instead. */
+.apparition-cloak {
   opacity: 0.97;
-  stroke: rgba(8, 6, 4, 0.6);
-  stroke-width: 1.4;
+  stroke: rgba(8, 6, 4, 0.7);
+  stroke-width: 1.6;
 }
 
 .apparition-collar {

@@ -1152,49 +1152,58 @@ function cameoColorFor(publicKey) {
 // the variant just varies the silhouette itself.
 const APPARITION_VARIANTS = [
   {
-    // A tall, sharply PEAKED hood (a distinct point at the crown, not a
-    // rounded dome) over a narrower face opening, with shoulders that slope
-    // steeply outward from a narrow neck (reading as actual shoulders, not
-    // a horizontal belt-like band) into a flared robe below.
-    hood: "M50 2 C44 2 40 10 38 20 C36 30 36 40 40 48 C44 54 48 57 50 57 C52 57 56 54 60 48 C64 40 64 30 62 20 C60 10 56 2 50 2 Z",
-    shoulders: "M50 48 C38 48 30 54 24 64 C18 72 14 80 12 88 L36 88 C38 80 42 72 50 68 C58 72 62 80 64 88 L88 88 C86 80 82 72 76 64 C70 54 62 48 50 48 Z",
-    robe: "M12 88 C6 104 4 120 8 134 C20 144 34 150 50 151 C66 150 80 144 92 134 C96 120 94 104 88 88 C76 94 24 94 12 88 Z",
-    hem: "M14 127 C25 136 38 141 50 141 C62 141 75 136 86 127",
+    // ONE continuous cloak outline — hood peak flowing directly into the
+    // shoulders — rather than two separately-stroked shapes stacked on top
+    // of each other. Direct full-scale rendering showed that a separate
+    // lens-shaped "hood" over a separate "shoulders" band reads as a single
+    // eye-like blob with no legible garment structure; a single outline
+    // that already traces hood-into-shoulder-into-neck-cutout gives the
+    // silhouette a real head/shoulders read at cameo scale.
+    cloak: "M50 4 C42 4 36 14 33 26 C31 34 31 42 34 49 C27 52 18 58 11 68 C4 78 1 90 2 103 L18 103 C19 93 22 84 28 77 C33 71 40 67 47 65 L47 103 L53 103 L53 65 C60 67 67 71 72 77 C78 84 81 93 82 103 L98 103 C99 90 96 78 89 68 C82 58 73 52 66 49 C69 42 69 34 67 26 C64 14 58 4 50 4 Z",
+    robe: "M2 103 C-2 118 -2 134 4 148 C18 160 34 167 50 168 C66 167 82 160 96 148 C102 134 102 118 98 103 L82 103 C78 110 65 114 50 114 C35 114 22 110 18 103 Z",
+    hem: "M6 142 C20 152 35 158 50 158 C65 158 80 152 94 142",
     folds: [
-      "M28 92 C25 107 24 120 27 134",
-      "M50 94 C49 110 49 124 50 138",
-      "M72 92 C75 107 76 120 73 134",
+      "M24 108 C20 122 19 136 22 150",
+      "M50 110 C49 126 49 140 50 154",
+      "M76 108 C80 122 81 136 78 150",
     ],
-    handY: 100,
+    handY: 118,
+    faceCy: 38,
+    faceRx: 9,
+    faceRy: 16,
   },
   {
-    // A softer, rounder veil-hood (still a real peak, just less sharp) and
-    // more gently sloped shoulders, with a wider, more flared robe below.
-    hood: "M50 3 C45 3 41 10 39 19 C37 28 37 38 41 46 C44 52 48 55 50 55 C52 55 56 52 59 46 C63 38 63 28 61 19 C59 10 55 3 50 3 Z",
-    shoulders: "M50 46 C40 46 32 51 26 60 C20 68 16 76 14 86 L34 86 C37 78 42 70 50 66 C58 70 63 78 66 86 L86 86 C84 76 80 68 74 60 C68 51 60 46 50 46 Z",
-    robe: "M14 86 C8 101 6 118 10 132 C22 142 36 148 50 149 C64 148 78 142 90 132 C94 118 92 101 86 86 C74 92 26 92 14 86 Z",
-    hem: "M16 125 C27 134 39 139 50 139 C61 139 73 134 84 125",
+    // A slightly softer, less sharply peaked hood over the same
+    // cloak-as-one-outline structure.
+    cloak: "M50 5 C43 5 37 14 34 25 C32 33 32 41 35 48 C28 51 19 57 13 66 C6 76 3 88 4 100 L19 100 C20 91 23 82 29 75 C34 69 41 66 48 64 L48 100 L52 100 L52 64 C59 66 66 69 71 75 C77 82 80 91 81 100 L96 100 C97 88 94 76 87 66 C81 57 72 51 65 48 C68 41 68 33 66 25 C63 14 57 5 50 5 Z",
+    robe: "M4 100 C0 115 0 131 6 145 C19 157 34 164 50 165 C66 164 81 157 94 145 C100 131 100 115 96 100 L81 100 C77 107 65 111 50 111 C35 111 23 107 19 100 Z",
+    hem: "M8 139 C21 149 35 155 50 155 C65 155 79 149 92 139",
     folds: [
-      "M30 90 C27 105 26 118 29 132",
-      "M50 92 C49 108 49 122 50 136",
-      "M70 90 C73 105 74 118 71 132",
+      "M26 105 C22 119 21 133 24 147",
+      "M50 107 C49 123 49 137 50 151",
+      "M74 105 C78 119 79 133 76 147",
     ],
-    handY: 98,
+    handY: 116,
+    faceCy: 36,
+    faceRx: 8.5,
+    faceRy: 15,
   },
   {
-    // A slightly shorter, asymmetric drape — one shoulder sits a touch
-    // higher (a suggestion of a turned stance), a visibly different
-    // silhouette rather than a resized copy of the other two.
-    hood: "M50 5 C45 5 41 12 39 21 C37 29 38 38 42 45 C45 50 48 53 50 53 C52 53 55 50 58 45 C62 38 63 29 61 21 C59 12 55 5 50 5 Z",
-    shoulders: "M50 53 C40 53 32 58 26 66 C21 73 18 80 16 87 L34 87 C37 80 41 73 48 69 C50 68 53 70 56 74 C60 79 63 83 65 87 L84 87 C81 79 77 71 71 63 C65 56 58 53 50 53 Z",
-    robe: "M16 87 C11 100 10 115 13 128 C23 138 36 144 50 145 C64 144 77 138 87 128 C90 115 89 100 84 87 C73 92 27 92 16 87 Z",
-    hem: "M18 122 C28 131 39 136 50 136 C60 136 71 131 82 122",
+    // An asymmetric drape — the right shoulder sits a touch higher, read
+    // as a turned stance, giving a visibly different silhouette from the
+    // other two rather than a resized copy.
+    cloak: "M50 6 C44 6 38 15 36 25 C34 33 35 41 38 47 C30 51 20 57 14 66 C7 76 4 87 5 99 L20 99 C21 90 25 82 31 75 C37 69 44 66 50 65 C54 65 60 67 65 71 C72 76 78 82 82 90 L97 90 C94 80 88 72 80 65 C72 58 62 52 55 49 C58 42 58 33 56 25 C53 15 47 6 50 6 Z",
+    robe: "M5 99 C1 114 1 130 7 144 C20 156 35 163 50 164 C66 163 81 156 94 144 C100 130 100 114 97 99 L82 90 C79 101 65 107 50 107 C36 107 24 102 20 99 Z",
+    hem: "M9 138 C22 148 36 154 50 154 C64 154 78 148 91 138",
     folds: [
-      "M32 91 C29 104 28 116 31 129",
-      "M51 93 C50 107 50 119 51 132",
-      "M68 91 C71 104 72 116 69 129",
+      "M27 104 C23 118 22 132 25 146",
+      "M50 106 C49 122 49 136 50 150",
+      "M72 104 C75 116 76 128 74 142",
     ],
-    handY: 96,
+    handY: 115,
+    faceCy: 36,
+    faceRx: 8.5,
+    faceRy: 15,
   },
 ];
 
@@ -1219,13 +1228,13 @@ function buildApparitionSvg(publicKey) {
   apparitionIdCounter += 1;
   const uid = `apparition-${apparitionIdCounter}`;
   const robeGradId = `${uid}-robe`;
-  const hoodGradId = `${uid}-hood`;
+  const cloakGradId = `${uid}-cloak`;
   const faceGradId = `${uid}-face`;
   const auraBlurId = `${uid}-aura-blur`;
 
   const svg = svgEl("svg");
   svg.setAttribute("class", "apparition");
-  svg.setAttribute("viewBox", "0 0 100 150");
+  svg.setAttribute("viewBox", "0 0 100 175");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("focusable", "false");
 
@@ -1255,32 +1264,32 @@ function buildApparitionSvg(publicKey) {
   }
   defs.appendChild(robeGrad);
 
-  const hoodGrad = svgEl("linearGradient");
-  hoodGrad.setAttribute("id", hoodGradId);
-  hoodGrad.setAttribute("x1", "0");
-  hoodGrad.setAttribute("y1", "0");
-  hoodGrad.setAttribute("x2", "0");
-  hoodGrad.setAttribute("y2", "1");
-  const hoodStops = [
-    ["0%", "color-mix(in srgb, white 78%, var(--cameo-color, var(--gold)) 22%)", 0.98],
-    ["100%", "color-mix(in srgb, var(--cameo-color, var(--gold)) 85%, white 8%)", 0.97],
+  const cloakGrad = svgEl("linearGradient");
+  cloakGrad.setAttribute("id", cloakGradId);
+  cloakGrad.setAttribute("x1", "0");
+  cloakGrad.setAttribute("y1", "0");
+  cloakGrad.setAttribute("x2", "0");
+  cloakGrad.setAttribute("y2", "1");
+  const cloakStops = [
+    ["0%", "color-mix(in srgb, white 75%, var(--cameo-color, var(--gold)) 25%)", 0.98],
+    ["100%", "color-mix(in srgb, var(--cameo-color, var(--gold)) 85%, white 6%)", 0.97],
   ];
-  for (const [offset, color, opacity] of hoodStops) {
+  for (const [offset, color, opacity] of cloakStops) {
     const stop = svgEl("stop");
     stop.setAttribute("offset", offset);
     stop.setAttribute("stop-opacity", String(opacity));
     stop.setAttribute("style", `stop-color: ${color}`);
-    hoodGrad.appendChild(stop);
+    cloakGrad.appendChild(stop);
   }
-  defs.appendChild(hoodGrad);
+  defs.appendChild(cloakGrad);
 
   const faceGrad = svgEl("radialGradient");
   faceGrad.setAttribute("id", faceGradId);
   faceGrad.setAttribute("cx", "50%");
-  faceGrad.setAttribute("cy", "38%");
+  faceGrad.setAttribute("cy", "35%");
   faceGrad.setAttribute("r", "65%");
   const faceStops = [
-    ["0%", "#2a2420", 0.75],
+    ["0%", "#2a2420", 0.7],
     ["100%", "#0a0806", 0.92],
   ];
   for (const [offset, color, opacity] of faceStops) {
@@ -1309,9 +1318,9 @@ function buildApparitionSvg(publicKey) {
   const aura = svgEl("ellipse");
   aura.setAttribute("class", "apparition-aura");
   aura.setAttribute("cx", "50");
-  aura.setAttribute("cy", "78");
-  aura.setAttribute("rx", "44");
-  aura.setAttribute("ry", "62");
+  aura.setAttribute("cy", "90");
+  aura.setAttribute("rx", "46");
+  aura.setAttribute("ry", "72");
   aura.setAttribute("filter", `url(#${auraBlurId})`);
   aura.setAttribute("style", "fill: var(--cameo-color, var(--gold))");
   svg.appendChild(aura);
@@ -1331,23 +1340,22 @@ function buildApparitionSvg(publicKey) {
     svg.appendChild(fold);
   }
 
-  // Smaller and narrower than the first pass, and positioned lower at the
-  // waist (per-variant `handY`) — the earlier size/placement read as a pair
-  // of eyes/buttons on the belly rather than folded hands, confirmed by
-  // directly rendering the SVG at scale.
+  // Positioned at the waist (per-variant `handY`), where the robe is still
+  // wide enough for a pair of small hand shapes to read as hands rather
+  // than belt buttons.
   const hands = svgEl("g");
   hands.setAttribute("class", "apparition-hands");
   const handLeft = svgEl("ellipse");
-  handLeft.setAttribute("cx", "46");
+  handLeft.setAttribute("cx", "42");
   handLeft.setAttribute("cy", String(variant.handY));
-  handLeft.setAttribute("rx", "3.2");
-  handLeft.setAttribute("ry", "5");
+  handLeft.setAttribute("rx", "3.6");
+  handLeft.setAttribute("ry", "5.5");
   hands.appendChild(handLeft);
   const handRight = svgEl("ellipse");
-  handRight.setAttribute("cx", "54");
+  handRight.setAttribute("cx", "58");
   handRight.setAttribute("cy", String(variant.handY));
-  handRight.setAttribute("rx", "3.2");
-  handRight.setAttribute("ry", "5");
+  handRight.setAttribute("rx", "3.6");
+  handRight.setAttribute("ry", "5.5");
   hands.appendChild(handRight);
   svg.appendChild(hands);
 
@@ -1356,34 +1364,27 @@ function buildApparitionSvg(publicKey) {
   hemTrim.setAttribute("d", variant.hem);
   svg.appendChild(hemTrim);
 
-  // Shoulders + hood sit outside the fade — the upper body never dissolves.
-  const shoulders = svgEl("path");
-  shoulders.setAttribute("class", "apparition-shoulders");
-  shoulders.setAttribute("d", variant.shoulders);
-  shoulders.setAttribute("fill", `url(#${hoodGradId})`);
-  svg.appendChild(shoulders);
+  // The cloak — hood, shoulders and neck cutout as ONE continuous outline
+  // (see APPARITION_VARIANTS' own comment) — sits outside the fade; the
+  // upper body never dissolves, only the lower robe does.
+  const cloak = svgEl("path");
+  cloak.setAttribute("class", "apparition-cloak");
+  cloak.setAttribute("d", variant.cloak);
+  cloak.setAttribute("fill", `url(#${cloakGradId})`);
+  svg.appendChild(cloak);
 
-  const hood = svgEl("path");
-  hood.setAttribute("class", "apparition-hood");
-  hood.setAttribute("d", variant.hood);
-  hood.setAttribute("fill", `url(#${hoodGradId})`);
-  svg.appendChild(hood);
-
-  // Shadowed face recess — a dark oval, no features by design — narrower
-  // and positioned higher to sit inside the new, more sharply tapered hood
-  // opening (the hood's own face-opening now narrows toward y=20, not a
-  // wide dome centred at y=35).
+  // Shadowed face recess — a dark oval, no features by design — sitting
+  // inside the cloak's neck cutout.
   const face = svgEl("ellipse");
   face.setAttribute("class", "apparition-face");
   face.setAttribute("cx", "50");
-  face.setAttribute("cy", "28");
-  face.setAttribute("rx", "7.5");
-  face.setAttribute("ry", "11");
+  face.setAttribute("cy", String(variant.faceCy));
+  face.setAttribute("rx", String(variant.faceRx));
+  face.setAttribute("ry", String(variant.faceRy));
   face.setAttribute("fill", `url(#${faceGradId})`);
   svg.appendChild(face);
 
-  // A bright collar crescent at the neck, where the hood meets the
-  // shoulders (now ~y=48-53 depending on variant, not the old fixed y=54).
+  // A bright collar crescent at the neck, where the cloak meets the robe.
   const collarY = variant.handY - 46;
   const collar = svgEl("path");
   collar.setAttribute("class", "apparition-collar");
