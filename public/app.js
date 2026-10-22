@@ -1121,294 +1121,79 @@ function cameoColorFor(publicKey) {
   return `hsl(${hue}, 65%, 55%)`;
 }
 
+function cameoOpacityFor(publicKey) {
+  return (0.72 + (hashKey(`opacity:${publicKey}`) % 20) / 100).toFixed(2);
+}
+function cameoGlowFor(publicKey) {
+  return (0.35 + (hashKey(`glow:${publicKey}`) % 30) / 100).toFixed(2);
+}
+
 // ---------------------------------------------------------------------------
-// The apparition itself: a layered, original Victorian/Gothic spectral
-// silhouette, replacing the earlier two-shape (ellipse head + clipped-
-// polygon body) version. Built as one small inline SVG per cameo
-// (document.createElementNS, the same convention buildShapeHotspot/
-// svgLabelFor already use elsewhere in this file) rather than a giant
-// template-string duplicated per visitor, so it composes the same way the
-// rest of this file's SVG-building code does.
+// The apparition itself: one of three fixed, pre-made transparent PNG
+// templates (public/assets/ui/visitor-ghost-{feminine,masculine,small}.png)
+// rather than a generated SVG silhouette. The template is chosen
+// deterministically from the visitor's own public key — never from their
+// (user-supplied, untrusted) display name, so this never infers gender from
+// a name — and stays stable for that visitor across re-renders, refreshes
+// and reconnects, the same "stable per-identity" discipline the anchor/
+// colour/idle-delay assignment above already uses.
 //
-// Layers, back to front: a soft blurred aura (the one layer kept on
-// `mix-blend-mode: screen` — see styles.css's doc comment on why that blend
-// is safe ONLY as a non-load-bearing accent) · the draped robe body (an
-// opaque ivory-to-hue gradient that fades to full transparency toward the
-// hem, via per-stop `stop-opacity`, so the lower body genuinely dissolves
-// into mist rather than being hard-clipped) · a few curved fold-line
-// strokes giving the drape real visible structure · a faint suggestion of
-// folded hands at the waist · a dashed ornamental hem trim just above the
-// fade · the shoulders and hood (a second, slightly different opaque
-// gradient, outside the hem's fade — the upper body never dissolves) · a
-// shadowed face recess (a dark radial gradient, no features — silhouette
-// richness, not a portrait) · a bright collar crescent framing the face ·
-// a small brass clasp/brooch with a glint highlight.
-//
-// Three subtly different silhouette variants (hood/shoulder/robe shape)
-// are selected deterministically from the visitor's own public key (the
-// same `hashKey` pattern the anchor/colour/idle-delay assignment already
-// uses), so a room with several visitors doesn't look like identical
-// clones — the hue tint still makes each one individually identifiable;
-// the variant just varies the silhouette itself.
-const APPARITION_VARIANTS = [
-  {
-    // ONE continuous cloak outline — hood peak flowing directly into the
-    // shoulders — rather than two separately-stroked shapes stacked on top
-    // of each other. Direct full-scale rendering showed that a separate
-    // lens-shaped "hood" over a separate "shoulders" band reads as a single
-    // eye-like blob with no legible garment structure; a single outline
-    // that already traces hood-into-shoulder-into-neck-cutout gives the
-    // silhouette a real head/shoulders read at cameo scale.
-    cloak: "M50 4 C42 4 36 14 33 26 C31 34 31 42 34 49 C27 52 18 58 11 68 C4 78 1 90 2 103 L18 103 C19 93 22 84 28 77 C33 71 40 67 47 65 L47 103 L53 103 L53 65 C60 67 67 71 72 77 C78 84 81 93 82 103 L98 103 C99 90 96 78 89 68 C82 58 73 52 66 49 C69 42 69 34 67 26 C64 14 58 4 50 4 Z",
-    robe: "M2 103 C-2 118 -2 134 4 148 C18 160 34 167 50 168 C66 167 82 160 96 148 C102 134 102 118 98 103 L82 103 C78 110 65 114 50 114 C35 114 22 110 18 103 Z",
-    hem: "M6 142 C20 152 35 158 50 158 C65 158 80 152 94 142",
-    folds: [
-      "M24 108 C20 122 19 136 22 150",
-      "M50 110 C49 126 49 140 50 154",
-      "M76 108 C80 122 81 136 78 150",
-    ],
-    handY: 118,
-    faceCy: 38,
-    faceRx: 9,
-    faceRy: 16,
-  },
-  {
-    // A slightly softer, less sharply peaked hood over the same
-    // cloak-as-one-outline structure.
-    cloak: "M50 5 C43 5 37 14 34 25 C32 33 32 41 35 48 C28 51 19 57 13 66 C6 76 3 88 4 100 L19 100 C20 91 23 82 29 75 C34 69 41 66 48 64 L48 100 L52 100 L52 64 C59 66 66 69 71 75 C77 82 80 91 81 100 L96 100 C97 88 94 76 87 66 C81 57 72 51 65 48 C68 41 68 33 66 25 C63 14 57 5 50 5 Z",
-    robe: "M4 100 C0 115 0 131 6 145 C19 157 34 164 50 165 C66 164 81 157 94 145 C100 131 100 115 96 100 L81 100 C77 107 65 111 50 111 C35 111 23 107 19 100 Z",
-    hem: "M8 139 C21 149 35 155 50 155 C65 155 79 149 92 139",
-    folds: [
-      "M26 105 C22 119 21 133 24 147",
-      "M50 107 C49 123 49 137 50 151",
-      "M74 105 C78 119 79 133 76 147",
-    ],
-    handY: 116,
-    faceCy: 36,
-    faceRx: 8.5,
-    faceRy: 15,
-  },
-  {
-    // An asymmetric drape — the right shoulder sits a touch higher, read
-    // as a turned stance, giving a visibly different silhouette from the
-    // other two rather than a resized copy.
-    cloak: "M50 6 C44 6 38 15 36 25 C34 33 35 41 38 47 C30 51 20 57 14 66 C7 76 4 87 5 99 L20 99 C21 90 25 82 31 75 C37 69 44 66 50 65 C54 65 60 67 65 71 C72 76 78 82 82 90 L97 90 C94 80 88 72 80 65 C72 58 62 52 55 49 C58 42 58 33 56 25 C53 15 47 6 50 6 Z",
-    robe: "M5 99 C1 114 1 130 7 144 C20 156 35 163 50 164 C66 163 81 156 94 144 C100 130 100 114 97 99 L82 90 C79 101 65 107 50 107 C36 107 24 102 20 99 Z",
-    hem: "M9 138 C22 148 36 154 50 154 C64 154 78 148 91 138",
-    folds: [
-      "M27 104 C23 118 22 132 25 146",
-      "M50 106 C49 122 49 136 50 150",
-      "M72 104 C75 116 76 128 74 142",
-    ],
-    handY: 115,
-    faceCy: 36,
-    faceRx: 8.5,
-    faceRy: 15,
-  },
+// The artwork itself is never recoloured or altered: each cameo layers
+// three elements —
+//   1. `.apparition-aura`, a blurred, screen-blended copy of the template
+//      masked by its own alpha, behind everything, for a soft per-visitor
+//      glow;
+//   2. `.apparition-base`, the PNG at full/original detail (`object-fit:
+//      contain` preserves its proportions);
+//   3. `.apparition-tint`, a flat `--cameo-color` layer masked by the SAME
+//      template's alpha channel (`mask-image`/`-webkit-mask-image`, never
+//      `filter: hue-rotate`, which would shift the hue of every pixel
+//      uniformly rather than respecting the garment's own shading) and
+//      composited with `mix-blend-mode: color` so it recolours the figure
+//      while the base layer's clothing folds and facial shading still show
+//      through underneath.
+// Only colour, transparency (`--cameo-opacity`/`--cameo-tint-opacity`),
+// glow (`--cameo-glow-opacity`) and animation timing (`--cameo-delay`,
+// already set in renderCameos) vary per visitor — the character art itself
+// is identical for every visitor who lands on the same template.
+const APPARITION_TEMPLATES = [
+  "/assets/ui/visitor-ghost-feminine.png",
+  "/assets/ui/visitor-ghost-masculine.png",
+  "/assets/ui/visitor-ghost-small.png",
 ];
 
-function apparitionVariantFor(publicKey) {
-  return APPARITION_VARIANTS[hashKey(`variant:${publicKey}`) % APPARITION_VARIANTS.length];
+function apparitionTemplateFor(publicKey) {
+  return APPARITION_TEMPLATES[hashKey(`template:${publicKey}`) % APPARITION_TEMPLATES.length];
 }
 
-let apparitionIdCounter = 0;
+function buildApparitionFigure(publicKey) {
+  const template = apparitionTemplateFor(publicKey);
 
-function svgEl(tag) {
-  return document.createElementNS(SVG_NS, tag);
-}
+  const wrap = document.createElement("div");
+  wrap.className = "apparition";
 
-// Any reference to the per-visitor hue tint inside this SVG goes through
-// `style="...: var(--cameo-color, var(--gold))"` (a real CSS property on
-// the `style` attribute), never a bare `fill="var(...)"` presentation
-// attribute — SVG presentation attributes don't reliably resolve CSS
-// functions like var()/color-mix() across browsers, while the `style`
-// attribute's value is parsed as real CSS and does.
-function buildApparitionSvg(publicKey) {
-  const variant = apparitionVariantFor(publicKey);
-  apparitionIdCounter += 1;
-  const uid = `apparition-${apparitionIdCounter}`;
-  const robeGradId = `${uid}-robe`;
-  const cloakGradId = `${uid}-cloak`;
-  const faceGradId = `${uid}-face`;
-  const auraBlurId = `${uid}-aura-blur`;
+  const aura = document.createElement("div");
+  aura.className = "apparition-aura";
+  aura.style.maskImage = `url(${template})`;
+  aura.style.webkitMaskImage = `url(${template})`;
+  aura.style.backgroundImage = `url(${template})`;
+  wrap.appendChild(aura);
 
-  const svg = svgEl("svg");
-  svg.setAttribute("class", "apparition");
-  svg.setAttribute("viewBox", "0 0 100 175");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
+  const base = document.createElement("img");
+  base.className = "apparition-base";
+  base.src = template;
+  base.alt = "";
+  base.setAttribute("aria-hidden", "true");
+  base.draggable = false;
+  wrap.appendChild(base);
 
-  const defs = svgEl("defs");
+  const tint = document.createElement("div");
+  tint.className = "apparition-tint";
+  tint.style.maskImage = `url(${template})`;
+  tint.style.webkitMaskImage = `url(${template})`;
+  wrap.appendChild(tint);
 
-  // The robe's gradient carries the hem-fade itself (decreasing
-  // stop-opacity toward the bottom stop) rather than a separate <mask> —
-  // one fewer id to keep unique per instance, same visual result.
-  const robeGrad = svgEl("linearGradient");
-  robeGrad.setAttribute("id", robeGradId);
-  robeGrad.setAttribute("x1", "0");
-  robeGrad.setAttribute("y1", "0");
-  robeGrad.setAttribute("x2", "0");
-  robeGrad.setAttribute("y2", "1");
-  const robeStops = [
-    ["0%", "color-mix(in srgb, white 68%, var(--cameo-color, var(--gold)) 32%)", 0.95],
-    ["45%", "color-mix(in srgb, var(--cameo-color, var(--gold)) 80%, white 8%)", 0.85],
-    ["78%", "var(--cameo-color, var(--gold))", 0.4],
-    ["100%", "var(--cameo-color, var(--gold))", 0],
-  ];
-  for (const [offset, color, opacity] of robeStops) {
-    const stop = svgEl("stop");
-    stop.setAttribute("offset", offset);
-    stop.setAttribute("stop-opacity", String(opacity));
-    stop.setAttribute("style", `stop-color: ${color}`);
-    robeGrad.appendChild(stop);
-  }
-  defs.appendChild(robeGrad);
-
-  const cloakGrad = svgEl("linearGradient");
-  cloakGrad.setAttribute("id", cloakGradId);
-  cloakGrad.setAttribute("x1", "0");
-  cloakGrad.setAttribute("y1", "0");
-  cloakGrad.setAttribute("x2", "0");
-  cloakGrad.setAttribute("y2", "1");
-  const cloakStops = [
-    ["0%", "color-mix(in srgb, white 75%, var(--cameo-color, var(--gold)) 25%)", 0.98],
-    ["100%", "color-mix(in srgb, var(--cameo-color, var(--gold)) 85%, white 6%)", 0.97],
-  ];
-  for (const [offset, color, opacity] of cloakStops) {
-    const stop = svgEl("stop");
-    stop.setAttribute("offset", offset);
-    stop.setAttribute("stop-opacity", String(opacity));
-    stop.setAttribute("style", `stop-color: ${color}`);
-    cloakGrad.appendChild(stop);
-  }
-  defs.appendChild(cloakGrad);
-
-  const faceGrad = svgEl("radialGradient");
-  faceGrad.setAttribute("id", faceGradId);
-  faceGrad.setAttribute("cx", "50%");
-  faceGrad.setAttribute("cy", "35%");
-  faceGrad.setAttribute("r", "65%");
-  const faceStops = [
-    ["0%", "#2a2420", 0.7],
-    ["100%", "#0a0806", 0.92],
-  ];
-  for (const [offset, color, opacity] of faceStops) {
-    const stop = svgEl("stop");
-    stop.setAttribute("offset", offset);
-    stop.setAttribute("stop-opacity", String(opacity));
-    stop.setAttribute("style", `stop-color: ${color}`);
-    faceGrad.appendChild(stop);
-  }
-  defs.appendChild(faceGrad);
-
-  const blur = svgEl("filter");
-  blur.setAttribute("id", auraBlurId);
-  blur.setAttribute("x", "-80%");
-  blur.setAttribute("y", "-80%");
-  blur.setAttribute("width", "260%");
-  blur.setAttribute("height", "260%");
-  const feGaussianBlur = svgEl("feGaussianBlur");
-  feGaussianBlur.setAttribute("stdDeviation", "5.5");
-  blur.appendChild(feGaussianBlur);
-  defs.appendChild(blur);
-
-  svg.appendChild(defs);
-
-  // Aura — furthest back, a soft restrained glow behind the whole figure.
-  const aura = svgEl("ellipse");
-  aura.setAttribute("class", "apparition-aura");
-  aura.setAttribute("cx", "50");
-  aura.setAttribute("cy", "90");
-  aura.setAttribute("rx", "46");
-  aura.setAttribute("ry", "72");
-  aura.setAttribute("filter", `url(#${auraBlurId})`);
-  aura.setAttribute("style", "fill: var(--cameo-color, var(--gold))");
-  svg.appendChild(aura);
-
-  // Robe (dissolving into mist at the hem) + its fold lines, hands, and
-  // hem trim — all part of the lower body that fades, so grouped together.
-  const robe = svgEl("path");
-  robe.setAttribute("class", "apparition-robe");
-  robe.setAttribute("d", variant.robe);
-  robe.setAttribute("fill", `url(#${robeGradId})`);
-  svg.appendChild(robe);
-
-  for (const foldD of variant.folds) {
-    const fold = svgEl("path");
-    fold.setAttribute("class", "apparition-fold");
-    fold.setAttribute("d", foldD);
-    svg.appendChild(fold);
-  }
-
-  // Positioned at the waist (per-variant `handY`), where the robe is still
-  // wide enough for a pair of small hand shapes to read as hands rather
-  // than belt buttons.
-  const hands = svgEl("g");
-  hands.setAttribute("class", "apparition-hands");
-  const handLeft = svgEl("ellipse");
-  handLeft.setAttribute("cx", "42");
-  handLeft.setAttribute("cy", String(variant.handY));
-  handLeft.setAttribute("rx", "3.6");
-  handLeft.setAttribute("ry", "5.5");
-  hands.appendChild(handLeft);
-  const handRight = svgEl("ellipse");
-  handRight.setAttribute("cx", "58");
-  handRight.setAttribute("cy", String(variant.handY));
-  handRight.setAttribute("rx", "3.6");
-  handRight.setAttribute("ry", "5.5");
-  hands.appendChild(handRight);
-  svg.appendChild(hands);
-
-  const hemTrim = svgEl("path");
-  hemTrim.setAttribute("class", "apparition-hem-trim");
-  hemTrim.setAttribute("d", variant.hem);
-  svg.appendChild(hemTrim);
-
-  // The cloak — hood, shoulders and neck cutout as ONE continuous outline
-  // (see APPARITION_VARIANTS' own comment) — sits outside the fade; the
-  // upper body never dissolves, only the lower robe does.
-  const cloak = svgEl("path");
-  cloak.setAttribute("class", "apparition-cloak");
-  cloak.setAttribute("d", variant.cloak);
-  cloak.setAttribute("fill", `url(#${cloakGradId})`);
-  svg.appendChild(cloak);
-
-  // Shadowed face recess — a dark oval, no features by design — sitting
-  // inside the cloak's neck cutout.
-  const face = svgEl("ellipse");
-  face.setAttribute("class", "apparition-face");
-  face.setAttribute("cx", "50");
-  face.setAttribute("cy", String(variant.faceCy));
-  face.setAttribute("rx", String(variant.faceRx));
-  face.setAttribute("ry", String(variant.faceRy));
-  face.setAttribute("fill", `url(#${faceGradId})`);
-  svg.appendChild(face);
-
-  // A bright collar crescent at the neck, where the cloak meets the robe.
-  const collarY = variant.handY - 46;
-  const collar = svgEl("path");
-  collar.setAttribute("class", "apparition-collar");
-  collar.setAttribute(
-    "d",
-    `M38 ${collarY} Q50 ${collarY + 9} 62 ${collarY} L57 ${collarY + 5} Q50 ${collarY + 11} 43 ${collarY + 5} Z`,
-  );
-  svg.appendChild(collar);
-
-  // Ornamental clasp/brooch at the collar, with a small glint highlight.
-  const clasp = svgEl("circle");
-  clasp.setAttribute("class", "apparition-clasp");
-  clasp.setAttribute("cx", "50");
-  clasp.setAttribute("cy", String(collarY + 5));
-  clasp.setAttribute("r", "2.4");
-  svg.appendChild(clasp);
-  const claspGlint = svgEl("circle");
-  claspGlint.setAttribute("class", "apparition-clasp-glint");
-  claspGlint.setAttribute("cx", "49.1");
-  claspGlint.setAttribute("cy", String(collarY + 4.1));
-  claspGlint.setAttribute("r", "0.8");
-  svg.appendChild(claspGlint);
-
-  return svg;
+  return wrap;
 }
 
 let recentActivityByKey = new Map(); // publicKey -> timestamp, for the activity-pulse cue
@@ -1450,6 +1235,8 @@ function renderCameos() {
     cameo.style.setProperty("--cameo-depth", String(anchor.depth ?? 1));
     cameo.style.setProperty("--cameo-color", cameoColorFor(visitor.publicKey));
     cameo.style.setProperty("--cameo-delay", `${(hashKey(visitor.publicKey) % 50) / 10}s`);
+    cameo.style.setProperty("--cameo-opacity", cameoOpacityFor(visitor.publicKey));
+    cameo.style.setProperty("--cameo-glow-opacity", cameoGlowFor(visitor.publicKey));
     cameo.tabIndex = 0;
     // A real interactive control now — clicking/tapping/Enter-ing another
     // visitor's apparition opens the Séance panel for them (see
@@ -1471,7 +1258,7 @@ function renderCameos() {
 
     const silhouette = document.createElement("div");
     silhouette.className = "cameo-silhouette";
-    silhouette.appendChild(buildApparitionSvg(visitor.publicKey));
+    silhouette.appendChild(buildApparitionFigure(visitor.publicKey));
     cameo.appendChild(silhouette);
 
     // The name reveals only on hover/focus (CLAUDE.md: "do not show large

@@ -268,10 +268,35 @@ function roomIdForScene(sceneId) {
 
 // Visitors reported against a gallery's main OR closeup scene both count as
 // "in that room" for the floor plan, same aggregation `galleryRoomTotal`
-// already uses in app.js for the room-total badge.
+// already uses in app.js for the room-total badge. Deduped by publicKey (the
+// same discipline app.js's own visitorsInRoom already applies) so a visitor
+// briefly reported against both exact scenes never counts, or draws, twice.
 function visitorsInRoom(roomId, sceneVisitors) {
-  if (roomId === "hall") return sceneVisitors.hall ?? [];
-  return [...(sceneVisitors[`${roomId}-main`] ?? []), ...(sceneVisitors[`${roomId}-closeup`] ?? [])];
+  const raw = roomId === "hall" ? (sceneVisitors.hall ?? []) : [...(sceneVisitors[`${roomId}-main`] ?? []), ...(sceneVisitors[`${roomId}-closeup`] ?? [])];
+  const byKey = new Map();
+  for (const v of raw) byKey.set(v.publicKey, v);
+  return [...byKey.values()];
+}
+
+// Peer footprint positions for a room's OTHER visitors — a horizontal band
+// roughly 30% down the room, deliberately NOT the room's geometric centre
+// (reserved exclusively for the self marker, see buildSelfMarker) and
+// deliberately above the relic band (which starts at 45% down, see
+// `relicRect` below) and below the room label (~top 18%). Each visitor gets
+// a small deterministic per-publicKey vertical jitter (the same seeded-hash
+// discipline every other marker placement in this file uses) so several
+// footprints read as scattered rather than mechanically lined up, while
+// staying stable across re-renders for the same visitor.
+function peerFootprintPositions(rect, visitors) {
+  const count = visitors.length;
+  const bandY = rect.y + rect.h * 0.3;
+  const margin = 40;
+  const usableW = Math.max(rect.w - margin * 2, 10);
+  return visitors.map((v, i) => {
+    const x = count > 1 ? rect.x + margin + (i / (count - 1)) * usableW : rect.x + rect.w / 2;
+    const jitter = seededUnit(`footprint-y:${v.publicKey}`) * (rect.h * 0.04);
+    return { x, y: bandY + jitter };
+  });
 }
 
 const MAX_VISITOR_MARKERS_PER_ROOM = 6;
@@ -420,7 +445,13 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
     const rect = ROOMS[room.id];
     if (!rect) continue;
     const isCurrent = room.id === currentRoomId;
-    const visitors = visitorsInRoom(room.id, sceneVisitors).filter((v) => v.publicKey !== myPublicKey);
+    const roomVisitors = visitorsInRoom(room.id, sceneVisitors);
+    const visitors = roomVisitors.filter((v) => v.publicKey !== myPublicKey);
+    // The current room's total includes the visitor themself (never reported
+    // back by the server as a presence row), so the summary doesn't silently
+    // undercount "how many people are actually here" by only ever naming
+    // OTHER visitors.
+    const totalInRoom = isCurrent ? roomVisitors.length + 1 : roomVisitors.length;
     const exhibits =
       room.id === "hall" ? [] : [...exhibitsById.values()].filter((e) => e.galleryId === room.id && e.origin !== "builtin");
 
@@ -429,10 +460,14 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
       tabindex: "0",
       role: "button",
     });
-    const detail = [
-      visitors.length === 0 ? "empty" : visitors.length === 1 ? "1 visitor" : `${visitors.length} visitors`,
-      exhibits.length > 0 ? `${exhibits.length} relic${exhibits.length === 1 ? "" : "s"}` : null,
-    ]
+    const visitorSummary = isCurrent
+      ? `${totalInRoom} visitor${totalInRoom === 1 ? "" : "s"} (you${visitors.length > 0 ? ` + ${visitors.length} other${visitors.length === 1 ? "" : "s"}` : ""})`
+      : totalInRoom === 0
+        ? "empty"
+        : totalInRoom === 1
+          ? "1 visitor"
+          : `${totalInRoom} visitors`;
+    const detail = [visitorSummary, exhibits.length > 0 ? `${exhibits.length} relic${exhibits.length === 1 ? "" : "s"}` : null]
       .filter(Boolean)
       .join(", ");
     g.setAttribute("aria-label", `${room.name}. ${detail}.${isCurrent ? " You are here." : ""}`);
@@ -482,11 +517,16 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
     // publicKey (same "stable per-identity, never server-assigned"
     // discipline as app.js's own renderCameos() anchor assignment), so the
     // same visitor's footprints land in the same spot across re-renders.
+    // Positioned via `peerFootprintPositions` — a band offset from the room
+    // centre, which is reserved for the current visitor's own "You are
+    // here" self-marker (see buildSelfMarker) so a peer's footprints never
+    // render underneath/behind it.
     const sortedVisitors = [...visitors].sort((a, b) => hashKey(a.publicKey) - hashKey(b.publicKey));
     const overflow = sortedVisitors.length > MAX_VISITOR_MARKERS_PER_ROOM;
     const shownCount = overflow ? MAX_VISITOR_MARKERS_PER_ROOM - 1 : sortedVisitors.length;
-    const visitorPositions = subPositions(rect, Math.max(1, shownCount), 28);
-    sortedVisitors.slice(0, shownCount).forEach((visitor, i) => {
+    const shownVisitors = sortedVisitors.slice(0, shownCount);
+    const visitorPositions = peerFootprintPositions(rect, shownVisitors);
+    shownVisitors.forEach((visitor, i) => {
       const p = visitorPositions[i];
       const color = colorForKey(visitor.publicKey);
       const delay = ((hashKey(`delay:${visitor.publicKey}`) % 1000) / 1000) * 1.6;
@@ -525,7 +565,7 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
       g.appendChild(footGroup);
     });
     if (overflow) {
-      const p = visitorPositions[visitorPositions.length - 1] ?? subPositions(rect, 1, 28)[0];
+      const p = visitorPositions[visitorPositions.length - 1] ?? peerFootprintPositions(rect, [sortedVisitors[0]])[0];
       const chip = svg("text", { x: p.x, y: p.y + 4, class: "floor-plan-overflow", "text-anchor": "middle" });
       chip.textContent = `+${sortedVisitors.length - shownCount}`;
       g.appendChild(chip);
