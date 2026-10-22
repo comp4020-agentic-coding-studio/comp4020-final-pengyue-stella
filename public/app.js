@@ -1388,6 +1388,24 @@ function reactionLabelFor(reactionId) {
   return reactions.find((r) => r.id === reactionId)?.label ?? reactionId;
 }
 
+// The Séance panel's own buttons/transcript still show the full server
+// vocabulary label (reactionLabelFor, above) — this is only for the small
+// glyph shown in the ephemeral burst beside a visitor's own cameo, which has
+// no room for a full label like "🕯️ Offer a candle" without overwhelming
+// the silhouette. `heart` renders as a plain text "♥" character (not the
+// red ❤️ emoji) so it reads in this app's own muted rose/gold palette
+// instead of a jarring bright-red glyph.
+const REACTION_GLYPHS = {
+  wave: "✧", // ✧
+  bow: "❦", // ❦
+  candle: "✦", // ✦
+  heart: "♥", // ♥
+  gasp: "!",
+};
+function reactionGlyphFor(reactionId) {
+  return REACTION_GLYPHS[reactionId] ?? reactionLabelFor(reactionId);
+}
+
 // Renders the currently-open panel's transcript — called after every send
 // AND every incoming interact event for the currently-open target, so the
 // panel never needs a manual refresh. Each bubble uses this project's
@@ -1626,10 +1644,10 @@ function handleIncomingInteract(e) {
     announceToScreenReader(`${fromDisplayName} sent you a message: ${body}`);
   } else if (kind === "reaction") {
     const label = reactionLabelFor(reactionId);
-    burstReactionNearCameo(fromPublicKey, label);
+    burstReactionNearCameo(fromPublicKey, reactionGlyphFor(reactionId));
     announceToScreenReader(`${fromDisplayName} reacted: ${label}`);
   } else if (kind === "reach-out") {
-    burstReactionNearCameo(fromPublicKey, "🤍");
+    burstReactionNearCameo(fromPublicKey, "♥");
     toast(`${fromDisplayName} reached out to you.`);
     announceToScreenReader(`${fromDisplayName} reached out to you.`);
   }

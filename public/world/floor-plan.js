@@ -540,8 +540,22 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
       const p = visitorPositions[i];
       const color = colorForKey(visitor.publicKey);
       const delay = ((hashKey(`delay:${visitor.publicKey}`) % 1000) / 1000) * 1.6;
+      // The whole pair is positioned by ONE group transform (translate to
+      // this visitor's room-local point); each ellipse below then uses
+      // small LOCAL coordinates around that origin and rotates only around
+      // its own local centre. Previously each ellipse carried its own
+      // `rotate(angle cx cy)` in the SVG's outer coordinate space while the
+      // CSS also set `transform-box: fill-box` + `transform-origin: center`
+      // on `.floor-plan-footprint-mark` — that combination re-anchors the
+      // element's transform origin to its own bounding box, which fights
+      // the explicit SVG `rotate(... cx cy)` pivot and visibly flings one
+      // foot of the pair away from the other. Keeping rotation in local
+      // group-space and dropping the CSS transform-origin override avoids
+      // the conflict entirely, so a visitor's two footsteps always render
+      // together.
       const footGroup = svg("g", {
         class: "floor-plan-footprint",
+        transform: `translate(${p.x} ${p.y})`,
         style: `--floor-plan-footprint-delay: ${delay.toFixed(2)}s`,
       });
       const title = svg("title", {});
@@ -554,26 +568,26 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
       // 19px-outer-radius star, which must remain the most prominent mark.
       footGroup.appendChild(
         svg("ellipse", {
-          cx: p.x - 8.5,
-          cy: p.y + 5.7,
+          cx: -8.5,
+          cy: 5.7,
           rx: 6,
           ry: 9.8,
           fill: color,
           class: "floor-plan-footprint-mark",
-          transform: `rotate(-18 ${p.x - 8.5} ${p.y + 5.7})`,
+          transform: "rotate(-18 -8.5 5.7)",
         }),
       );
       // Right footstep, ahead and rotated the opposite way — the pair reads
       // as a stride.
       footGroup.appendChild(
         svg("ellipse", {
-          cx: p.x + 8.5,
-          cy: p.y - 5.7,
+          cx: 8.5,
+          cy: -5.7,
           rx: 6,
           ry: 9.8,
           fill: color,
           class: "floor-plan-footprint-mark",
-          transform: `rotate(18 ${p.x + 8.5} ${p.y - 5.7})`,
+          transform: "rotate(18 8.5 -5.7)",
         }),
       );
       g.appendChild(footGroup);
