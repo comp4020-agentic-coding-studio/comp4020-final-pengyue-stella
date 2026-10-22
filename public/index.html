@@ -358,7 +358,49 @@
           <p class="gate-error" id="account-error" role="alert"></p>
         </form>
       </div>
+      <!-- The Séance panel: opened by clicking/tapping/Enter-ing another
+           visitor's apparition (see app.js's renderCameos — each `.cameo`
+           is now role="button", not decorative role="img"). A compact
+           dialog, not a full gate, so it never covers much of the scene —
+           kept inside #viewport so its position stays sane inside this
+           app's own stacking context, same as every other overlay here.
+           Everything it shows (the target's name, the transcript, a typed
+           message) renders via textContent only, never innerHTML — the
+           same rule every other user-supplied text in this app follows. -->
+      <div id="seance-panel" class="overlay-gate seance-gate" hidden>
+        <div class="gate-card seance-card" role="dialog" aria-labelledby="seance-title">
+          <button type="button" id="seance-close" class="dossier-close" aria-label="Close Séance">&times;</button>
+          <p class="dossier-kicker">Séance</p>
+          <h2 id="seance-title"></h2>
+
+          <div id="seance-transcript" class="seance-transcript" aria-live="off"></div>
+
+          <div class="seance-reactions" id="seance-reactions" role="group" aria-label="Send a reaction"></div>
+
+          <button type="button" id="seance-reach-out" class="secondary seance-reach-out">
+            Reach Out <span aria-hidden="true">&#x1F56F;&#xFE0F;</span>
+          </button>
+
+          <form id="seance-message-form" class="seance-message-form">
+            <label for="seance-message-input">Send a message</label>
+            <p id="seance-reply-indicator" class="seance-reply-indicator" hidden></p>
+            <textarea id="seance-message-input" maxlength="160" rows="2"
+              placeholder="A quiet word across the gallery&hellip;"></textarea>
+            <div class="gate-actions">
+              <button type="button" id="seance-mute" class="secondary">Mute for this visit</button>
+              <button type="submit">Send</button>
+            </div>
+          </form>
+          <p class="gate-error" id="seance-error" role="alert"></p>
+        </div>
+      </div>
     </div>
+
+    <!-- Screen-reader-only announcer for an incoming Séance message/reaction
+         — never steals keyboard focus, and never auto-opens the panel for
+         an unsolicited interaction (see app.js's handleIncomingInteract);
+         a restrained toast is the sighted equivalent of this same event. -->
+    <div id="seance-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
     <div id="toasts" class="toasts" aria-live="polite"></div>
 

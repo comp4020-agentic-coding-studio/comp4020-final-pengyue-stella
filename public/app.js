@@ -19,6 +19,7 @@ let myIdentity = null;
 let myPublicKey = null;
 let world = null;
 let relicPresets = []; // the curated donated-relic visual catalog — see server/src/relic-presets.js
+let reactions = []; // the Séance panel's fixed reaction vocabulary — see server/src/constants.js's REACTIONS
 let exhibitsById = new Map(); // exhibitId -> exhibit (with accounts)
 let illustrator = null;
 let lastSceneCounts = {};
@@ -90,6 +91,12 @@ async function loadRelicPresets() {
   const res = await fetch("/api/relic-presets");
   const { presets } = await res.json();
   relicPresets = presets;
+}
+
+async function loadReactions() {
+  const res = await fetch("/api/reactions");
+  const { reactions: list } = await res.json();
+  reactions = list;
 }
 
 async function loadExhibits() {
@@ -1423,8 +1430,23 @@ function renderCameos() {
     cameo.style.setProperty("--cameo-color", cameoColorFor(visitor.publicKey));
     cameo.style.setProperty("--cameo-delay", `${(hashKey(visitor.publicKey) % 50) / 10}s`);
     cameo.tabIndex = 0;
-    cameo.setAttribute("role", "img");
-    cameo.setAttribute("aria-label", `${visitor.displayName}, another visitor in this room`);
+    // A real interactive control now — clicking/tapping/Enter-ing another
+    // visitor's apparition opens the Séance panel for them (see
+    // openSeancePanel below), so this is role="button", not the earlier
+    // decorative role="img". The pointer/touch target stays the whole
+    // `.cameo` box (comfortably larger than the slim illustrated silhouette
+    // inside it — see styles.css's own sizing note), satisfying "a
+    // comfortably large pointer/touch target even if the silhouette itself
+    // is kept slim."
+    cameo.setAttribute("role", "button");
+    cameo.setAttribute("aria-label", `${visitor.displayName}, another visitor in this room. Press Enter to open a Séance.`);
+    cameo.addEventListener("click", () => openSeancePanel(visitor));
+    cameo.addEventListener("keydown", (e) => {
+      if (e.code === "Enter" || e.code === "Space") {
+        e.preventDefault();
+        openSeancePanel(visitor);
+      }
+    });
 
     const silhouette = document.createElement("div");
     silhouette.className = "cameo-silhouette";
@@ -1550,6 +1572,290 @@ function renderVisitorList() {
     chip.style.setProperty("--cameo-color", cameoColorFor(v.publicKey));
     chip.textContent = v.displayName;
     list.appendChild(chip);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The Séance panel: a compact Gothic interaction dialog opened from another
+// visitor's own apparition (see renderCameos — a `.cameo` is now a real
+// `role="button"`, not decorative). Everything here is ephemeral/session-
+// local — the transcript lives only in this tab's own memory, mirroring the
+// server's own "never persisted" treatment of the interaction itself (see
+// server.js's /api/presence/interact doc comment). A page reload starts a
+// fresh, empty transcript, same as a reload already resets focus/activity
+// cues elsewhere in this app.
+
+let seanceTargetPublicKey = null; // whoever the open panel currently targets, or null if closed
+let seanceReplyToId = null; // the local transcript-entry id a typed message will reply to, or null
+const seanceTranscripts = new Map(); // publicKey -> [{ id, mine, kind, body?, reactionId?, replyToId?, displayName }]
+const mutedPublicKeys = new Set(); // publicKeys this session has chosen to stop hearing from — client-only, cleared on reload
+let seanceEntryIdCounter = 0;
+function nextSeanceEntryId() {
+  seanceEntryIdCounter += 1;
+  return `seance-entry-${seanceEntryIdCounter}`;
+}
+
+function transcriptFor(publicKey) {
+  let list = seanceTranscripts.get(publicKey);
+  if (!list) {
+    list = [];
+    seanceTranscripts.set(publicKey, list);
+  }
+  return list;
+}
+
+function reactionLabelFor(reactionId) {
+  return reactions.find((r) => r.id === reactionId)?.label ?? reactionId;
+}
+
+// Renders the currently-open panel's transcript — called after every send
+// AND every incoming interact event for the currently-open target, so the
+// panel never needs a manual refresh. Each bubble uses this project's
+// existing Gothic palette tokens via .seance-entry's own CSS (never a
+// modern flat-design chat bubble — see styles.css's doc comment), and every
+// piece of visitor-supplied text renders via textContent, never innerHTML.
+function renderSeanceTranscript() {
+  const container = el("seance-transcript");
+  if (!container || !seanceTargetPublicKey) return;
+  container.innerHTML = "";
+  for (const entry of transcriptFor(seanceTargetPublicKey)) {
+    const bubble = document.createElement("div");
+    bubble.className = `seance-entry${entry.mine ? " mine" : ""}`;
+    bubble.dataset.entryId = entry.id;
+
+    const byline = document.createElement("span");
+    byline.className = "seance-entry-byline";
+    byline.textContent = entry.mine ? "You" : entry.displayName; // textContent only
+    bubble.appendChild(byline);
+
+    if (entry.kind === "reaction") {
+      const body = document.createElement("p");
+      body.className = "seance-entry-body seance-entry-reaction";
+      body.textContent = `${reactionLabelFor(entry.reactionId)}`; // fixed server vocabulary, still textContent
+      bubble.appendChild(body);
+    } else if (entry.kind === "reach-out") {
+      const body = document.createElement("p");
+      body.className = "seance-entry-body";
+      body.textContent = entry.mine ? "You reached out." : "Reached out to you.";
+      bubble.appendChild(body);
+    } else {
+      if (entry.replyToId) {
+        const replied = transcriptFor(seanceTargetPublicKey).find((e) => e.id === entry.replyToId);
+        if (replied?.body) {
+          const replyNote = document.createElement("p");
+          replyNote.className = "seance-entry-byline";
+          replyNote.textContent = `In reply to: "${replied.body.slice(0, 60)}"`; // textContent only
+          bubble.appendChild(replyNote);
+        }
+      }
+      const body = document.createElement("p");
+      body.className = "seance-entry-body";
+      body.textContent = entry.body; // textContent only — never innerHTML
+      bubble.appendChild(body);
+
+      // A small inline "Reply" affordance on every real message (yours or
+      // theirs) — clicking it sets this entry as the reply target for the
+      // NEXT message sent, shown in the form's own reply indicator below.
+      const replyBtn = document.createElement("button");
+      replyBtn.type = "button";
+      replyBtn.className = "seance-reply-btn";
+      replyBtn.textContent = "Reply";
+      replyBtn.addEventListener("click", () => setSeanceReplyTarget(entry));
+      bubble.appendChild(replyBtn);
+    }
+    container.appendChild(bubble);
+  }
+  container.scrollTop = container.scrollHeight;
+}
+
+function setSeanceReplyTarget(entry) {
+  seanceReplyToId = entry.id;
+  const indicator = el("seance-reply-indicator");
+  if (indicator) {
+    indicator.hidden = false;
+    indicator.textContent = `Replying to: "${entry.body.slice(0, 60)}"`; // textContent only
+  }
+  el("seance-message-input").focus();
+}
+
+function clearSeanceReplyTarget() {
+  seanceReplyToId = null;
+  const indicator = el("seance-reply-indicator");
+  if (indicator) {
+    indicator.hidden = true;
+    indicator.textContent = "";
+  }
+}
+
+function renderSeanceReactionButtons() {
+  const container = el("seance-reactions");
+  if (!container) return;
+  container.innerHTML = "";
+  for (const reaction of reactions) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "seance-reaction-btn";
+    btn.textContent = reaction.label; // textContent only — a fixed server list, still never innerHTML
+    btn.addEventListener("click", () => sendSeanceInteraction({ kind: "reaction", reactionId: reaction.id }));
+    container.appendChild(btn);
+  }
+}
+
+// Opens the Séance panel for `visitor` ({ publicKey, displayName }) — the
+// panel shows that visitor's own transcript (empty on first open) and lets
+// this visitor send a message/reaction/reach-out back to them. Never opened
+// automatically for an unsolicited incoming interaction (see
+// handleIncomingInteract below) — only a deliberate click/tap/Enter on that
+// visitor's own apparition opens it.
+function openSeancePanel(visitor) {
+  if (anyOverlayOpen() && el("seance-panel").hidden) return; // don't pop this over some other open gate
+  seanceTargetPublicKey = visitor.publicKey;
+  clearSeanceReplyTarget();
+  el("seance-title").textContent = visitor.displayName; // textContent only
+  el("seance-error").textContent = "";
+  el("seance-message-input").value = "";
+  renderSeanceReactionButtons();
+  renderSeanceTranscript();
+  el("seance-panel").hidden = false;
+  el("seance-message-input").focus();
+}
+
+function closeSeancePanel() {
+  el("seance-panel").hidden = true;
+  seanceTargetPublicKey = null;
+  clearSeanceReplyTarget();
+  viewport.focus();
+}
+
+async function sendSeanceInteraction(body) {
+  if (!seanceTargetPublicKey) return;
+  const errEl = el("seance-error");
+  errEl.textContent = "";
+  const res = await fetch("/api/presence/interact", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetPublicKey: seanceTargetPublicKey, ...body }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    errEl.textContent = data.error ?? "That didn't reach them — try again in a moment.";
+    return;
+  }
+  const entry = {
+    id: nextSeanceEntryId(),
+    mine: true,
+    displayName: "You",
+    replyToId: body.kind === "message" ? seanceReplyToId : null,
+    ...body,
+  };
+  transcriptFor(seanceTargetPublicKey).push(entry);
+  clearSeanceReplyTarget();
+  renderSeanceTranscript();
+  // A reaction/reach-out you send also briefly animates near YOUR OWN
+  // apparition-less self (you have no rendered cameo — CLAUDE.md: never a
+  // cameo of yourself), so there's nothing to animate on this sender's own
+  // screen beyond the transcript entry just added above; the recipient's
+  // screen is where the near-ghost animation happens (handleIncomingInteract).
+}
+
+el("seance-close").addEventListener("click", closeSeancePanel);
+el("seance-reach-out").addEventListener("click", () => sendSeanceInteraction({ kind: "reach-out" }));
+el("seance-mute").addEventListener("click", () => {
+  if (!seanceTargetPublicKey) return;
+  mutedPublicKeys.add(seanceTargetPublicKey);
+  toast("Muted for this visit — you won't see cues from them again until you reload.");
+  closeSeancePanel();
+});
+el("seance-message-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = el("seance-message-input");
+  const body = input.value.trim();
+  if (!body) return;
+  await sendSeanceInteraction({ kind: "message", body, replyToMessageId: seanceReplyToId });
+  input.value = "";
+});
+
+// Briefly animates a reaction glyph rising beside a specific visitor's own
+// rendered cameo in the CURRENT scene, if they currently have one on screen
+// (they might not — the interaction could target a visitor in this room's
+// OTHER exact scene, main vs. closeup, where this client never renders a
+// ghost for them at all — see renderCameos' own exact-scene scoping).
+// Known limitation: renderCameos() fully rebuilds cameoLayer's innerHTML on
+// every re-render (another visitor's activity/focus/scene-presence event),
+// which would delete this burst early if one fires mid-animation — accepted
+// as a rare cosmetic truncation rather than threading a second persistent
+// overlay layer through the camera's own transform just for this, matching
+// this app's existing tolerance for similarly "best-effort" ephemeral cues.
+function burstReactionNearCameo(publicKey, label) {
+  const cameo = illustrator
+    ?.activeLayers()
+    .cameoLayer?.querySelector(`.cameo[data-public-key="${CSS.escape(publicKey)}"] .cameo-silhouette`);
+  if (!cameo) return;
+  const burst = document.createElement("span");
+  burst.className = "cameo-reaction-burst";
+  burst.textContent = label; // textContent only
+  burst.setAttribute("aria-hidden", "true");
+  cameo.appendChild(burst);
+  window.setTimeout(() => burst.remove(), 1900);
+}
+
+// Shows a received message as a small restrained speech/parchment bubble
+// near the SENDER's own rendered cameo, if visible in this exact scene —
+// same visibility caveat as burstReactionNearCameo above.
+function showMessageBubbleNearCameo(publicKey, body) {
+  const cameo = illustrator
+    ?.activeLayers()
+    .cameoLayer?.querySelector(`.cameo[data-public-key="${CSS.escape(publicKey)}"] .cameo-silhouette`);
+  if (!cameo) return;
+  const bubble = document.createElement("div");
+  bubble.className = "cameo-message-bubble";
+  bubble.textContent = body; // textContent only — never innerHTML
+  cameo.appendChild(bubble);
+  window.setTimeout(() => bubble.remove(), 6200);
+}
+
+function announceToScreenReader(text) {
+  const live = el("seance-announcer");
+  if (live) live.textContent = text;
+}
+
+// Handles an incoming `interact` SSE event (see server.js's
+// /api/presence/interact and sse.js's broadcastToVisitor) — never auto-
+// opens the Séance panel for an unsolicited interaction (a toast/near-ghost
+// cue is enough, matching this app's existing restrained toast() style);
+// only updates the panel's own live transcript if it's ALREADY open for
+// this exact sender.
+function handleIncomingInteract(e) {
+  const { fromPublicKey, fromDisplayName, kind, body, reactionId, replyToMessageId } = JSON.parse(e.data);
+  if (!fromPublicKey || mutedPublicKeys.has(fromPublicKey)) return;
+
+  const entry = {
+    id: nextSeanceEntryId(),
+    mine: false,
+    displayName: fromDisplayName,
+    kind,
+    body,
+    reactionId,
+    replyToId: replyToMessageId ?? null,
+  };
+  transcriptFor(fromPublicKey).push(entry);
+
+  if (kind === "message") {
+    showMessageBubbleNearCameo(fromPublicKey, body);
+    toast(`${fromDisplayName} sent you a message.`);
+    announceToScreenReader(`${fromDisplayName} sent you a message: ${body}`);
+  } else if (kind === "reaction") {
+    const label = reactionLabelFor(reactionId);
+    burstReactionNearCameo(fromPublicKey, label);
+    announceToScreenReader(`${fromDisplayName} reacted: ${label}`);
+  } else if (kind === "reach-out") {
+    burstReactionNearCameo(fromPublicKey, "🤍");
+    toast(`${fromDisplayName} reached out to you.`);
+    announceToScreenReader(`${fromDisplayName} reached out to you.`);
+  }
+
+  if (seanceTargetPublicKey === fromPublicKey && !el("seance-panel").hidden) {
+    renderSeanceTranscript();
   }
 }
 
@@ -1705,6 +2011,11 @@ function connectEvents() {
     }
   });
 
+  // The Séance panel's own ephemeral interaction channel — see
+  // handleIncomingInteract's own doc comment for why this never auto-opens
+  // the panel.
+  eventSource.addEventListener("interact", handleIncomingInteract);
+
   eventSource.onerror = () => {
     // EventSource auto-reconnects; on reconnect the server resends `hello`
     // with current scene counts, and a fresh GET /api/exhibits hydrates
@@ -1781,7 +2092,8 @@ function anyOverlayOpen() {
     !el("archive-gate").hidden ||
     !el("name-gate").hidden ||
     !el("museum-guide").hidden ||
-    !el("onboarding").hidden
+    !el("onboarding").hidden ||
+    !el("seance-panel").hidden
   );
 }
 
@@ -2521,6 +2833,7 @@ function isTypingTarget(el) {
 window.addEventListener("keydown", (e) => {
   if (e.code === "Escape") {
     if (placement) cancelPlacement();
+    else if (!el("seance-panel").hidden) closeSeancePanel();
     else if (!el("dossier").hidden) closeDossier();
     else if (!el("donate-gate").hidden) closeDonateGate();
     else if (!el("donate-receipt").hidden) closeReceipt();
@@ -2552,6 +2865,7 @@ async function boot() {
 
   await loadWorld();
   await loadRelicPresets();
+  await loadReactions();
   await loadExhibits();
 
   illustrator = createIllustrationController({

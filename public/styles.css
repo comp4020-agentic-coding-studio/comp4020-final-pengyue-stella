@@ -481,10 +481,22 @@ a {
   animation: cameo-float 7s ease-in-out infinite;
   animation-delay: var(--cameo-delay, 0s);
   pointer-events: auto;
-  cursor: default;
+  /* Now a real control (role="button", see app.js's renderCameos) that
+     opens the Séance panel for this visitor — a pointer cursor, not the
+     earlier decorative `cursor: default`. */
+  cursor: pointer;
   background: none;
   border: none;
   filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
+}
+
+/* A clear keyboard-focus ring — this element is a real interactive control
+   now, not decorative `role="img"`, so Tab must make it obvious which
+   visitor's apparition is about to be activated by Enter/Space. */
+.cameo:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+  border-radius: 10px;
 }
 
 /* The wrapper that hosts the layered apparition SVG (see buildApparitionSvg
@@ -2533,6 +2545,255 @@ a {
     opacity: 0;
     transform: translateY(-6px);
   }
+}
+
+/* --- Séance panel -------------------------------------------------------- */
+/* Opened by clicking/tapping/Enter-ing another visitor's apparition (see
+   app.js's renderCameos — a `.cameo` is now role="button"). Uses the same
+   `.overlay-gate`/`.gate-card` shell every other dialog in this app already
+   uses, but deliberately its own dark Gothic palette (not the light cream
+   `.gate-card` the donation/account forms use) — a séance belongs with the
+   Archive/Guide's own dark obsidian-and-gold treatment, never a beige
+   settings-style form. Kept visually small (`max-width`) so it never covers
+   much of the scene behind it. */
+.seance-card {
+  width: min(380px, 100%);
+  background: linear-gradient(160deg, rgba(26, 20, 16, 0.97), rgba(17, 13, 10, 0.98));
+  color: var(--parchment);
+  border: 1px solid rgba(198, 161, 107, 0.45);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(198, 161, 107, 0.12);
+}
+.seance-card .dossier-kicker,
+.seance-card h2 {
+  color: var(--gold);
+}
+.seance-card h2 {
+  font-family: Georgia, "Cormorant Garamond", serif;
+}
+
+/* The transcript: a short scrollable column of parchment-toned message
+   bubbles — this project's existing Gothic palette tokens, never a modern
+   flat-design chat bubble. Capped height so a long exchange scrolls inside
+   the panel rather than growing it indefinitely. */
+.seance-transcript {
+  max-height: 11rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.2rem 0;
+}
+.seance-transcript:empty::before {
+  content: "No words have passed between you yet.";
+  font-style: italic;
+  font-size: 0.82rem;
+  color: color-mix(in srgb, var(--parchment) 65%, transparent);
+}
+
+/* One transcript entry: a small parchment card, visually distinguished by
+   who sent it (`.mine` = you, the default = them) via alignment + a thin
+   brass/rose border accent rather than a colour fill switch. */
+.seance-entry {
+  align-self: flex-start;
+  max-width: 85%;
+  background: rgba(233, 221, 197, 0.08);
+  border: 1px solid rgba(198, 161, 107, 0.35);
+  border-radius: 10px 10px 10px 2px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.84rem;
+}
+.seance-entry.mine {
+  align-self: flex-end;
+  border-radius: 10px 10px 2px 10px;
+  border-color: rgba(102, 61, 67, 0.55);
+  background: rgba(102, 61, 67, 0.18);
+}
+.seance-entry-byline {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--gold);
+  margin-bottom: 0.15rem;
+  font-style: italic;
+}
+.seance-entry-body {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.seance-entry-reaction {
+  font-size: 0.95rem;
+}
+
+/* The small inline "Reply" affordance on each real message bubble — a tiny
+   pill, visually subordinate to the message itself, and deliberately its
+   OWN class (never shared with .seance-reaction-btn below) even though the
+   two look similar — they're two different concerns (replying vs. sending
+   a fixed-vocabulary reaction) and a future querySelector for "every real
+   reaction button" must never accidentally match this one. */
+.seance-card button.seance-reply-btn {
+  font: inherit;
+  font-size: 0.66rem;
+  padding: 0.12rem 0.45rem;
+  margin-top: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid rgba(198, 161, 107, 0.3);
+  background: none;
+  color: var(--parchment);
+  cursor: pointer;
+  opacity: 0.75;
+}
+.seance-card button.seance-reply-btn:hover,
+.seance-card button.seance-reply-btn:focus-visible {
+  opacity: 1;
+  border-color: var(--gold);
+}
+
+.seance-reply-indicator {
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--gold);
+  margin: 0;
+}
+
+.seance-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.2rem 0;
+}
+.seance-card button.seance-reaction-btn {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(198, 161, 107, 0.4);
+  background: none;
+  color: var(--parchment);
+  cursor: pointer;
+}
+.seance-card button.seance-reaction-btn:hover,
+.seance-card button.seance-reaction-btn:focus-visible {
+  border-color: var(--gold);
+  background: rgba(198, 161, 107, 0.12);
+}
+
+.seance-card button.seance-reach-out {
+  width: 100%;
+  background: none;
+  color: var(--parchment);
+  border: 1px solid rgba(198, 161, 107, 0.4);
+  margin: 0.1rem 0 0.3rem;
+}
+.seance-card button.seance-reach-out:hover,
+.seance-card button.seance-reach-out:focus-visible {
+  border-color: var(--gold);
+}
+
+.seance-message-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border-top: 1px solid rgba(198, 161, 107, 0.2);
+  padding-top: 0.5rem;
+}
+.seance-message-form label {
+  font-size: 0.72rem;
+  color: var(--gold);
+}
+.seance-message-form textarea {
+  font: inherit;
+  font-size: 0.88rem;
+  min-height: 3.2rem;
+  resize: vertical;
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid rgba(198, 161, 107, 0.4);
+  background: rgba(17, 16, 15, 0.5);
+  color: var(--parchment);
+}
+.seance-message-form textarea:focus-visible {
+  outline: 2px solid var(--gold);
+}
+.seance-message-form .gate-actions {
+  margin-top: 0;
+}
+.seance-card button.secondary {
+  background: none;
+  color: var(--parchment);
+  border: 1px solid rgba(198, 161, 107, 0.4);
+}
+.seance-card button.secondary:hover,
+.seance-card button.secondary:focus-visible {
+  border-color: var(--gold);
+}
+
+/* A reaction briefly animating near the TARGET ghost on the recipient's own
+   screen (see app.js's handleIncomingInteract) — a small glyph that rises
+   and fades beside the sender's cameo, never a modal interruption. */
+.cameo-reaction-burst {
+  position: absolute;
+  left: 50%;
+  top: -0.6rem;
+  transform: translateX(-50%);
+  font-size: 1.3rem;
+  pointer-events: none;
+  animation: cameo-reaction-rise 1.8s ease-out forwards;
+  z-index: 3;
+}
+@keyframes cameo-reaction-rise {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.6); }
+  15% { opacity: 1; transform: translate(-50%, -6px) scale(1); }
+  75% { opacity: 1; transform: translate(-50%, -34px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -46px) scale(1); }
+}
+
+/* A received message's small restrained speech/parchment bubble near the
+   SENDER's ghost on the recipient's own screen — distinct from the Séance
+   panel's own transcript entry, which stays open even after this fades. */
+.cameo-message-bubble {
+  position: absolute;
+  bottom: calc(100% + 0.3rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 9rem;
+  background: rgba(233, 221, 197, 0.95);
+  color: var(--ink);
+  border: 1px solid var(--brass);
+  border-radius: 8px 8px 8px 2px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  pointer-events: none;
+  z-index: 3;
+  animation: cameo-message-fade 6s ease-in forwards;
+}
+@keyframes cameo-message-fade {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cameo-reaction-burst,
+  .cameo-message-bubble {
+    animation: none;
+  }
+}
+
+/* A visually-hidden-but-screen-reader-visible live region (app.js's
+   seance-announcer) — announces an incoming Séance message/reaction without
+   ever stealing keyboard focus or appearing on screen. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* --- /readme/ ---------------------------------------------------------- */

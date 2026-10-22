@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { identify, nameCookieFor, publicKeyFor } from "./identity.js";
-import { galleryById, publicWorld, SCENE_IDS, DEFAULT_SCENE_ID } from "./world.js";
+import { galleryById, publicWorld, SCENE_IDS, DEFAULT_SCENE_ID, roomIdForScene } from "./world.js";
 import * as db from "./db.js";
 import * as sse from "./sse.js";
 import { serveStatic } from "./static.js";
@@ -19,6 +19,11 @@ import {
   EXHIBIT_EDIT_COOLDOWN_MS,
   PRESENCE_MIN_INTERVAL_MS,
   FOCUS_MIN_INTERVAL_MS,
+  REACTIONS,
+  REACTION_ID_SET,
+  MAX_INTERACTION_MESSAGE_LENGTH,
+  INTERACTION_REACTION_COOLDOWN_MS,
+  INTERACTION_MESSAGE_COOLDOWN_MS,
 } from "./constants.js";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -42,6 +47,7 @@ const lastAccountAt = new Map();
 const lastPresenceAt = new Map();
 const lastFocusAt = new Map();
 const lastExhibitEditAt = new Map(); // shared cooldown for PATCH/DELETE on an owned exhibit
+const lastInteractAt = new Map(); // visitorId -> epoch ms, the Séance panel's own cooldown (never shared with focus's)
 
 // A focus object id is always rendered via textContent/attribute, never
 // HTML, on the client, and is only ever one of the fixed, server-authored
@@ -120,6 +126,15 @@ const server = createServer(async (req, res) => {
     // galleries/subtypes, never something a client assembles itself.
     if (req.method === "GET" && pathname === "/api/relic-presets") {
       json(res, 200, { presets: RELIC_PRESETS });
+      return;
+    }
+
+    // The Séance panel's fixed reaction vocabulary (see constants.js's
+    // REACTIONS) — same "server is the one source of truth for a fixed
+    // list, the client never hand-maintains its own copy" pattern as
+    // /api/relic-presets above.
+    if (req.method === "GET" && pathname === "/api/reactions") {
+      json(res, 200, { reactions: REACTIONS });
       return;
     }
 
@@ -614,6 +629,117 @@ const server = createServer(async (req, res) => {
         { publicKey: publicKeyFor(identity.id), objectId },
         { exceptVisitorId: identity.id },
       );
+      json(res, 200, { ok: true }, withCookies({}, identity));
+      return;
+    }
+
+    // The Séance panel: one visitor reaching out to another specific
+    // visitor currently sharing their room — a message, a fixed-vocabulary
+    // reaction, or a wordless "reach out" gesture. Ephemeral exactly like
+    // `focus` above (never written to SQLite — CLAUDE.md's "visitor
+    // presence... never persisted" extends naturally to an interaction
+    // ABOUT that live presence), but unlike focus this targets one specific
+    // visitor by their public key rather than broadcasting to a whole
+    // room, so it needs its own identity resolution (sender from the
+    // cookie, target from publicKey, never the reverse) and its own
+    // same-room authority check — see sse.js's sceneIdForPublicKey/
+    // isVisitorConnected and world.js's roomIdForScene doc comments.
+    if (req.method === "POST" && pathname === "/api/presence/interact") {
+      const identity = identify(req);
+
+      let payload;
+      try {
+        payload = await readJsonBody(req, 512);
+      } catch {
+        json(res, 400, { error: "bad request body" }, withCookies({}, identity));
+        return;
+      }
+
+      const { kind, targetPublicKey } = payload;
+      if (typeof targetPublicKey !== "string" || targetPublicKey.length === 0) {
+        json(res, 400, { error: "invalid target" }, withCookies({}, identity));
+        return;
+      }
+
+      const myPublicKey = publicKeyFor(identity.id);
+      if (targetPublicKey === myPublicKey) {
+        logAction(identity, "interact", { kind }, "rejected:self_target");
+        json(res, 400, { error: "you can't reach out to yourself" }, withCookies({}, identity));
+        return;
+      }
+
+      // Validate the body shape before touching any rate limit or presence
+      // state, so a malformed request never consumes the cooldown window a
+      // well-formed retry would need.
+      let eventPayload;
+      let cooldownMs;
+      if (kind === "message") {
+        const body = typeof payload.body === "string" ? payload.body.trim() : "";
+        if (!isNonEmptyString(body, MAX_INTERACTION_MESSAGE_LENGTH)) {
+          json(res, 400, { error: "invalid message" }, withCookies({}, identity));
+          return;
+        }
+        // replyToMessageId is an opaque client-chosen id echoed back purely
+        // so the recipient's own transcript can thread a reply under the
+        // message it replies to — never looked up/validated server-side
+        // (nothing is persisted to validate it against), same spirit as
+        // objectId's "a value the client already produced, just bounded in
+        // shape before relaying" in the focus handler above, except this
+        // one has no fixed server vocabulary to check against since it's
+        // just an echo.
+        const replyToMessageId =
+          typeof payload.replyToMessageId === "string" && payload.replyToMessageId.length <= 64
+            ? payload.replyToMessageId
+            : null;
+        eventPayload = { kind: "message", body, replyToMessageId };
+        cooldownMs = INTERACTION_MESSAGE_COOLDOWN_MS;
+      } else if (kind === "reaction") {
+        if (!REACTION_ID_SET.has(payload.reactionId)) {
+          json(res, 400, { error: "invalid reaction" }, withCookies({}, identity));
+          return;
+        }
+        eventPayload = { kind: "reaction", reactionId: payload.reactionId };
+        cooldownMs = INTERACTION_REACTION_COOLDOWN_MS;
+      } else if (kind === "reach-out") {
+        eventPayload = { kind: "reach-out" };
+        cooldownMs = INTERACTION_REACTION_COOLDOWN_MS;
+      } else {
+        json(res, 400, { error: "invalid interaction kind" }, withCookies({}, identity));
+        return;
+      }
+
+      const last = lastInteractAt.get(identity.id) ?? 0;
+      const now = Date.now();
+      if (now - last < cooldownMs) {
+        json(res, 429, { error: "wait a moment before reaching out again" }, withCookies({}, identity));
+        return;
+      }
+
+      // The server is the sole authority on "are these two visitors
+      // actually in the same room right now" — never a client-asserted
+      // room on either side. The sender's own current scene comes from
+      // their own open SSE connection (sceneIdForPublicKey), exactly the
+      // same source of truth sceneIdForVisitor already uses for focus.
+      const mySceneId = sse.sceneIdForPublicKey(myPublicKey);
+      const targetSceneId = sse.sceneIdForPublicKey(targetPublicKey);
+      if (
+        !sse.isVisitorConnected(targetPublicKey) ||
+        !targetSceneId ||
+        !mySceneId ||
+        roomIdForScene(targetSceneId) !== roomIdForScene(mySceneId)
+      ) {
+        logAction(identity, "interact", { kind }, "rejected:not_in_room");
+        json(res, 404, { error: "that visitor isn't here right now" }, withCookies({}, identity));
+        return;
+      }
+
+      lastInteractAt.set(identity.id, now);
+      sse.broadcastToVisitor(targetPublicKey, "interact", {
+        fromPublicKey: myPublicKey,
+        fromDisplayName: identity.name,
+        ...eventPayload,
+      });
+      logAction(identity, "interact", { kind });
       json(res, 200, { ok: true }, withCookies({}, identity));
       return;
     }

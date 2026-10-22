@@ -181,6 +181,58 @@ export function broadcastToScene(sceneId, event, data, { exceptVisitorId } = {})
   }
 }
 
+// Relays an event only to every open connection belonging to the visitor
+// identified by `publicKey` — used for the Séance interaction endpoint
+// (server.js's `POST /api/presence/interact`), which targets one specific
+// visitor rather than a whole scene/room. A visitor open in two tabs (both
+// sharing the same cookie, hence the same publicKey) gets the event on
+// each of their own connections, with no extra dedup needed — each tab is
+// its own legitimate recipient, the same "look up every connection whose
+// publicKey matches" approach visitorsInScene already uses to roster a
+// scene, just filtered to one visitor instead of one scene. Returns the
+// number of connections the event was actually written to, so the caller
+// can tell "target has no open connection at all" apart from "it was
+// delivered" without a second lookup.
+export function broadcastToVisitor(publicKey, event, data) {
+  let delivered = 0;
+  for (const [res, entry] of clients.entries()) {
+    if (entry.publicKey !== publicKey) continue;
+    try {
+      write(res, event, data);
+      delivered += 1;
+    } catch {
+      clients.delete(res);
+    }
+  }
+  return delivered;
+}
+
+// Whether `publicKey` currently has at least one open connection — used to
+// reject a Séance interaction aimed at a visitor who has since disconnected,
+// before even checking which room they're in.
+export function isVisitorConnected(publicKey) {
+  for (const entry of clients.values()) {
+    if (entry.publicKey === publicKey) return true;
+  }
+  return false;
+}
+
+// The scene a CONNECTED visitor (identified by publicKey, never a raw
+// visitor id leaked back to a client) is currently tagged with — used by
+// the Séance endpoint to look up the TARGET's own current scene server-side
+// (never trusting a client-supplied scene/room for the target), the same
+// "the server is the actual authority on where someone is" principle
+// sceneIdForVisitor already applies for the sender's own focus broadcasts.
+// A visitor open in two tabs on different scenes is the same unresolved
+// edge case sceneIdForVisitor already accepts — the first matching
+// connection wins.
+export function sceneIdForPublicKey(publicKey) {
+  for (const entry of clients.values()) {
+    if (entry.publicKey === publicKey) return entry.sceneId ?? null;
+  }
+  return null;
+}
+
 export function broadcastDeparture(visitorId, sceneId) {
   if (sceneId) {
     const counts = sceneCounts();

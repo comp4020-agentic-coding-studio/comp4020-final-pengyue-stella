@@ -909,6 +909,19 @@ export function sceneById(id) {
   return SCENES.find((s) => s.id === id);
 }
 
+// The "logical room" a scene belongs to — mirrors public/app.js's own
+// roomIdForScene exactly (a gallery's `-main` and `-closeup` scenes are the
+// same physical room; the hall is its own room), so the server can be the
+// actual authority on "are these two visitors in the same room right now"
+// for anything that needs it (the Séance interaction endpoint — see
+// server.js/sse.js) without trusting a client-supplied room id. Falls back
+// to the scene id itself for an unknown scene, same defensive shape as the
+// client's own version.
+export function roomIdForScene(sceneId) {
+  const scene = sceneById(sceneId);
+  return scene?.galleryId ?? sceneId;
+}
+
 // Every `type: "lore"` interactive object across the whole world (hall +
 // every gallery's main/closeup scenes) — the flat list db.js's
 // `seedBuiltinLoreExhibits()` iterates to derive one real exhibit row per
