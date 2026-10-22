@@ -441,30 +441,35 @@ a {
 /* A full-body translucent Gothic apparition per OTHER visitor sharing this
    scene, standing at a server-defined `visitorAnchors` spot (with a small
    depth value for parallax scale) — not an embodied 3D avatar, not
-   free-roam movement; a head/shoulder/body silhouette built from layered
-   CSS gradients and clip-path (no image assets), fading toward the lower
-   body like a figure dissolving into mist, with a soft spectral glow in a
-   colour stable per public key (so the same visitor always reads as the
-   same ghost) — that colour + silhouette shape together are the
-   ALWAYS-visible identity cue; the name label itself only reveals on
-   hover/focus (a tiny monogram glyph would be redundant with the stable
-   hue + shape, so the always-visible cue stays purely the apparition
-   itself, same restrained-by-default intent as before). Floats gently for
-   restrained idle motion.
-   Visibility note: an earlier pass used `mix-blend-mode: screen` on the
-   whole shape, reasoning "screen only ever lightens, so it holds contrast
-   over a dark room." That reasoning only holds over a DARK background — a
-   screen blend washes out and nearly disappears over the busy, warm, often
-   quite BRIGHT scenes this museum actually has (verified visually: a
-   Playwright screenshot in The Forgotten Childhood, a warm red/gold room,
-   showed the apparition as barely a faint smudge). Fixed by keeping the
-   core shape's own fill fully opaque (normal blending, not screen) with a
-   near-white, high-contrast body and a dark contact-shadow rim via
-   `filter: drop-shadow(...)`, which holds contrast against ANY background
-   brightness because it's a real dark edge, not a lightening blend; the
-   per-visitor hue + the glow's `mix-blend-mode: screen` are layered OUTSIDE
-   that solid core purely as colour/light accents, never the sole source of
-   visibility. */
+   free-roam movement. The figure itself is now a real layered inline SVG
+   (built by `buildApparitionSvg` in app.js — hood, shoulders/robe with
+   visible fold-line strokes, a shadowed face recess, a hem that dissolves
+   into mist via an SVG mask, an ornamental clasp, and a restrained outer
+   aura) rather than two flat CSS shapes, so it reads as a genuinely
+   illustrated Victorian/Gothic mourner instead of a coloured blob — see the
+   doc comment above `buildApparitionSvg` for the full layer list and the
+   three silhouette variants. The per-visitor hue (`cameoColorFor`) still
+   drives every layer's colour, so "whose ghost is this" stays legible. The
+   name label still only reveals on hover/focus — restrained by default,
+   legible on demand, unchanged from before this redesign. Floats gently for
+   restrained idle motion (unchanged `.cameo` animation below).
+   Visibility note (kept from the original flat-shape version, and still the
+   reason every opaque layer below uses normal blending, not `screen`): an
+   earlier pass used `mix-blend-mode: screen` on the whole shape, reasoning
+   "screen only ever lightens, so it holds contrast over a dark room." That
+   reasoning only holds over a DARK background — a screen blend washes out
+   and nearly disappears over the busy, warm, often quite BRIGHT scenes this
+   museum actually has (verified visually: a Playwright screenshot in The
+   Forgotten Childhood, a warm red/gold room, showed the apparition as
+   barely a faint smudge). Every solid layer (robe, hood, collar, face) is
+   fully opaque; `.cameo`'s own `filter: drop-shadow(...)` below now traces
+   the real SVG silhouette's alpha channel (not a bounding box), which is a
+   genuine dark edge rather than a lightening blend — it holds contrast
+   against ANY background brightness. The aura glow is the one layer that
+   stays `mix-blend-mode: screen`, deliberately: it's a pure light/colour
+   accent layered OUTSIDE the opaque core, never the sole source of
+   visibility, so it can safely wash out over bright art without taking the
+   figure's own legibility with it. */
 .cameo {
   position: absolute;
   transform: translate(-50%, -100%) scale(var(--cameo-depth, 1));
@@ -482,56 +487,115 @@ a {
   filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
 }
 
-/* Two stacked layers build the apparition: `.cameo-silhouette` is the
-   head+shoulders (an ellipse, via border-radius), `::after` is the longer
-   draped body beneath it clipped to a soft robe-like polygon and faded
-   toward the hem with a mask gradient — together reading as a hooded
-   Victorian/Gothic figure rather than a plain blob. The core fill of each
-   is an OPAQUE near-white-to-hue gradient (normal blending) so the shape
-   itself holds contrast against any scene brightness; the per-visitor hue
-   shows strongest at the rim/glow, keeping "whose ghost is this" legible
-   without relying on a blend mode that only works over dark art. */
+/* The wrapper that hosts the layered apparition SVG (see buildApparitionSvg
+   in app.js). Sized to fit the whole head-to-mist figure the SVG now draws
+   (previously this was itself the head ellipse, with a `::after` pseudo for
+   the body — both are gone, replaced by the SVG's own internal layers).
+   `overflow: visible` lets the aura's soft blur bleed slightly past this
+   box without being clipped. The box itself (plus the always-present-but-
+   invisible `.cameo-name` below it) already comfortably exceeds a 44px
+   touch target even though the illustrated silhouette inside stays slim. */
 .cameo-silhouette {
   position: relative;
-  width: 3.1rem;
-  height: 2.3rem;
+  width: 3.6rem;
+  height: 5.4rem;
   margin-bottom: -0.35rem;
-  border-radius: 50% 50% 45% 45% / 60% 60% 40% 40%;
-  background: radial-gradient(
-    ellipse 85% 85% at 50% 32%,
-    color-mix(in srgb, white 70%, var(--cameo-color, var(--gold)) 30%) 0%,
-    color-mix(in srgb, var(--cameo-color, var(--gold)) 75%, white 10%) 55%,
-    color-mix(in srgb, var(--cameo-color, var(--gold)) 55%, transparent) 85%,
-    transparent 100%
-  );
-  opacity: 0.96;
-  border: 1.5px solid color-mix(in srgb, var(--cameo-color, var(--gold)) 85%, white 15%);
-  box-shadow:
-    0 0 10px 2px rgba(0, 0, 0, 0.5),
-    0 0 26px 6px color-mix(in srgb, var(--cameo-color, var(--gold)) 65%, transparent),
-    0 0 52px 14px color-mix(in srgb, var(--cameo-color, var(--gold)) 35%, transparent);
+  overflow: visible;
   z-index: 1;
+  /* Purely so `.activity`'s box-shadow pulse (below) rings out as an
+     ellipse hugging the figure rather than a rectangle — this wrapper is
+     otherwise invisible (no background/border of its own). */
+  border-radius: 50%;
 }
 
-.cameo-silhouette::after {
-  content: "";
-  position: absolute;
-  top: 72%;
-  left: 50%;
-  width: 4.4rem;
-  height: 6.4rem;
-  transform: translateX(-50%);
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, white 55%, var(--cameo-color, var(--gold)) 45%) 0%,
-    color-mix(in srgb, var(--cameo-color, var(--gold)) 70%, white 8%) 30%,
-    color-mix(in srgb, var(--cameo-color, var(--gold)) 50%, transparent) 65%,
-    transparent 95%
-  );
-  clip-path: polygon(30% 0%, 70% 0%, 94% 58%, 100% 100%, 0% 100%, 6% 58%);
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 96%);
-  mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 96%);
+.apparition {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* The restrained outer glow/aura — the one layer still using `screen`
+   blending (see the visibility note above): a pure light/colour accent, not
+   load-bearing for the figure's own legibility. */
+.apparition-aura {
+  mix-blend-mode: screen;
+  opacity: 0.75;
+}
+
+/* The solid robe body — opaque, normal blending, ivory-to-hue gradient. Its
+   `fill` is set directly on the element (a `fill="url(#...)"` attribute) by
+   buildApparitionSvg, pointing at a <linearGradient> with a unique id per
+   cameo instance — never a fixed id here in CSS, since a fixed id would
+   silently point every cameo at whichever instance's <defs> happened to be
+   first in the DOM (SVG gradient ids aren't scoped per <svg>). */
+.apparition-robe {
+  opacity: 0.97;
+}
+
+/* Subtle fold LINES (not a second flat shape) — thin strokes, slightly
+   darker than the robe fill, giving the drape real visible structure. */
+.apparition-fold {
+  fill: none;
+  stroke: color-mix(in srgb, var(--cameo-color, var(--gold)) 70%, black 25%);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+/* A faint suggestion of folded hands at the waist — part of the same masked
+   (hem-fading) group as the robe, so it dissolves into mist along with the
+   lower body rather than floating past the fade. */
+.apparition-hands {
+  fill: color-mix(in srgb, white 60%, var(--cameo-color, var(--gold)) 40%);
+  opacity: 0.5;
+}
+
+/* A small ornamental hem border just above where the robe dissolves into
+   mist — a dashed brass-toned trim rather than a hard edge. */
+.apparition-hem-trim {
+  fill: none;
+  stroke: color-mix(in srgb, white 40%, var(--cameo-color, var(--gold)) 60%);
+  stroke-width: 0.8;
+  stroke-dasharray: 2 2.4;
+  opacity: 0.6;
+}
+
+/* Hood, shoulders and collar sit OUTSIDE the hem's fade mask — the upper
+   body never dissolves, only the lower robe does. Fill is set directly on
+   each element (a unique-per-instance gradient id, same reasoning as
+   `.apparition-robe` above) to a slightly different gradient from the
+   robe's own, so the hood/collar reads as a distinct draped layer rather
+   than a continuation of the same flat shape. */
+.apparition-hood,
+.apparition-shoulders {
+  opacity: 0.97;
+}
+
+.apparition-collar {
+  fill: color-mix(in srgb, white 72%, var(--cameo-color, var(--gold)) 28%);
+  opacity: 0.92;
+}
+
+/* A soft shadowed recess where a face would be — no features, just a dark
+   oval via its own radial gradient (fill set directly on the element, same
+   unique-per-instance-id reasoning as `.apparition-robe` above), reading as
+   "the hood conceals a face" rather than a character portrait. */
+.apparition-face {
   opacity: 0.88;
+}
+
+/* The ornamental clasp/brooch at the collar — a small glinting accent,
+   brass/gold rather than the per-visitor hue, so it reads as a shared
+   museum-Gothic costume detail every apparition wears. */
+.apparition-clasp {
+  fill: var(--gold);
+  stroke: color-mix(in srgb, var(--gold) 60%, white 40%);
+  stroke-width: 0.4;
+}
+.apparition-clasp-glint {
+  fill: #fff;
+  opacity: 0.85;
 }
 
 .cameo-name {
@@ -592,9 +656,6 @@ a {
    ghost once more visitors share this scene than it has anchors for, so two
    ghosts never render stacked exactly on top of each other. */
 .cameo-overflow .cameo-silhouette {
-  display: none;
-}
-.cameo-overflow .cameo-silhouette::after {
   display: none;
 }
 
