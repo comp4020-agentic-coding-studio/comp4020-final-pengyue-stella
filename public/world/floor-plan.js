@@ -19,26 +19,96 @@
 
 const VIEWBOX = { width: 1000, height: 1000 };
 
-// Room rectangles — a central hub with four wings, the same cardinal
-// assignment the prior schematic used (portraits=N, memento=E, specimen=S,
-// childhood=W), carried forward for continuity. These are the *logical*
-// bounds used for layout math (marker grids, label placement); the drawn
-// outline below is a hand-jittered trace of this rectangle, never a crisp
-// rect itself.
+// Room rectangles — a FAN, not the old cross/plus layout: the Entrance Hall
+// sits low and central, acting as the fan's pivot, and the four galleries
+// are spread across a broad arc above it (an even angular spread across
+// ~120° of a semicircle centred on the hall), each at the same radius from
+// the hall's own centre. Which gallery id lands at which arc position is an
+// arbitrary but fixed choice (there's no remaining "north/south/east/west"
+// once the layout isn't a cross) — picked purely for a pleasant left-to-
+// right spread, documented here so it's not mistaken for a semantic
+// mapping. These are the *logical* bounds used for layout math (marker
+// grids, label placement, corridor anchors); the drawn outline below is a
+// hand-jittered trace of this rectangle, never a crisp rect itself.
 const ROOMS = {
-  hall: { x: 380, y: 380, w: 240, h: 240, label: "Entrance Hall" },
-  portraits: { x: 380, y: 60, w: 240, h: 240 },
-  memento: { x: 700, y: 380, w: 240, h: 240 },
-  specimen: { x: 380, y: 700, w: 240, h: 240 },
-  childhood: { x: 60, y: 380, w: 240, h: 240 },
+  hall: { x: 380, y: 720, w: 240, h: 200, label: "Entrance Hall" },
+  // Outer-left arm of the fan.
+  childhood: { x: 26, y: 515, w: 220, h: 190 },
+  // Inner-left arm.
+  portraits: { x: 246, y: 330, w: 220, h: 190 },
+  // Inner-right arm.
+  specimen: { x: 534, y: 330, w: 220, h: 190 },
+  // Outer-right arm.
+  memento: { x: 754, y: 515, w: 220, h: 190 },
 };
 
-const CORRIDORS = [
-  { from: "hall", to: "portraits", rect: { x: 460, y: 300, w: 80, h: 80 } },
-  { from: "hall", to: "memento", rect: { x: 620, y: 460, w: 80, h: 80 } },
-  { from: "hall", to: "specimen", rect: { x: 460, y: 620, w: 80, h: 80 } },
-  { from: "hall", to: "childhood", rect: { x: 300, y: 460, w: 80, h: 80 } },
-];
+function rectCenter(rect) {
+  return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+}
+
+// Where a ray from `rect`'s centre, travelling in unit direction `dir`,
+// exits the rectangle — used to anchor a corridor at each room's own wall
+// (facing the other room) rather than at its centre, so a fan rib visibly
+// touches both room outlines instead of appearing to originate mid-room.
+function rectBoundaryPoint(rect, dir) {
+  const c = rectCenter(rect);
+  const hw = rect.w / 2;
+  const hh = rect.h / 2;
+  let t = Infinity;
+  if (Math.abs(dir.x) > 1e-6) t = Math.min(t, hw / Math.abs(dir.x));
+  if (Math.abs(dir.y) > 1e-6) t = Math.min(t, hh / Math.abs(dir.y));
+  return { x: c.x + dir.x * t, y: c.y + dir.y * t };
+}
+
+// A gently curved "ribbon" path between two points — the fan-rib corridor
+// shape, replacing the old straight rectangular connector. Adapts the same
+// deterministic-seeded-wobble technique `handDrawnRectPath` uses (a quadratic
+// Bézier bowed off the straight line by a seeded amount, plus small per-point
+// jitter) rather than a plain rect, so a corridor reads as hand-inked, not
+// architectural.
+function fanCorridorPath(a, b, seed, width = 30) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const bow = seededUnit(`${seed}:bow`) * len * 0.1;
+  const mid = { x: (a.x + b.x) / 2 + nx * bow, y: (a.y + b.y) / 2 + ny * bow };
+  const hw = width / 2;
+  const j = (suffix, scale = 3) => seededUnit(`${seed}:${suffix}`) * scale;
+
+  const aL = { x: a.x + nx * hw + j("aLx"), y: a.y + ny * hw + j("aLy") };
+  const aR = { x: a.x - nx * hw + j("aRx"), y: a.y - ny * hw + j("aRy") };
+  const bL = { x: b.x + nx * hw + j("bLx"), y: b.y + ny * hw + j("bLy") };
+  const bR = { x: b.x - nx * hw + j("bRx"), y: b.y - ny * hw + j("bRy") };
+  const midL = { x: mid.x + nx * hw, y: mid.y + ny * hw };
+  const midR = { x: mid.x - nx * hw, y: mid.y - ny * hw };
+
+  const f = (n) => n.toFixed(1);
+  return (
+    `M ${f(aL.x)},${f(aL.y)} ` +
+    `Q ${f(midL.x)},${f(midL.y)} ${f(bL.x)},${f(bL.y)} ` +
+    `L ${f(bR.x)},${f(bR.y)} ` +
+    `Q ${f(midR.x)},${f(midR.y)} ${f(aR.x)},${f(aR.y)} Z`
+  );
+}
+
+// The four fan ribs, computed once from ROOMS (static layout data, not
+// per-render): each runs from the hall's own boundary toward the gallery's
+// boundary, in the direction that actually joins their two centres.
+const FAN_CORRIDORS = Object.keys(ROOMS)
+  .filter((id) => id !== "hall")
+  .map((id) => {
+    const hallCenter = rectCenter(ROOMS.hall);
+    const roomCenter = rectCenter(ROOMS[id]);
+    const dx = roomCenter.x - hallCenter.x;
+    const dy = roomCenter.y - hallCenter.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const dir = { x: dx / len, y: dy / len };
+    const from = rectBoundaryPoint(ROOMS.hall, dir);
+    const to = rectBoundaryPoint(ROOMS[id], { x: -dir.x, y: -dir.y });
+    return { from: "hall", to: id, d: fanCorridorPath(from, to, `corridor:hall-${id}`) };
+  });
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -141,6 +211,53 @@ function inkBlotchPath(cx, cy, r, seed) {
     d += ` Q ${p1.x.toFixed(1)},${p1.y.toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)}`;
   }
   return d + " Z";
+}
+
+// An 8-point star outline, used for the current visitor's own "You are
+// here" self-marker — geometrically identical in spirit to the compass
+// rose's star (both original, purely geometric shapes), but gold-filled and
+// solid rather than an outline, so it unmistakably reads as "a seal," not
+// "a direction indicator."
+function starPath(cx, cy, outerR, innerR, points = 8) {
+  let d = "";
+  for (let i = 0; i < points * 2; i++) {
+    const angle = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+    const r = i % 2 === 0 ? outerR : innerR;
+    const px = cx + Math.cos(angle) * r;
+    const py = cy + Math.sin(angle) * r;
+    d += `${i === 0 ? "M" : "L"} ${px.toFixed(1)},${py.toFixed(1)} `;
+  }
+  return d + "Z";
+}
+
+// The current visitor's OWN position marker — deliberately a different,
+// more prominent glyph than a peer's ink footprints or a relic's wax seal
+// (brief: "more prominent than every other presence marker... do not rely
+// only on changing the room border"). A glowing gold star-burst with a dark
+// pin at its centre, placed at the room's own geometric centre (never a
+// sub-position-grid slot shared with peer/relic markers, so it can never
+// collide with either) — rendered once per map, only for whichever room
+// `roomIdForScene(currentSceneId)` resolves to right now, independent of
+// whether any OTHER visitor happens to be in that room too (this is the fix
+// for the reported "room shows empty, no sign of my own position" bug: a
+// peer-footprint list being empty after excluding `myPublicKey` is no
+// longer the only source of truth for "is anyone/anything shown here" —
+// this marker renders from `isCurrent` alone).
+function buildSelfMarker(rect) {
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2 + 18; // nudged down from the label/ring area so it doesn't collide with the room name text
+  const group = svg("g", { class: "floor-plan-self-marker" });
+  const title = svg("title", {});
+  title.textContent = "You are here";
+  group.appendChild(title);
+  // Sized deliberately larger than a peer's ~8px-radius footprint pair or a
+  // relic's ~6.5px wax-seal blotch (see MAX_VISITOR_MARKERS_PER_ROOM's
+  // sibling constants above) — "more prominent than every other presence
+  // marker" is a literal sizing requirement, not just a different glyph.
+  group.appendChild(svg("circle", { cx, cy, r: 30, class: "floor-plan-self-marker-glow" }));
+  group.appendChild(svg("path", { d: starPath(cx, cy, 19, 8), class: "floor-plan-self-marker-star" }));
+  group.appendChild(svg("circle", { cx, cy, r: 3.2, class: "floor-plan-self-marker-pin" }));
+  return group;
 }
 
 function roomIdForScene(sceneId) {
@@ -282,12 +399,14 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
     ...world.galleries.map((g) => ({ id: g.id, name: g.name })),
   ];
 
-  // Corridors first (hand-drawn, ink-wobbled), so room fills + markers draw
-  // on top.
-  for (const corridor of CORRIDORS) {
+  // Corridors first (curved fan ribs, hand-wobbled), so room fills + markers
+  // draw on top. `FAN_CORRIDORS` is precomputed once at module load from
+  // `ROOMS`' own static layout (see its own comment above) — its `d` is
+  // already a full path string, not a rect to re-derive here.
+  for (const corridor of FAN_CORRIDORS) {
     svgRoot.appendChild(
       svg("path", {
-        d: handDrawnRectPath(corridor.rect, `corridor:${corridor.from}-${corridor.to}`, 6),
+        d: corridor.d,
         class: "floor-plan-corridor",
       }),
     );
@@ -355,6 +474,7 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
       });
       hereLabel.textContent = "You are here";
       g.appendChild(hereLabel);
+      g.appendChild(buildSelfMarker(rect));
     }
 
     // Visitor markers: a small pair of ink footprints, not a plain dot — the
@@ -471,7 +591,11 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
   relicSwatch.className = "floor-plan-legend-seal";
   const relicLabel = document.createElement("span");
   relicLabel.textContent = "Donated relic";
-  legend.append(visitorSwatch, visitorLabel, relicSwatch, relicLabel);
+  const selfSwatch = document.createElement("span");
+  selfSwatch.className = "floor-plan-legend-star";
+  const selfLabel = document.createElement("span");
+  selfLabel.textContent = "You are here";
+  legend.append(visitorSwatch, visitorLabel, relicSwatch, relicLabel, selfSwatch, selfLabel);
   wrap.appendChild(legend);
 
   container.appendChild(wrap);

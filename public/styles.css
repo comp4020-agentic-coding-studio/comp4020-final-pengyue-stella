@@ -1717,6 +1717,40 @@ a {
   pointer-events: none;
 }
 
+/* The current visitor's own "You are here" self-marker — a bright gold
+   star-burst seal, deliberately a different glyph from both a peer's ink
+   footprints and a relic's wax-seal blotch, and rendered larger/brighter
+   than either so it reads as unmistakably "you" rather than just another
+   presence dot. The room-border ring + "You are here" text label (above)
+   stay as secondary reinforcing cues, not the sole indicator. */
+.floor-plan-self-marker-glow {
+  fill: var(--gold);
+  opacity: 0.35;
+  animation: floor-plan-self-pulse 2.6s ease-in-out infinite;
+}
+
+.floor-plan-self-marker-star {
+  fill: var(--gold);
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+
+.floor-plan-self-marker-pin {
+  fill: var(--ink);
+}
+
+@keyframes floor-plan-self-pulse {
+  0%, 100% { opacity: 0.25; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floor-plan-self-marker-glow {
+    animation: none;
+    opacity: 0.35;
+  }
+}
+
 .floor-plan-legend {
   display: flex;
   align-items: center;
@@ -1763,6 +1797,14 @@ a {
   background: var(--rose);
   box-shadow: inset 0 0 0 1.5px var(--gold);
   display: inline-block;
+}
+
+.floor-plan-legend-star {
+  width: 0.7rem;
+  height: 0.7rem;
+  display: inline-block;
+  background: var(--gold);
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
 }
 
 @media (prefers-reduced-motion: reduce) {
