@@ -250,12 +250,28 @@ export function upsertVisitor(id, displayName) {
 // other.
 const MIN_SURFACE_SEPARATION = 0.22;
 
-function surfaceCollision(galleryId, surfaceId, u, v) {
+// The free-placement region (see world.js's `${galleryId}-free` entry) is
+// much larger than any of the old named surfaces, so reusing
+// MIN_SURFACE_SEPARATION's normalized-u/v threshold unchanged would only
+// let a handful of items fit in the whole room. Collision there is checked
+// in real viewBox pixels instead — comfortably wider than a free-placed
+// relic's own ~100-120px base footprint, but far smaller a fraction of the
+// region's own span than 0.22 would be.
+const MIN_FREE_PLACEMENT_PIXEL_SEPARATION = 110;
+
+function surfaceCollision(galleryId, surfaceId, u, v, surface) {
   const rows = db
     .prepare(
       "SELECT placement_u AS u, placement_v AS v FROM exhibits WHERE gallery_id = ? AND surface_id = ? AND deleted_at IS NULL",
     )
     .all(galleryId, surfaceId);
+  if (surface?.surfaceType === "freeform") {
+    const point = surfacePointFromUv(surface, u, v);
+    return rows.some((r) => {
+      const other = surfacePointFromUv(surface, r.u, r.v);
+      return Math.hypot(other.x - point.x, other.y - point.y) < MIN_FREE_PLACEMENT_PIXEL_SEPARATION;
+    });
+  }
   return rows.some((r) => Math.hypot(r.u - u, r.v - v) < MIN_SURFACE_SEPARATION);
 }
 
@@ -317,11 +333,17 @@ export function donateExhibit({
   // only the INSERT path below is affected.
   if (visualId === undefined || visualId === null) return { error: "visual_required" };
   const preset = RELIC_PRESETS_BY_ID.get(visualId);
+  // The free-placement region ("freeform") never appears in a preset's own
+  // `compatibleSurfaceTypes` (that list only ever names real wall/shelf/
+  // tabletop/cabinet/plinth surface types) — a free placement only needs
+  // the preset's category/subtype to match, the same compatibility a named
+  // surface's own subtype-vs-surfaceType check already enforced above via
+  // `allowedRelicTypes`.
   const validVisual =
     preset &&
     preset.category === galleryRow.category &&
     preset.subtype === subtype &&
-    preset.compatibleSurfaceTypes.includes(surface.surfaceType);
+    (surface.surfaceType === "freeform" || preset.compatibleSurfaceTypes.includes(surface.surfaceType));
   if (!validVisual) return { error: "invalid_visual" };
   const appliedVisualId = visualId;
 
@@ -343,7 +365,7 @@ export function donateExhibit({
       return { error: "slot_taken" };
     }
 
-    if (surfaceCollision(galleryId, surfaceId, u, v)) {
+    if (surfaceCollision(galleryId, surfaceId, u, v, surface)) {
       db.exec("ROLLBACK");
       return { error: "surface_taken" };
     }

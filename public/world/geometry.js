@@ -81,6 +81,26 @@ export function surfaceCentroidUv(surface) {
   return surfaceUvFromPoint(surface, c.x, c.y);
 }
 
+// Shared relic-layout helper for the free-placement region (see
+// server/src/world.js's `${galleryId}-free` surface): the ONE place both the
+// placement-drag preview and the final persisted exhibit compute width,
+// height, x and y for a given point/aspect/scale, so the two paths can never
+// disagree and a confirmed placement never visibly jumps from where its
+// preview sat. A stable base size (not the old surface-size*0.55 formula,
+// which would make an item enormous against this much larger region), the
+// preset's own real aspect ratio (never stretched), and a fixed centred
+// anchor (`x = point.x - width/2, y = point.y - height/2`) — never the old
+// surfaces' bottom "resting" anchor, so a free placement's visual centre is
+// exactly what gets persisted as its normalized u/v point.
+const FREE_RELIC_BASE_SIZE = 110;
+export function relicLayoutFree(point, aspect, scale = 1) {
+  const baseSize = FREE_RELIC_BASE_SIZE * (Number.isFinite(scale) ? scale : 1);
+  const ratio = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
+  const width = ratio >= 1 ? baseSize : baseSize * ratio;
+  const height = ratio >= 1 ? baseSize / ratio : baseSize;
+  return { x: point.x - width / 2, y: point.y - height / 2, width, height };
+}
+
 // Grows a shape outward from its own centroid by `pad` viewBox units — used
 // for a larger invisible touch/click hit region distinct from the exact
 // silhouette the visible glow renders at ("larger invisible touch hit areas

@@ -1,7 +1,7 @@
 import { renderArtifactObject } from "./world/artifacts.js";
 import { createIllustrationController } from "./world/illustration.js";
 import { createAmbientSoundscape } from "./world/ambient.js";
-import { pointInShape, shapeBounds, snapIntoShape, surfaceUvFromPoint, surfacePointFromUv, surfaceCentroidUv, expandShape } from "./world/geometry.js";
+import { shapeBounds, snapIntoShape, surfaceUvFromPoint, surfacePointFromUv, surfaceCentroidUv, expandShape, relicLayoutFree } from "./world/geometry.js";
 import { renderFloorPlan } from "./world/floor-plan.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -2262,18 +2262,32 @@ function buildExhibitObject(exhibit, gallery, scene) {
   // stretched — CLAUDE.md-aligned brief) rather than forcing a square
   // footprint the way the old procedural canvas used; a "resting" preset's
   // own visual base sits at the surface point (like an object standing on a
-  // shelf), while a "wall" preset centres on it (like a hung frame).
-  const b = shapeBounds(surface.shape);
+  // shelf), while a "wall" preset centres on it (like a hung frame). A
+  // FREE placement (surface.surfaceType === "freeform") instead always uses
+  // the shared `relicLayoutFree` helper — the exact same sizing/anchor math
+  // the placement-drag preview uses (`wirePlacementDrag`'s onPointerMove) —
+  // so a confirmed exhibit renders at precisely the point its preview sat
+  // at, never a bottom "resting" anchor and never a square-forced footprint.
   const preset = exhibit.visualId ? presetById(exhibit.visualId) : null;
-  const baseSize = Math.max(60, Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.55) * scale;
   const aspect = preset ? preset.naturalWidth / preset.naturalHeight : 1;
-  const width = aspect >= 1 ? baseSize : baseSize * aspect;
-  const height = aspect >= 1 ? baseSize / aspect : baseSize;
-  const half = Math.max(width, height) / 2;
-
+  let width, height, half;
   const fo = document.createElementNS(SVG_NS, "foreignObject");
-  fo.setAttribute("x", String(point.x - width / 2));
-  fo.setAttribute("y", String(preset?.anchor === "resting" ? point.y - height : point.y - height / 2));
+  if (surface.surfaceType === "freeform") {
+    const layout = relicLayoutFree(point, aspect, scale);
+    width = layout.width;
+    height = layout.height;
+    half = Math.max(width, height) / 2;
+    fo.setAttribute("x", String(layout.x));
+    fo.setAttribute("y", String(layout.y));
+  } else {
+    const b = shapeBounds(surface.shape);
+    const baseSize = Math.max(60, Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.55) * scale;
+    width = aspect >= 1 ? baseSize : baseSize * aspect;
+    height = aspect >= 1 ? baseSize / aspect : baseSize;
+    half = Math.max(width, height) / 2;
+    fo.setAttribute("x", String(point.x - width / 2));
+    fo.setAttribute("y", String(preset?.anchor === "resting" ? point.y - height : point.y - height / 2));
+  }
   fo.setAttribute("width", String(width));
   fo.setAttribute("height", String(height));
   fo.setAttribute("class", "object-hit");
@@ -2325,60 +2339,59 @@ function svgLabelFor(shape, text) {
 
 // ---------------------------------------------------------------------------
 // Placement mode: a translucent, pointer-following relic preview the
-// visitor drags freely within whichever compatible surface it's currently
-// over, snapping gently to a valid point (snapIntoShape) rather than a grid
-// of fixed anchors. Only surfaces whose `allowedRelicTypes` include the
-// chosen subtype are ever shown — a painting is never offered a floor/
-// carpet surface, matching the compatibility matrix server/src/world.js
-// enforces again server-side.
+// visitor can move anywhere in the room — clicking or dragging ANYWHERE in
+// the scene moves it, via one transparent, pointer-event-receiving full-room
+// hit region, rather than a visible dashed box or a restricted set of
+// surfaces. Every new donation (regardless of subtype) uses the gallery's
+// one free-placement region (world.js's `${galleryId}-free`, surfaceType
+// "freeform") — the old named surfaces are kept only to render exhibits
+// donated before this shipped, never offered or rendered here.
+
+function freePlacementSurfaceFor(gallery) {
+  return gallery.placementSurfaces.find((s) => s.surfaceType === "freeform");
+}
 
 function renderPlacementSurfaces(objectLayer, scene) {
   if (!placement || scene.id !== `${placement.exhibitForm.galleryId}-main`) return;
   const gallery = world.galleries.find((g) => g.id === placement.exhibitForm.galleryId);
   const subtype = placement.exhibitForm.subtype;
-  const compatible = gallery.placementSurfaces.filter((s) => s.allowedRelicTypes.includes(subtype));
+  const freeSurface = freePlacementSurfaceFor(gallery);
+  if (!freeSurface) return;
 
-  for (const surface of compatible) {
-    const node = svgShapeNode(surface.shape);
-    node.setAttribute("class", `placement-surface${placement.surfaceId === surface.id ? " chosen" : ""}`);
-    node.dataset.surfaceId = surface.id;
-    objectLayer.appendChild(node);
-  }
+  // One invisible, full-region hit rect — no visible border, just the real
+  // click/drag target for "place it anywhere in this room."
+  const hit = svgShapeNode(freeSurface.shape);
+  hit.setAttribute("class", "placement-hit-region");
+  objectLayer.appendChild(hit);
 
   // The translucent, draggable relic preview — rendered once at the chosen
-  // point (defaulting to the first compatible surface's own centroid the
-  // first time placement mode reaches this scene), via the same transparent
-  // object renderer the final integrated relic uses, so what the visitor
-  // drags is a true preview of the real thing, never a generic ghost box.
-  if (!placement.surfaceId && compatible.length > 0) {
-    const first = compatible[0];
-    const { u, v } = surfaceCentroidUv(first);
-    const point = surfacePointFromUv(first, u, v);
-    placement.surfaceId = first.id;
-    placement.point = point;
+  // point (defaulting to the free region's own centroid the first time
+  // placement mode reaches this scene), via the same transparent object
+  // renderer the final integrated relic uses, so what the visitor drags is
+  // a true preview of the real thing, never a generic ghost box.
+  if (!placement.surfaceId) {
+    const { u, v } = surfaceCentroidUv(freeSurface);
+    placement.surfaceId = freeSurface.id;
+    placement.point = surfacePointFromUv(freeSurface, u, v);
   }
-  if (!placement.surfaceId) return;
 
-  const surface = gallery.placementSurfaces.find((s) => s.id === placement.surfaceId);
-  const defaultUv = surfaceCentroidUv(surface);
-  const point = placement.point ?? surfacePointFromUv(surface, defaultUv.u, defaultUv.v);
-  const b = shapeBounds(surface.shape);
+  const point = placement.point;
   // The exact same curated preset (if one was chosen) the final placed relic
   // will render with, at the exact same aspect ratio — a drag preview is
   // never a generic ghost box, and never a different asset than the one
-  // that actually gets persisted.
+  // that actually gets persisted. Uses the SAME shared layout helper the
+  // final `buildExhibitObject()` uses for a free placement, so preview and
+  // confirmed position can never disagree.
   const preset = placement.exhibitForm.visualId ? presetById(placement.exhibitForm.visualId) : null;
-  const baseSize = Math.max(60, Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.55);
   const aspect = preset ? preset.naturalWidth / preset.naturalHeight : 1;
-  const width = aspect >= 1 ? baseSize : baseSize * aspect;
-  const height = aspect >= 1 ? baseSize / aspect : baseSize;
+  const layout = relicLayoutFree(point, aspect, 1);
 
   const fo = document.createElementNS(SVG_NS, "foreignObject");
   fo.setAttribute("id", "placement-preview");
-  fo.setAttribute("x", String(point.x - width / 2));
-  fo.setAttribute("y", String(preset?.anchor === "resting" ? point.y - height : point.y - height / 2));
-  fo.setAttribute("width", String(width));
-  fo.setAttribute("height", String(height));
+  fo.setAttribute("x", String(layout.x));
+  fo.setAttribute("y", String(layout.y));
+  fo.setAttribute("width", String(layout.width));
+  fo.setAttribute("height", String(layout.height));
   fo.setAttribute("class", "placement-preview");
   const container = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
   container.style.width = "100%";
@@ -2393,7 +2406,7 @@ function renderPlacementSurfaces(objectLayer, scene) {
     exhibitId: `placement-preview:${subtype}`,
   });
 
-  wirePlacementDrag(objectLayer, fo, gallery);
+  wirePlacementDrag(objectLayer, fo, gallery, freeSurface);
 }
 
 // Converts a pointer event's client coordinates into the SVG's own viewBox
@@ -2412,34 +2425,31 @@ function svgPointFromEvent(svg, event) {
 }
 
 let placementDragState = null;
-function wirePlacementDrag(objectLayer, previewNode, gallery) {
+function wirePlacementDrag(objectLayer, previewNode, gallery, freeSurface) {
   if (placementDragState?.cleanup) placementDragState.cleanup();
   const svg = objectLayer;
 
+  // Clicking or dragging ANYWHERE in the free-placement region moves the
+  // preview there — gently snapped inside the region's own bounds
+  // (snapIntoShape) rather than clamped to a fixed grid. Uses the exact
+  // same `relicLayoutFree` sizing/anchor math `renderPlacementSurfaces` used
+  // to draw the preview and `buildExhibitObject` uses for the final exhibit
+  // — never a square-forced footprint, never a different anchor, so the
+  // preview never visibly jumps once confirmed.
   function onPointerMove(e) {
     if (!placement) return;
     const p = svgPointFromEvent(svg, e);
-    const surfaces = gallery.placementSurfaces.filter((s) => s.allowedRelicTypes.includes(placement.exhibitForm.subtype));
-    // Snap into whichever compatible surface the pointer is nearest to —
-    // the surface actually under the pointer if it's inside one, otherwise
-    // the previously-chosen surface (so a brief overshoot outside every
-    // surface doesn't yank the preview to a different wall entirely).
-    let target = surfaces.find((s) => pointInShape(s.shape, p.x, p.y));
-    if (!target) target = surfaces.find((s) => s.id === placement.surfaceId) ?? surfaces[0];
-    if (!target) return;
-    const snapped = snapIntoShape(target.shape, p.x, p.y);
-    placement.surfaceId = target.id;
+    const snapped = snapIntoShape(freeSurface.shape, p.x, p.y);
+    placement.surfaceId = freeSurface.id;
     placement.point = snapped;
-    const b = shapeBounds(target.shape);
-    const footprint = Math.max(60, Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.55);
-    previewNode.setAttribute("x", String(snapped.x - footprint / 2));
-    previewNode.setAttribute("y", String(snapped.y - footprint / 2));
-    previewNode.setAttribute("width", String(footprint));
-    previewNode.setAttribute("height", String(footprint));
+    const preset = placement.exhibitForm.visualId ? presetById(placement.exhibitForm.visualId) : null;
+    const aspect = preset ? preset.naturalWidth / preset.naturalHeight : 1;
+    const layout = relicLayoutFree(snapped, aspect, 1);
+    previewNode.setAttribute("x", String(layout.x));
+    previewNode.setAttribute("y", String(layout.y));
+    previewNode.setAttribute("width", String(layout.width));
+    previewNode.setAttribute("height", String(layout.height));
     el("placement-confirm-btn").disabled = false;
-    for (const node of svg.querySelectorAll(".placement-surface")) {
-      node.classList.toggle("chosen", node.dataset.surfaceId === target.id);
-    }
   }
 
   let dragging = false;
@@ -2457,20 +2467,21 @@ function wirePlacementDrag(objectLayer, previewNode, gallery) {
   previewNode.addEventListener("pointerdown", onPointerDown);
   svg.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onPointerUp);
-  // A click anywhere on a compatible surface (not just a drag of the
-  // preview itself) also moves the preview there — placement should feel
-  // like "drop it where I click," not require grabbing the preview first.
-  function onSurfaceClick(e) {
-    if (e.target.classList?.contains("placement-surface")) onPointerMove(e);
+  // A click anywhere in the room's free-placement hit region (not just a
+  // drag of the preview itself) also moves the preview there — placement
+  // should feel like "drop it where I click," not require grabbing the
+  // preview first.
+  function onRegionClick(e) {
+    if (e.target.classList?.contains("placement-hit-region")) onPointerMove(e);
   }
-  svg.addEventListener("click", onSurfaceClick);
+  svg.addEventListener("click", onRegionClick);
 
   placementDragState = {
     cleanup() {
       previewNode.removeEventListener("pointerdown", onPointerDown);
       svg.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onPointerUp);
-      svg.removeEventListener("click", onSurfaceClick);
+      svg.removeEventListener("click", onRegionClick);
     },
   };
   // Confirm is enabled as soon as there's a valid chosen point (the initial

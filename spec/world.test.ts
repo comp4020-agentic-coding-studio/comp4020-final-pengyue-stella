@@ -373,7 +373,11 @@ describe("surface-aware free relic placement", () => {
     for (const gallery of galleries) {
       expect(gallery.placementSurfaces.length).toBeGreaterThan(0);
       for (const surface of gallery.placementSurfaces) {
-        expect(["wall", "shelf", "tabletop", "cabinet", "plinth", "floor"]).toContain(surface.surfaceType);
+        // "freeform" is the one free-roam placement region every new
+        // donation uses (see world.js's `${galleryId}-free`) — every other
+        // surface is a legacy named one, kept only to render exhibits
+        // donated before free placement shipped.
+        expect(["wall", "shelf", "tabletop", "cabinet", "plinth", "floor", "freeform"]).toContain(surface.surfaceType);
         // A painting/sketch must never be offered a floor or carpet
         // placement — the one hard rule the brief calls out by name.
         if (surface.surfaceType === "floor") {
@@ -384,6 +388,7 @@ describe("surface-aware free relic placement", () => {
     }
     const portraits = galleries.find((g) => g.id === "portraits")!;
     for (const surface of portraits.placementSurfaces) {
+      if (surface.surfaceType === "freeform") continue;
       expect(surface.surfaceType).toBe("wall");
     }
   });

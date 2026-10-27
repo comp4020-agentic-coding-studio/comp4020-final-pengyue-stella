@@ -154,6 +154,33 @@ function truncatedName(name) {
   return `${name.slice(0, MAX_FOOTPRINT_NAME_LENGTH - 1)}…`;
 }
 
+// A room name is never abbreviated — instead it wraps onto up to two lines,
+// word-boundary only, estimating each candidate line's rendered width from
+// an average-glyph-width heuristic (Georgia/Cormorant Garamond at this
+// weight) rather than measuring a live DOM node, so the wrap is identical in
+// a headless render/test and in the browser. If more than two lines would be
+// needed, the overflow is folded into the second line rather than dropped —
+// in practice every current room name fits two lines at this room width.
+const ROOM_LABEL_AVG_CHAR_WIDTH_FACTOR = 0.56;
+function wrapRoomName(name, maxWidth, fontSize) {
+  const maxChars = Math.max(1, Math.floor(maxWidth / (fontSize * ROOM_LABEL_AVG_CHAR_WIDTH_FACTOR)));
+  const words = name.split(" ");
+  const lines = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= maxChars || !current) {
+      current = candidate;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  if (lines.length > 2) return [lines[0], lines.slice(1).join(" ")];
+  return lines;
+}
+
 function svg(tag, attrs = {}) {
   const node = document.createElementNS(SVG_NS, tag);
   for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
@@ -519,15 +546,30 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
       );
     }
 
-    const labelRotation = (seededUnit(`label:${room.id}`) * 3).toFixed(1);
+    // Never rotated, never pressed against the room's own border — the name
+    // region sits inset from both side walls, wraps onto up to two lines,
+    // and starts a fixed distance below the top edge so a long name (e.g.
+    // "The Cabinet of Impossible Life") stays fully inside the room box
+    // instead of overflowing it. Applies identically to the Entrance Hall.
+    const labelInset = 12;
+    const labelFontSize = 15.5;
+    const labelLineHeight = labelFontSize * 1.15;
+    const labelTopY = rect.y + 24;
+    const labelLines = wrapRoomName(room.name, rect.w - labelInset * 2, labelFontSize);
     const label = svg("text", {
       x: rect.x + rect.w / 2,
-      y: rect.y + 20,
+      y: labelTopY,
       class: "floor-plan-room-label",
       "text-anchor": "middle",
-      transform: `rotate(${labelRotation} ${rect.x + rect.w / 2} ${rect.y + 20})`,
     });
-    label.textContent = room.name;
+    labelLines.forEach((line, i) => {
+      const tspan = svg("tspan", {
+        x: rect.x + rect.w / 2,
+        dy: i === 0 ? "0" : `${labelLineHeight}`,
+      });
+      tspan.textContent = line;
+      label.appendChild(tspan);
+    });
     g.appendChild(label);
 
     if (isCurrent) {

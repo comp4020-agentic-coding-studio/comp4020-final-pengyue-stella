@@ -382,37 +382,15 @@ a {
   opacity: 1;
 }
 
-/* A placement-mode surface: only a surface compatible with the relic
-   subtype being placed renders here, and only while placement is active —
-   never an arbitrary pixel coordinate, never a dashed rectangle unrelated
-   to a real wall/shelf/table/cabinet/plinth (CLAUDE.md-aligned brief).
-   `.chosen` is the surface the drag preview currently sits on. */
-.placement-surface {
-  fill: rgba(102, 200, 150, 0.14);
-  stroke: rgba(138, 209, 170, 0.75);
-  stroke-width: 3;
-  stroke-dasharray: 10 6;
+/* Free-roam placement mode: one invisible, full-room hit region — clicking
+   or dragging anywhere in it moves the preview, with no visible border or
+   highlighted box (replacing the old small set of dashed-outline named
+   surfaces a donor used to have to find and click). */
+.placement-hit-region {
+  fill: transparent;
+  stroke: none;
   cursor: pointer;
   pointer-events: auto;
-  animation: placement-glow 1.8s ease-in-out infinite;
-}
-
-.placement-surface.chosen {
-  fill: rgba(138, 209, 170, 0.22);
-  stroke: #8ad1aa;
-  stroke-dasharray: none;
-  animation: none;
-}
-
-@keyframes placement-glow {
-  0%, 100% { stroke-opacity: 0.55; }
-  50% { stroke-opacity: 0.95; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .placement-surface {
-    animation: none;
-  }
 }
 
 /* The draggable relic preview during placement — a real, translucent
@@ -1782,10 +1760,10 @@ a {
 
 .floor-plan-room-label {
   fill: var(--ink);
-  font-size: 17px;
-  font-weight: 700;
-  font-style: italic;
+  font-size: 15.5px;
+  font-weight: 600;
   font-family: Georgia, "Cormorant Garamond", serif;
+  line-height: 1.15;
   letter-spacing: 0.02em;
   pointer-events: none;
 }

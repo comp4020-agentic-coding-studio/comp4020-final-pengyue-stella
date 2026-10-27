@@ -681,6 +681,31 @@ const GALLERY_LAYOUT = [
   },
 ];
 
+// Free-roam placement region (replacing the old "pick one of a handful of
+// glowing surfaces" model for every NEW donation — see docs/adr/0007's
+// successor decision, recorded in this comment rather than a new ADR file):
+// one inset rectangle covering nearly the whole of a gallery's main-scene
+// image, in that scene's own SCENE_VIEWBOX pixel space. The OLD named
+// surfaces in GALLERY_SURFACES above are kept completely unchanged and are
+// used ONLY to keep rendering exhibits donated before this shipped — a new
+// donation is never offered them and never validated against them. This
+// region's own `surfaceType` ("freeform") deliberately never appears in
+// SURFACE_TYPES_BY_SUBTYPE, so `surfaceAllows()` (and therefore
+// `legacySlotPlacement`, which reads GALLERY_SURFACES directly, not this
+// region) never picks it for anything — it only ever exists inside
+// `placementSurfaces`, reached by `surfaceById()`, for a fresh donation.
+const FREE_PLACEMENT_EDGE_MARGIN = 60;
+function freePlacementShape() {
+  const { width, height } = SCENE_VIEWBOX;
+  const m = FREE_PLACEMENT_EDGE_MARGIN;
+  return polygon([
+    [m, m],
+    [width - m, m],
+    [width - m, height - m],
+    [m, height - m],
+  ]);
+}
+
 export const GALLERIES = GALLERY_LAYOUT.map((g) => ({
   ...g,
   slots: SLOT_ANCHORS.map((a, i) => ({
@@ -691,14 +716,32 @@ export const GALLERIES = GALLERY_LAYOUT.map((g) => ({
     width: a.width,
     height: a.height,
   })),
-  // The real, traced placement surfaces this gallery offers — the only
-  // positions a visitor is ever shown while placing a relic. Each carries
-  // the compatibility list derived from SURFACE_TYPES_BY_SUBTYPE so the
-  // client never has to duplicate that matrix to decide what to show.
-  placementSurfaces: (GALLERY_SURFACES[g.id] ?? []).map((s) => ({
-    ...s,
-    allowedRelicTypes: (SUBTYPES_BY_CATEGORY[g.category] ?? []).filter((subtype) => surfaceAllows(s, subtype)),
-  })),
+  // The real, traced placement surfaces this gallery offers for rendering
+  // its ALREADY-donated legacy exhibits — never offered as a placement
+  // option for a new donation any more (see `placementSurfaces` below,
+  // which appends the gallery's one free-placement region after these).
+  // Each still carries the compatibility list derived from
+  // SURFACE_TYPES_BY_SUBTYPE, used only by legacy rendering/validation
+  // paths that still reference a named surface by id.
+  placementSurfaces: [
+    ...(GALLERY_SURFACES[g.id] ?? []).map((s) => ({
+      ...s,
+      allowedRelicTypes: (SUBTYPES_BY_CATEGORY[g.category] ?? []).filter((subtype) => surfaceAllows(s, subtype)),
+    })),
+    // The one free-placement region a NEW donation of any subtype valid for
+    // this gallery's category is placed into — no surface-type compatibility
+    // restriction, since there's no real "wall" vs. "shelf" distinction left
+    // to enforce once placement is free-roam across the whole scene.
+    {
+      id: `${g.id}-free`,
+      surfaceType: "freeform",
+      shape: freePlacementShape(),
+      allowedRelicTypes: SUBTYPES_BY_CATEGORY[g.category] ?? [],
+      minScale: 0.5,
+      maxScale: 1.5,
+      depth: 0.4,
+    },
+  ],
 }));
 
 export const GALLERY_IDS = new Set(GALLERIES.map((g) => g.id));
