@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { identify, nameCookieFor, ghostTypeCookieFor, publicKeyFor } from "./identity.js";
-import { galleryById, publicWorld, SCENE_IDS, DEFAULT_SCENE_ID, roomIdForScene } from "./world.js";
+import { galleryById, publicWorld, SCENE_IDS, DEFAULT_SCENE_ID } from "./world.js";
 import * as db from "./db.js";
 import * as sse from "./sse.js";
 import { serveStatic } from "./static.js";
@@ -647,17 +647,16 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // The Séance panel: one visitor reaching out to another specific
-    // visitor currently sharing their room — a message, a fixed-vocabulary
-    // reaction, or a wordless "reach out" gesture. Ephemeral exactly like
-    // `focus` above (never written to SQLite — CLAUDE.md's "visitor
-    // presence... never persisted" extends naturally to an interaction
-    // ABOUT that live presence), but unlike focus this targets one specific
-    // visitor by their public key rather than broadcasting to a whole
-    // room, so it needs its own identity resolution (sender from the
-    // cookie, target from publicKey, never the reverse) and its own
-    // same-room authority check — see sse.js's sceneIdForPublicKey/
-    // isVisitorConnected and world.js's roomIdForScene doc comments.
+    // The Séance panel: a room-scoped group chat — a message, a fixed-
+    // vocabulary reaction, or a wordless "reach out" gesture, broadcast to
+    // every OTHER visitor currently sharing the sender's own room (never a
+    // single targeted visitor any more, and never across rooms or museum-
+    // wide). Ephemeral exactly like `focus` above (never written to SQLite —
+    // CLAUDE.md's "visitor presence... never persisted" extends naturally
+    // to an interaction ABOUT that live presence). The room is derived
+    // entirely from the sender's own REAL scene on their open SSE
+    // connection (sceneIdForVisitor) — the client never gets to declare its
+    // own roomId.
     if (req.method === "POST" && pathname === "/api/presence/interact") {
       const identity = identify(req);
 
@@ -669,18 +668,8 @@ const server = createServer(async (req, res) => {
         return;
       }
 
-      const { kind, targetPublicKey } = payload;
-      if (typeof targetPublicKey !== "string" || targetPublicKey.length === 0) {
-        json(res, 400, { error: "invalid target" }, withCookies({}, identity));
-        return;
-      }
-
+      const { kind } = payload;
       const myPublicKey = publicKeyFor(identity.id);
-      if (targetPublicKey === myPublicKey) {
-        logAction(identity, "interact", { kind }, "rejected:self_target");
-        json(res, 400, { error: "you can't reach out to yourself" }, withCookies({}, identity));
-        return;
-      }
 
       // Validate the body shape before touching any rate limit or presence
       // state, so a malformed request never consumes the cooldown window a
@@ -694,7 +683,7 @@ const server = createServer(async (req, res) => {
           return;
         }
         // replyToMessageId is an opaque client-chosen id echoed back purely
-        // so the recipient's own transcript can thread a reply under the
+        // so a recipient's own transcript can thread a reply under the
         // message it replies to — never looked up/validated server-side
         // (nothing is persisted to validate it against), same spirit as
         // objectId's "a value the client already produced, just bounded in
@@ -729,32 +718,27 @@ const server = createServer(async (req, res) => {
         return;
       }
 
-      // The server is the sole authority on "are these two visitors
-      // actually in the same room right now" — never a client-asserted
-      // room on either side. The sender's own current scene comes from
-      // their own open SSE connection (sceneIdForPublicKey), exactly the
-      // same source of truth sceneIdForVisitor already uses for focus.
-      const mySceneId = sse.sceneIdForPublicKey(myPublicKey);
-      const targetSceneId = sse.sceneIdForPublicKey(targetPublicKey);
-      if (
-        !sse.isVisitorConnected(targetPublicKey) ||
-        !targetSceneId ||
-        !mySceneId ||
-        roomIdForScene(targetSceneId) !== roomIdForScene(mySceneId)
-      ) {
+      // The server is the sole authority on "which room is this sender
+      // actually in right now" — never a client-asserted room. The sender's
+      // own current scene comes from their own open SSE connection
+      // (sceneIdForVisitor), the same source of truth the focus handler
+      // above already uses.
+      const mySceneId = sse.sceneIdForVisitor(identity.id);
+      if (!mySceneId) {
         logAction(identity, "interact", { kind }, "rejected:not_in_room");
-        json(res, 404, { error: "that visitor isn't here right now" }, withCookies({}, identity));
+        json(res, 404, { error: "you're not in a room right now" }, withCookies({}, identity));
         return;
       }
 
       lastInteractAt.set(identity.id, now);
-      sse.broadcastToVisitor(targetPublicKey, "interact", {
-        fromPublicKey: myPublicKey,
-        fromDisplayName: identity.name,
-        ...eventPayload,
-      });
+      const delivered = sse.broadcastToRoom(
+        mySceneId,
+        "interact",
+        { fromPublicKey: myPublicKey, fromDisplayName: identity.name, ...eventPayload },
+        { exceptVisitorId: identity.id },
+      );
       logAction(identity, "interact", { kind });
-      json(res, 200, { ok: true }, withCookies({}, identity));
+      json(res, 200, { ok: true, delivered }, withCookies({}, identity));
       return;
     }
 

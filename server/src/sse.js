@@ -42,6 +42,8 @@
 // `broadcast()` below — it never filters by the recipient's own scene), so
 // a client's cached roster for a scene it isn't currently in still gets
 // kept live.
+import { roomIdForScene } from "./world.js";
+
 const clients = new Map(); // res -> { visitorId, sceneId, publicKey, displayName, ghostType }
 
 export function addClient(res, visitorId, sceneId, publicKey, displayName, ghostType) {
@@ -189,22 +191,22 @@ export function broadcastToScene(sceneId, event, data, { exceptVisitorId } = {})
   }
 }
 
-// Relays an event only to every open connection belonging to the visitor
-// identified by `publicKey` — used for the Séance interaction endpoint
-// (server.js's `POST /api/presence/interact`), which targets one specific
-// visitor rather than a whole scene/room. A visitor open in two tabs (both
-// sharing the same cookie, hence the same publicKey) gets the event on
-// each of their own connections, with no extra dedup needed — each tab is
-// its own legitimate recipient, the same "look up every connection whose
-// publicKey matches" approach visitorsInScene already uses to roster a
-// scene, just filtered to one visitor instead of one scene. Returns the
-// number of connections the event was actually written to, so the caller
-// can tell "target has no open connection at all" apart from "it was
-// delivered" without a second lookup.
-export function broadcastToVisitor(publicKey, event, data) {
+// Broadcasts an event to every OTHER visitor sharing the sender's own
+// logical room — a gallery's `-main` and `-closeup` scenes both count as
+// one room (world.js's `roomIdForScene`), so a visitor in the close-up view
+// still receives a group Séance message sent from the main view of the same
+// gallery. Used by the room-scoped Séance group chat (server.js's `POST
+// /api/presence/interact`), which replaces the old one-to-one
+// `broadcastToVisitor` for that endpoint. `exceptVisitorId` excludes ALL of
+// that visitor's own open connections (a visitor open in two tabs never
+// receives their own message echoed back over SSE — their own tab already
+// renders it locally on send).
+export function broadcastToRoom(sceneId, event, data, { exceptVisitorId } = {}) {
+  const roomId = roomIdForScene(sceneId);
   let delivered = 0;
   for (const [res, entry] of clients.entries()) {
-    if (entry.publicKey !== publicKey) continue;
+    if (exceptVisitorId && entry.visitorId === exceptVisitorId) continue;
+    if (!entry.sceneId || roomIdForScene(entry.sceneId) !== roomId) continue;
     try {
       write(res, event, data);
       delivered += 1;
@@ -213,32 +215,6 @@ export function broadcastToVisitor(publicKey, event, data) {
     }
   }
   return delivered;
-}
-
-// Whether `publicKey` currently has at least one open connection — used to
-// reject a Séance interaction aimed at a visitor who has since disconnected,
-// before even checking which room they're in.
-export function isVisitorConnected(publicKey) {
-  for (const entry of clients.values()) {
-    if (entry.publicKey === publicKey) return true;
-  }
-  return false;
-}
-
-// The scene a CONNECTED visitor (identified by publicKey, never a raw
-// visitor id leaked back to a client) is currently tagged with — used by
-// the Séance endpoint to look up the TARGET's own current scene server-side
-// (never trusting a client-supplied scene/room for the target), the same
-// "the server is the actual authority on where someone is" principle
-// sceneIdForVisitor already applies for the sender's own focus broadcasts.
-// A visitor open in two tabs on different scenes is the same unresolved
-// edge case sceneIdForVisitor already accepts — the first matching
-// connection wins.
-export function sceneIdForPublicKey(publicKey) {
-  for (const entry of clients.values()) {
-    if (entry.publicKey === publicKey) return entry.sceneId ?? null;
-  }
-  return null;
 }
 
 export function broadcastDeparture(visitorId, sceneId) {

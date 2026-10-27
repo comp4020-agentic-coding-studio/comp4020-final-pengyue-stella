@@ -1246,21 +1246,22 @@ function renderCameos() {
     cameo.style.setProperty("--cameo-opacity", cameoOpacityFor(visitor.publicKey));
     cameo.style.setProperty("--cameo-glow-opacity", cameoGlowFor(visitor.publicKey));
     cameo.tabIndex = 0;
-    // A real interactive control now — clicking/tapping/Enter-ing another
-    // visitor's apparition opens the Séance panel for them (see
-    // openSeancePanel below), so this is role="button", not the earlier
-    // decorative role="img". The pointer/touch target stays the whole
-    // `.cameo` box (comfortably larger than the slim illustrated silhouette
-    // inside it — see styles.css's own sizing note), satisfying "a
-    // comfortably large pointer/touch target even if the silhouette itself
-    // is kept slim."
+    // A real interactive control now — clicking/tapping/Enter-ing any
+    // visitor's apparition opens the SAME shared Séance panel for this
+    // visitor's whole room (see openSeancePanel below), not a private
+    // one-to-one thread with whoever was clicked — so this is role="button",
+    // not the earlier decorative role="img". The pointer/touch target stays
+    // the whole `.cameo` box (comfortably larger than the slim illustrated
+    // silhouette inside it — see styles.css's own sizing note), satisfying
+    // "a comfortably large pointer/touch target even if the silhouette
+    // itself is kept slim."
     cameo.setAttribute("role", "button");
-    cameo.setAttribute("aria-label", `${visitor.displayName}, another visitor in this room. Press Enter to open a Séance.`);
-    cameo.addEventListener("click", () => openSeancePanel(visitor));
+    cameo.setAttribute("aria-label", `${visitor.displayName}, another visitor in this room. Press Enter to open the room's Séance.`);
+    cameo.addEventListener("click", () => openSeancePanel());
     cameo.addEventListener("keydown", (e) => {
       if (e.code === "Enter" || e.code === "Space") {
         e.preventDefault();
-        openSeancePanel(visitor);
+        openSeancePanel();
       }
     });
 
@@ -1354,32 +1355,41 @@ function roomIdForScene(sceneId) {
   return scene?.galleryId ?? sceneId;
 }
 
+// The display name for a room id — "Entrance Hall" for the hall, or the
+// matching gallery's own name otherwise. Used for the Séance panel's title
+// ("<Room Name> — Room Séance"), never the old single-visitor name.
+function roomNameFor(roomId) {
+  if (roomId === "hall") return "Entrance Hall";
+  return world?.galleries.find((g) => g.id === roomId)?.name ?? roomId;
+}
 
 // ---------------------------------------------------------------------------
-// The Séance panel: a compact Gothic interaction dialog opened from another
-// visitor's own apparition (see renderCameos — a `.cameo` is now a real
-// `role="button"`, not decorative). Everything here is ephemeral/session-
-// local — the transcript lives only in this tab's own memory, mirroring the
-// server's own "never persisted" treatment of the interaction itself (see
-// server.js's /api/presence/interact doc comment). A page reload starts a
-// fresh, empty transcript, same as a reload already resets focus/activity
-// cues elsewhere in this app.
+// The Séance panel: a room-scoped GROUP chat, opened by clicking/tapping/
+// Enter-ing any visitor's own apparition (see renderCameos — a `.cameo` is
+// still a real `role="button"`) — but the panel it opens is the same shared
+// panel for the whole room, not a private one-to-one thread with whoever was
+// clicked. Everything here is ephemeral/session-local — transcripts live
+// only in this tab's own memory, mirroring the server's own "never
+// persisted" treatment of the interaction itself (see server.js's
+// /api/presence/interact doc comment). A page reload starts fresh, empty
+// transcripts, same as a reload already resets focus/activity cues
+// elsewhere in this app.
 
-let seanceTargetPublicKey = null; // whoever the open panel currently targets, or null if closed
+let seanceOpenRoomId = null; // the room id the open panel currently shows, or null if closed
 let seanceReplyToId = null; // the local transcript-entry id a typed message will reply to, or null
-const seanceTranscripts = new Map(); // publicKey -> [{ id, mine, kind, body?, reactionId?, replyToId?, displayName }]
-const mutedPublicKeys = new Set(); // publicKeys this session has chosen to stop hearing from — client-only, cleared on reload
+const seanceTranscripts = new Map(); // roomId -> [{ id, mine, kind, body?, reactionId?, replyToId?, displayName, fromPublicKey }]
+const mutedRoomIds = new Set(); // room ids this session has chosen to stop hearing from — client-only, cleared on reload
 let seanceEntryIdCounter = 0;
 function nextSeanceEntryId() {
   seanceEntryIdCounter += 1;
   return `seance-entry-${seanceEntryIdCounter}`;
 }
 
-function transcriptFor(publicKey) {
-  let list = seanceTranscripts.get(publicKey);
+function transcriptFor(roomId) {
+  let list = seanceTranscripts.get(roomId);
   if (!list) {
     list = [];
-    seanceTranscripts.set(publicKey, list);
+    seanceTranscripts.set(roomId, list);
   }
   return list;
 }
@@ -1407,16 +1417,18 @@ function reactionGlyphFor(reactionId) {
 }
 
 // Renders the currently-open panel's transcript — called after every send
-// AND every incoming interact event for the currently-open target, so the
+// AND every incoming interact event for the currently-open room, so the
 // panel never needs a manual refresh. Each bubble uses this project's
 // existing Gothic palette tokens via .seance-entry's own CSS (never a
 // modern flat-design chat bubble — see styles.css's doc comment), and every
 // piece of visitor-supplied text renders via textContent, never innerHTML.
+// Every entry — yours or anyone else's in the room — still shows its own
+// sender's name, since this is now a group transcript, not a 1:1 thread.
 function renderSeanceTranscript() {
   const container = el("seance-transcript");
-  if (!container || !seanceTargetPublicKey) return;
+  if (!container || !seanceOpenRoomId) return;
   container.innerHTML = "";
-  for (const entry of transcriptFor(seanceTargetPublicKey)) {
+  for (const entry of transcriptFor(seanceOpenRoomId)) {
     const bubble = document.createElement("div");
     bubble.className = `seance-entry${entry.mine ? " mine" : ""}`;
     bubble.dataset.entryId = entry.id;
@@ -1434,11 +1446,11 @@ function renderSeanceTranscript() {
     } else if (entry.kind === "reach-out") {
       const body = document.createElement("p");
       body.className = "seance-entry-body";
-      body.textContent = entry.mine ? "You reached out." : "Reached out to you.";
+      body.textContent = entry.mine ? "You reached out to the room." : `${entry.displayName} reached out to the room.`;
       bubble.appendChild(body);
     } else {
       if (entry.replyToId) {
-        const replied = transcriptFor(seanceTargetPublicKey).find((e) => e.id === entry.replyToId);
+        const replied = transcriptFor(seanceOpenRoomId).find((e) => e.id === entry.replyToId);
         if (replied?.body) {
           const replyNote = document.createElement("p");
           replyNote.className = "seance-entry-byline";
@@ -1499,17 +1511,18 @@ function renderSeanceReactionButtons() {
   }
 }
 
-// Opens the Séance panel for `visitor` ({ publicKey, displayName }) — the
-// panel shows that visitor's own transcript (empty on first open) and lets
-// this visitor send a message/reaction/reach-out back to them. Never opened
-// automatically for an unsolicited incoming interaction (see
-// handleIncomingInteract below) — only a deliberate click/tap/Enter on that
-// visitor's own apparition opens it.
-function openSeancePanel(visitor) {
+// Opens the Séance panel for the CURRENT room (clicking any ghost in this
+// room opens the same shared group-chat panel, regardless of which specific
+// visitor was clicked — the panel is scoped to the room, not that one
+// visitor). Never opened automatically for an unsolicited incoming
+// interaction (see handleIncomingInteract below) — only a deliberate
+// click/tap/Enter on an apparition opens it.
+function openSeancePanel() {
   if (anyOverlayOpen() && el("seance-panel").hidden) return; // don't pop this over some other open gate
-  seanceTargetPublicKey = visitor.publicKey;
+  const roomId = roomIdForScene(currentSceneId);
+  seanceOpenRoomId = roomId;
   clearSeanceReplyTarget();
-  el("seance-title").textContent = visitor.displayName; // textContent only
+  el("seance-title").textContent = `${roomNameFor(roomId)} — Room Séance`; // textContent only
   el("seance-error").textContent = "";
   el("seance-message-input").value = "";
   renderSeanceReactionButtons();
@@ -1520,25 +1533,30 @@ function openSeancePanel(visitor) {
 
 function closeSeancePanel() {
   el("seance-panel").hidden = true;
-  seanceTargetPublicKey = null;
+  seanceOpenRoomId = null;
   clearSeanceReplyTarget();
   viewport.focus();
 }
 
 async function sendSeanceInteraction(body) {
-  if (!seanceTargetPublicKey) return;
+  if (!seanceOpenRoomId) return;
   const errEl = el("seance-error");
   errEl.textContent = "";
   const res = await fetch("/api/presence/interact", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ targetPublicKey: seanceTargetPublicKey, ...body }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    errEl.textContent = data.error ?? "That didn't reach them — try again in a moment.";
+    errEl.textContent = data.error ?? "That didn't reach the room — try again in a moment.";
     return;
   }
+  const data = await res.json().catch(() => ({}));
+  // The sender's own message is added to their own transcript exactly once,
+  // here — their own open SSE connection is explicitly excluded from the
+  // server's room broadcast (sse.js's broadcastToRoom `exceptVisitorId`), so
+  // this local push is the only place it's ever recorded for the sender.
   const entry = {
     id: nextSeanceEntryId(),
     mine: true,
@@ -1546,22 +1564,25 @@ async function sendSeanceInteraction(body) {
     replyToId: body.kind === "message" ? seanceReplyToId : null,
     ...body,
   };
-  transcriptFor(seanceTargetPublicKey).push(entry);
+  transcriptFor(seanceOpenRoomId).push(entry);
   clearSeanceReplyTarget();
   renderSeanceTranscript();
+  if (body.kind !== "message" && data.delivered === 0) {
+    toast("No one else is here right now — your message wasn't sent to anyone.");
+  }
   // A reaction/reach-out you send also briefly animates near YOUR OWN
   // apparition-less self (you have no rendered cameo — CLAUDE.md: never a
   // cameo of yourself), so there's nothing to animate on this sender's own
-  // screen beyond the transcript entry just added above; the recipient's
+  // screen beyond the transcript entry just added above; a recipient's own
   // screen is where the near-ghost animation happens (handleIncomingInteract).
 }
 
 el("seance-close").addEventListener("click", closeSeancePanel);
 el("seance-reach-out").addEventListener("click", () => sendSeanceInteraction({ kind: "reach-out" }));
 el("seance-mute").addEventListener("click", () => {
-  if (!seanceTargetPublicKey) return;
-  mutedPublicKeys.add(seanceTargetPublicKey);
-  toast("Muted for this visit — you won't see cues from them again until you reload.");
+  if (!seanceOpenRoomId) return;
+  mutedRoomIds.add(seanceOpenRoomId);
+  toast("Muted room for this visit — you won't see cues from here again until you reload.");
   closeSeancePanel();
 });
 el("seance-message-form").addEventListener("submit", async (e) => {
@@ -1618,41 +1639,50 @@ function announceToScreenReader(text) {
 }
 
 // Handles an incoming `interact` SSE event (see server.js's
-// /api/presence/interact and sse.js's broadcastToVisitor) — never auto-
-// opens the Séance panel for an unsolicited interaction (a toast/near-ghost
-// cue is enough, matching this app's existing restrained toast() style);
-// only updates the panel's own live transcript if it's ALREADY open for
-// this exact sender.
+// /api/presence/interact and sse.js's broadcastToRoom) — this client only
+// ever receives one because the server already scoped the broadcast to this
+// client's own current room, so the room it belongs to is simply this
+// client's own current room. Never auto-opens the Séance panel for an
+// unsolicited interaction (a toast/near-ghost cue is enough, matching this
+// app's existing restrained toast() style); only updates the panel's own
+// live transcript if it's ALREADY open for this room. A reaction/message
+// bursts above the SENDER's own cameo on THIS recipient's screen — if the
+// sender isn't visible here (e.g. they're in this room's other exact scene,
+// main vs. closeup), burstReactionNearCameo/showMessageBubbleNearCameo
+// already no-op gracefully (their own `if (!cameo) return`), so the
+// transcript/toast below still updates with no error either way.
 function handleIncomingInteract(e) {
   const { fromPublicKey, fromDisplayName, kind, body, reactionId, replyToMessageId } = JSON.parse(e.data);
-  if (!fromPublicKey || mutedPublicKeys.has(fromPublicKey)) return;
+  const roomId = roomIdForScene(currentSceneId);
+  if (!fromPublicKey || mutedRoomIds.has(roomId)) return;
 
   const entry = {
     id: nextSeanceEntryId(),
     mine: false,
     displayName: fromDisplayName,
+    fromPublicKey,
     kind,
     body,
     reactionId,
     replyToId: replyToMessageId ?? null,
   };
-  transcriptFor(fromPublicKey).push(entry);
+  transcriptFor(roomId).push(entry);
 
   if (kind === "message") {
     showMessageBubbleNearCameo(fromPublicKey, body);
-    toast(`${fromDisplayName} sent you a message.`);
-    announceToScreenReader(`${fromDisplayName} sent you a message: ${body}`);
+    toast(`${fromDisplayName} sent a message to the room.`);
+    announceToScreenReader(`${fromDisplayName} sent a message to the room: ${body}`);
   } else if (kind === "reaction") {
     const label = reactionLabelFor(reactionId);
     burstReactionNearCameo(fromPublicKey, reactionGlyphFor(reactionId));
     announceToScreenReader(`${fromDisplayName} reacted: ${label}`);
   } else if (kind === "reach-out") {
     burstReactionNearCameo(fromPublicKey, "♥");
-    toast(`${fromDisplayName} reached out to you.`);
-    announceToScreenReader(`${fromDisplayName} reached out to you.`);
+    toast(`${fromDisplayName} reached out to the room.`);
+    announceToScreenReader(`${fromDisplayName} reached out to the room.`);
   }
 
-  if (seanceTargetPublicKey === fromPublicKey && !el("seance-panel").hidden) {
+  if (seanceOpenRoomId === roomId && !el("seance-panel").hidden) {
     renderSeanceTranscript();
   }
 }

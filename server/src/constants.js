@@ -84,7 +84,7 @@ export const REACTION_ID_SET = new Set(REACTIONS.map((r) => r.id));
 export const MAX_INTERACTION_MESSAGE_LENGTH = 160;
 
 // Ephemeral, per-sender Séance cooldowns (never persisted — see sse.js's
-// broadcastToVisitor doc comment). A reaction/reach-out is a single click
+// broadcastToRoom doc comment). A reaction/reach-out is a single click
 // with no typing involved, so it gets a short floor purely against an
 // accidental or deliberate rapid-fire double-send; a message takes actual
 // typing to produce, so its own floor is a little longer, matching the
