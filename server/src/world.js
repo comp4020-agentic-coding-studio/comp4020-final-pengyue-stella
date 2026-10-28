@@ -828,11 +828,11 @@ const HALL_PORTALS = [
   {
     galleryId: "portraits",
     doorShape: polygon([
-      [350, 335], [380, 345], [400, 400], [405, 430], [405, 600], [300, 600], [300, 430], [305, 400], [325, 345],
+      [320, 335], [350, 345], [370, 400], [375, 430], [375, 600], [270, 600], [270, 430], [275, 400], [295, 345],
     ]),
   },
   { galleryId: "memento", doorShape: polygon([[503, 385], [650, 385], [650, 655], [503, 655]]) },
-  { galleryId: "specimen", doorShape: polygon([[1000, 390], [1150, 390], [1150, 655], [1000, 655]]) },
+  { galleryId: "specimen", doorShape: polygon([[1030, 390], [1180, 390], [1180, 655], [1030, 655]]) },
   {
     galleryId: "childhood",
     doorShape: polygon([[1350, 195], [1300, 245], [1298, 440], [1415, 440], [1413, 245]]),
@@ -893,7 +893,7 @@ const HALL_LORE_OBJECTS = [
     type: "guide",
     label: "The antique map",
     text: "A folded map of a coastline that matches no surveyed country. It has been re-folded along the same creases for as long as anyone has worked here, though no one admits to doing it.",
-    shape: polygon([[1352, 438], [1452, 445], [1458, 610], [1300, 618], [1295, 452]]),
+    shape: polygon([[1352, 463], [1452, 470], [1458, 635], [1300, 643], [1295, 477]]),
     hitPadding: 6,
   },
   {
