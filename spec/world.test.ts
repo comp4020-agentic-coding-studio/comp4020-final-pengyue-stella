@@ -117,22 +117,22 @@ describe("the museum world", () => {
       }
     }
 
-    // Each main gallery scene offers 6-15 real clickable objects (the "look
+    // Each main gallery scene offers 6-30 real clickable objects (the "look
     // closer" portal into its own close-up counts as one of them, same as
     // any other object a visitor can click — every gallery should feel
     // densely populated, per the museum-collection-object expansion pass;
     // `childhood`'s own artwork genuinely supports the high end of that
-    // range), and each close-up scene offers 3-5 of its own — verified here
-    // so it can't silently regress back to a sparse scene without a test
-    // noticing.
+    // range, having been traced object-by-object against its source art),
+    // and each close-up scene offers 3-5 of its own — verified here so it
+    // can't silently regress back to a sparse scene without a test noticing.
     for (const gallery of galleries) {
       const main = byId.get(`${gallery.id}-main`)!;
       const closeup = byId.get(`${gallery.id}-closeup`)!;
       expect(
         main.interactiveObjects.length,
-        `${gallery.id}-main should have 6-15 interactive objects, has ${main.interactiveObjects.length}`,
+        `${gallery.id}-main should have 6-30 interactive objects, has ${main.interactiveObjects.length}`,
       ).toBeGreaterThanOrEqual(6);
-      expect(main.interactiveObjects.length).toBeLessThanOrEqual(15);
+      expect(main.interactiveObjects.length).toBeLessThanOrEqual(30);
       expect(
         closeup.interactiveObjects.length,
         `${gallery.id}-closeup should have 3-5 interactive objects, has ${closeup.interactiveObjects.length}`,

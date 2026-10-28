@@ -610,6 +610,18 @@ const GALLERY_LAYOUT = [
       },
       {
         type: "lore",
+        label: "A jester doll beside the candelabra",
+        text: "Its painted grin has been noted as \"unchanged\" in forty consecutive condition reports, the only item in the gallery whose file uses that exact word every time.",
+        shape: polygon([[112, 296], [135, 292], [150, 298], [160, 310], [163, 322], [160, 335], [150, 345], [135, 350], [118, 350], [108, 344], [103, 332], [103, 318], [106, 306]]),
+      },
+      {
+        type: "lore",
+        label: "Two books on the left cabinet",
+        text: "Shelved spine-out, as always, though no catalogue entry records a title for either one, and no curator has volunteered to open them and check.",
+        shape: polygon([[281, 438], [391, 438], [391, 482], [281, 482]]),
+      },
+      {
+        type: "lore",
         label: "The waiting cot",
         text: "It is turned down fresh every morning. The nursery has had no occupant on record for longer than any living curator can confirm.",
         shape: polygon([[1042, 438], [1078, 430], [1150, 427], [1192, 434], [1202, 458], [1198, 480], [1202, 520], [1198, 555], [1188, 570], [1150, 575], [1085, 573], [1050, 565], [1043, 540], [1038, 490]]),
@@ -628,15 +640,39 @@ const GALLERY_LAYOUT = [
       },
       {
         type: "lore",
-        label: "A carousel beneath a glass dome",
-        text: "It turns, very slowly, without a key, a motor, or a draft to explain it. Conservation has measured the rotation and confirmed only that it is consistent.",
+        label: "A boy doll in the niche",
+        text: "Standing in the same recessed arch for every inventory photograph on file, hat and collar square, though nothing in the records says he was ever posed that way on purpose.",
+        shape: polygon([[665, 160], [690, 152], [712, 158], [722, 170], [725, 185], [718, 200], [725, 215], [720, 235], [728, 250], [722, 270], [710, 285], [695, 295], [680, 295], [668, 285], [662, 270], [665, 250], [658, 235], [665, 215], [658, 200], [662, 185]]),
+      },
+      {
+        type: "lore",
+        label: "A white horse figurine beneath the boy doll",
+        text: "Smaller than either rocking horse in the room, and the only one of the three never once logged as moved, cleaned, or repaired.",
+        shape: polygon([[650, 340], [670, 330], [695, 325], [715, 328], [735, 335], [755, 345], [765, 360], [760, 375], [745, 390], [720, 400], [695, 402], [670, 398], [650, 388], [642, 372], [645, 355]]),
+      },
+      {
+        type: "lore",
+        label: "A second rocking horse, deeper in the cabinet",
+        text: "Identical to the one nearer the door, down to the same worn saddle patch, though the ledger lists only a single horse ever acquired.",
+        shape: polygon([[905, 415], [925, 405], [940, 412], [950, 425], [958, 440], [968, 455], [990, 465], [1015, 475], [1030, 490], [1033, 505], [1025, 518], [1040, 528], [1055, 545], [1050, 560], [1025, 565], [1000, 560], [975, 552], [950, 548], [928, 552], [905, 558], [885, 560], [872, 548], [880, 528], [890, 508], [894, 488], [896, 468], [898, 448], [900, 430]]),
+      },
+      {
+        type: "lore",
+        label: "A miniature chapel beneath a glass dome",
+        text: "The candle behind its little window has burned at exactly the same height in every photograph on file, going back further than the glass itself has been catalogued.",
         shape: ellipse(296, 592, 62, 66),
       },
       {
         type: "lore",
         label: "A ballerina music box beneath the moon window",
         text: "The figure completes one full turn for every visitor who pauses here, never more, never fewer, by a count nobody has admitted to keeping.",
-        shape: polygon([[1416, 307], [1423, 307], [1427, 315], [1425, 323], [1430, 330], [1446, 348], [1440, 356], [1423, 360], [1420, 382], [1420, 398], [1412, 400], [1408, 398], [1407, 382], [1403, 360], [1392, 356], [1390, 348], [1402, 330], [1407, 323], [1405, 315]]),
+        shape: polygon([[1413, 306], [1428, 312], [1424, 322], [1443, 333], [1450, 344], [1452, 356], [1449, 365], [1428, 368], [1428, 400], [1452, 406], [1452, 410], [1385, 410], [1385, 406], [1408, 400], [1408, 368], [1387, 365], [1384, 352], [1387, 340], [1395, 330], [1408, 322], [1404, 312]]),
+      },
+      {
+        type: "lore",
+        label: "The crescent moon set into the cabinet glass",
+        text: "Etched, not painted, and always a little warmer to the touch than the glass around it, by a margin conservation can measure but not explain.",
+        shape: polygon([[1248, 220], [1260, 224], [1266, 233], [1266, 245], [1261, 255], [1252, 261], [1240, 262], [1228, 258], [1220, 249], [1218, 238], [1222, 228], [1232, 222]]),
       },
       {
         type: "lore",
@@ -649,6 +685,24 @@ const GALLERY_LAYOUT = [
         label: "A vase of peacock feathers",
         text: "Replaced each season from a bird nobody on staff has ever been asked to locate. The feathers never fade, and the vase has never once needed water.",
         shape: polygon([[1225, 405], [1245, 395], [1265, 398], [1280, 410], [1290, 440], [1292, 470], [1295, 500], [1290, 520], [1278, 535], [1260, 540], [1240, 538], [1222, 530], [1212, 515], [1208, 490], [1210, 460], [1215, 430]]),
+      },
+      {
+        type: "lore",
+        label: "A cloisonné globe on the upper shelf",
+        text: "No country on its surface matches a map conservation has been able to find, in any atlas from any year it could plausibly have been made.",
+        shape: polygon([[1585, 150], [1600, 145], [1615, 148], [1624, 160], [1626, 175], [1622, 190], [1610, 200], [1595, 200], [1584, 192], [1580, 178], [1580, 163]]),
+      },
+      {
+        type: "lore",
+        label: "A gilt puppet-theatre box, upper shelf",
+        text: "Smaller than the castle diorama by the door, and kept dark behind its own curtain — no visitor has reported the curtain open, though no photograph shows it being drawn shut either.",
+        shape: polygon([[1540, 88], [1562, 95], [1575, 105], [1580, 120], [1578, 170], [1582, 195], [1578, 215], [1555, 222], [1525, 222], [1500, 218], [1468, 210], [1465, 160], [1468, 120], [1478, 105], [1500, 95]]),
+      },
+      {
+        type: "lore",
+        label: "A gilt puppet-theatre box, lower shelf",
+        text: "Its curtain is always drawn exactly halfway, in every condition report since the box was acquired, regardless of who last checked it or when.",
+        shape: polygon([[1540, 258], [1565, 265], [1578, 278], [1582, 300], [1580, 350], [1583, 378], [1578, 398], [1555, 405], [1520, 405], [1490, 400], [1465, 390], [1460, 340], [1463, 295], [1472, 278], [1500, 265]]),
       },
       {
         type: "lore",
@@ -679,6 +733,12 @@ const GALLERY_LAYOUT = [
         label: "A second carousel, unglassed",
         text: "Its twin sits sealed under glass nearby; this one has no dome at all, and turns exactly as slowly, exactly as unexplainably.",
         shape: polygon([[578, 262], [613, 297], [602, 312], [608, 330], [599, 345], [597, 353], [507, 353], [503, 345], [500, 328], [503, 310], [502, 296]]),
+      },
+      {
+        type: "lore",
+        label: "A third carousel, domed on the far cabinet",
+        text: "A third of its kind, rotating on no schedule the other two share, as though each dome were keeping its own private time.",
+        shape: ellipse(1530, 655, 80, 80),
       },
       {
         type: "lore",
