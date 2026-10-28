@@ -2201,19 +2201,19 @@ a {
   filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.6));
 }
 
-/* A built-in museum object's dossier preview: a real CSS "sprite crop"
-   straight out of its own scene's gallery art (see public/app.js's
-   renderBuiltinObjectVisual) — background-size/background-position are set
-   inline per-object (derived from the object's own hand-traced shape's
-   bounding box), this rule only fixes the crop div itself to fill its
-   `.receipt-preview` container exactly, same as the curated-preset <img>
-   above fills it via object-fit. no-repeat is load-bearing: without it, a
-   crop region whose scaled background tiles instead of showing one clean
-   region of the actual painted item. */
+/* A built-in museum object's dossier preview: an inline SVG clipping the
+   real scene art to the object's own traced silhouette (see public/app.js's
+   renderBuiltinObjectVisual) — everything outside the clip stays
+   transparent, so `.receipt-preview`'s own dark radial-gradient background
+   shows through instead of a neighbouring painted object. `width`/`height`
+   only size the SVG viewport to fill `.receipt-preview` exactly; the SVG's
+   own `viewBox`/`preserveAspectRatio` (set inline, matching the object's
+   own aspect ratio) does the actual scaling, so the object is never
+   stretched independently on either axis. */
 .builtin-object-crop {
   width: 100%;
   height: 100%;
-  background-repeat: no-repeat;
+  display: block;
   border-radius: 4px;
 }
 

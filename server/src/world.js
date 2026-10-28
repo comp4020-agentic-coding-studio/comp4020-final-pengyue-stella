@@ -96,6 +96,35 @@ const ZOOM_CLOSEUP_VIEWBOX = "372 272 929 523";
 const PORTRAIT_REF_VIEWBOX = "0 0 419 398";
 const CABINET_REF_VIEWBOX = "0 0 494 398";
 
+// The exact native pixel size of each real image file in
+// public/assets/gallery-scenes/ — the single declared source of truth a
+// scene's own `sourceImage` field is built from below. This is NOT the same
+// thing as a shape's own `viewBox` (which, for the two zoom-reuse close-ups,
+// names only a cropped sub-window of a larger image — see
+// ZOOM_CLOSEUP_VIEWBOX above): the client's glow `<image>` element and
+// dossier "sprite crop" both need the real full image's own pixel
+// dimensions to size/scale correctly, regardless of what sub-window a
+// particular object's shape happens to be traced against. Measured directly
+// from each file; memento/specimen are 940px tall, one pixel short of the
+// 941 every shape coordinate in this file is still authored against
+// (SCENE_VIEWBOX) — an existing, imperceptible mismatch this table doesn't
+// attempt to correct, since fixing it would mean retracing every shape in
+// those two galleries, well outside this fix's scope.
+const SOURCE_IMAGE_SIZE = {
+  hall: { width: 1672, height: 941 },
+  portraits: { width: 1672, height: 941 },
+  memento: { width: 1672, height: 940 },
+  specimen: { width: 1672, height: 940 },
+  childhood: { width: 1672, height: 941 },
+  "portrait-reference": { width: 419, height: 398 },
+  "cabinet-reference": { width: 494, height: 398 },
+};
+
+function sourceImageViewBox(imageKey) {
+  const size = SOURCE_IMAGE_SIZE[imageKey];
+  return `0 0 ${size.width} ${size.height}`;
+}
+
 // Surface types a `placementSurfaces` entry can declare — each the kind of
 // real furniture/architecture a relic can actually rest against, not a
 // generic "slot."
@@ -928,6 +957,8 @@ function buildHallScenes() {
       parentSceneId: null,
       caption: "Entrance Hall",
       image: "hall",
+      sourceImage: SOURCE_IMAGE_SIZE.hall,
+      objectViewBox: sourceImageViewBox("hall"),
       camera: HALL_CAMERA,
       interactiveObjects: [donateObject, ...portalObjects, ...HALL_LORE_OBJECTS],
       visitorAnchors: HALL_VISITOR_ANCHORS,
@@ -960,11 +991,23 @@ function buildGalleryScenes(gallery) {
     parentSceneId: HALL_FACING_BY_GALLERY[gallery.id],
     caption: gallery.name,
     image: gallery.image,
+    sourceImage: SOURCE_IMAGE_SIZE[gallery.image],
+    objectViewBox: sourceImageViewBox(gallery.image),
     camera: DEFAULT_MAIN_CAMERA,
     interactiveObjects: objects,
     visitorAnchors: VISITOR_ANCHORS,
     nav: { back: { targetSceneId: HALL_FACING_BY_GALLERY[gallery.id], label: "Back to the Entrance Hall" } },
   };
+  // A close-up scene's `objectViewBox` is the SVG object-layer's own window
+  // onto the source image — it must match whatever crop/zoom the art layer's
+  // CSS actually shows (illustration.js's `paint()`), not just the source
+  // image's full native size. A `zoom` close-up reuses its gallery's main
+  // image at a CSS crop (ZOOM_CLOSEUP_VIEWBOX, see that constant's own
+  // derivation above); a dedicated-reference close-up shows that reference
+  // image's own full frame. `sourceImage`, by contrast, is always the real
+  // backing file's true native pixel size regardless of which window is
+  // shown — the glow `<image>` element needs that size to scale correctly
+  // even though the shapes themselves are authored in the cropped window.
   const closeupScene = {
     id: `${gallery.id}-closeup`,
     kind: "closeup",
@@ -972,6 +1015,8 @@ function buildGalleryScenes(gallery) {
     parentSceneId: `${gallery.id}-main`,
     caption: closeup.caption,
     image: closeup.image,
+    sourceImage: SOURCE_IMAGE_SIZE[closeup.image],
+    objectViewBox: closeup.zoom ? ZOOM_CLOSEUP_VIEWBOX : sourceImageViewBox(closeup.image),
     zoom: closeup.zoom ?? false,
     lore: closeup.lore,
     camera: closeup.closeupCamera ?? DEFAULT_CLOSEUP_CAMERA,

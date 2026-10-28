@@ -89,14 +89,14 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
     // slice"` (set once in index.html) matching the art's own `background-
     // size: cover; background-position: center` crop — the same "fill and
     // crop from the centre" behaviour, so a traced shape stays pixel-locked
-    // to the painted object it represents at every viewport size. Every
-    // interactive object in a scene shares one viewBox (the scene's own
-    // source image dimensions); take it from the first object that has one,
-    // falling back to the standard 1672x941 every illustration in this
-    // world is authored at.
+    // to the painted object it represents at every viewport size. The scene
+    // itself declares this window explicitly (`objectViewBox`, server/src/
+    // world.js) rather than it being inferred from whichever object happens
+    // to be first in the list — every object in a scene is traced against
+    // the same window regardless of list order, so inference was always
+    // fragile, not just wrong for the zoom close-ups it actually broke.
     const objectLayer = layer.querySelector(".object-layer");
-    const firstShape = scene.interactiveObjects?.find((o) => o.shape)?.shape;
-    objectLayer?.setAttribute("viewBox", firstShape?.viewBox ?? "0 0 1672 941");
+    objectLayer?.setAttribute("viewBox", scene.objectViewBox ?? "0 0 1672 941");
   }
 
   paint(front, current);

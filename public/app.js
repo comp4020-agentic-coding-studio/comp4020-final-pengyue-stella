@@ -2024,7 +2024,7 @@ function viewBoxSize(viewBoxStr) {
   return { width: parts[2] ?? 1672, height: parts[3] ?? 941 };
 }
 
-function buildShapeHotspot({ id, label, shape, hitPadding = 0, className, sceneImageKey }) {
+function buildShapeHotspot({ id, label, shape, hitPadding = 0, className, sceneImageKey, sourceImageSize }) {
   const g = document.createElementNS(SVG_NS, "g");
   g.setAttribute("class", `interactive-object ${className ?? ""}`.trim());
   g.setAttribute("tabindex", "0");
@@ -2054,14 +2054,20 @@ function buildShapeHotspot({ id, label, shape, hitPadding = 0, className, sceneI
   glowArt.setAttribute("class", "object-clip-art");
   glowArt.setAttributeNS("http://www.w3.org/1999/xlink", "href", sceneImageKey);
   glowArt.setAttribute("href", sceneImageKey);
-  // The <image> must cover the whole scene at its own native viewBox size
-  // (the same `shape.viewBox` every object in this scene shares) so the
-  // clip reveals the correct region of it — positioned at the scene's own
-  // origin regardless of this object's own bounds, which only matter for
-  // the clip shape itself. `preserveAspectRatio="xMidYMid slice"` matches
-  // the art layer's own `background-size: cover` crop, so the clipped
-  // region lines up with the painted item exactly as the base art does.
-  const { width, height } = viewBoxSize(shape.viewBox);
+  // The <image> must be sized to the REAL backing file's own native pixel
+  // dimensions (`sourceImageSize`, from the scene's own `sourceImage` field —
+  // server/src/world.js), never `shape.viewBox`: for a zoom close-up
+  // (childhood-closeup, specimen-closeup) the shape's own viewBox names only
+  // a cropped sub-window of the larger source image (ZOOM_CLOSEUP_VIEWBOX),
+  // and sizing the <image> to that sub-window's dimensions instead of the
+  // full image it's actually loading would scale the art wrong, dragging
+  // every clipped glow silhouette out of alignment with the painted object
+  // underneath it. Positioned at the scene's own origin regardless of this
+  // object's own bounds, which only matter for the clip shape itself.
+  // `preserveAspectRatio="xMidYMid slice"` matches the art layer's own
+  // `background-size: cover` crop, so the clipped region lines up with the
+  // painted item exactly as the base art does.
+  const { width, height } = sourceImageSize ?? viewBoxSize(shape.viewBox);
   glowArt.setAttribute("x", "0");
   glowArt.setAttribute("y", "0");
   glowArt.setAttribute("width", String(width));
@@ -2142,30 +2148,53 @@ function sceneImageUrl(scene) {
 }
 
 // ---------------------------------------------------------------------------
-// Built-in object dossier preview: a CSS "sprite crop" straight out of the
-// object's own scene art, rather than a generic procedural shape or an
-// arbitrary donated-relic preset image (the bug this task fixes). A
-// built-in exhibit's own `cropInfo` (server/src/db.js's fullExhibit, backed
-// by world.js's builtinObjectCropInfo) carries the owning sceneId + the
-// object's own hand-traced `shape` in that scene's 1672x941 viewBox — this
-// derives `background-position`/`background-size` percentages from that
-// shape's bounding box (server/src/geometry.js's `shapeBounds`, mirrored
-// client-side by world/geometry.js's own copy already imported above) so
-// the preview shows the EXACT real painted region, pixel for pixel,
-// scaled up so that region fills the container.
+// Built-in object dossier preview: the object's own real painted silhouette,
+// clipped straight out of its owning scene's art — the same "clip a
+// brightened copy of the real art to the exact traced shape" technique
+// `buildShapeHotspot`'s glow already uses, reused here so the dossier shows
+// ONLY the clicked object and never a neighbour that happened to sit inside
+// a padded bounding-box crop. A built-in exhibit's own `cropInfo`
+// (server/src/db.js's fullExhibit, backed by world.js's
+// builtinObjectCropInfo) carries the owning sceneId + the object's own
+// hand-traced `shape`, in that scene's own absolute image-pixel coordinate
+// space (the same space whichever `objectViewBox` window the scene declares
+// is itself just a *window* onto — see server/src/world.js's own comment on
+// ZOOM_CLOSEUP_VIEWBOX) — this reads the real full source image's own native
+// size from the scene's own `sourceImage` field, never a shape's own
+// (possibly cropped-window) viewBox.
 //
-// MARGIN pads the crop region outward by 18% of its own box size in each
-// dimension before computing background-size — several hand-traced
-// bounding boxes (e.g. a bust's plinth box, a mirror's tight ellipse) crop
-// right to the object's own silhouette with very little surrounding
-// context, which can read as an ambiguous close-up texture rather than a
-// recognisable object; a modest outward pad keeps a little of the
-// surrounding frame/shelf/wall in frame so the object still reads clearly
-// against its setting. 18% was chosen by spot-checking several objects
-// across different galleries (busts, the chandelier, mirrors, cabinets)
-// and is a single constant, not tuned per-object, so every builtin object
-// gets the same honest treatment.
-const BUILTIN_CROP_MARGIN = 0.18;
+// MARGIN pads the VIEWING WINDOW outward by a small fraction of the object's
+// own box size — just enough that the silhouette isn't touching the frame's
+// edge — not the visible content: the clip-path means nothing outside the
+// traced shape is ever visible regardless of this margin, so a small value
+// only affects how much breathing room the object gets inside the frame.
+const BUILTIN_CROP_MARGIN = 0.03;
+// The dossier preview's own fixed aspect ratio (.receipt-preview,
+// styles.css: `aspect-ratio: 420 / 260`) — the viewing window is grown
+// (never stretched) to match this ratio so a single uniform scale fills the
+// container exactly, the same way `object-fit: contain` does for the
+// curated-preset <img> this preview sits alongside.
+const BUILTIN_PREVIEW_ASPECT = 420 / 260;
+// The preview container's own max rendered width (`.receipt-preview`'s
+// `max-width: 380px`) — used as the upper bound for the magnification-cap
+// check below. The preview is never rendered larger than this, so capping
+// magnification against it is always at least as conservative as the real
+// on-screen size, including on narrower viewports.
+const BUILTIN_PREVIEW_REFERENCE_WIDTH = 380;
+// However small the traced object, the viewing window is never shrunk
+// below what keeps its magnification under this multiple of the source
+// image's own native resolution — beyond this, upscaling stops adding
+// anything but blur. Chosen the same way BUILTIN_CROP_MARGIN was (spot-
+// checking the smallest hand-traced objects — a locked drawer's handle, a
+// wilting rose at a frame's foot) against the point blur became obviously
+// worse than simply showing a little more real surrounding context.
+const BUILTIN_MAX_MAGNIFICATION = 6;
+
+function translateShape(shape, dx, dy) {
+  if (shape.type === "ellipse") return { ...shape, cx: shape.cx + dx, cy: shape.cy + dy };
+  if (shape.type === "polygon") return { ...shape, points: shape.points.map(([x, y]) => [x + dx, y + dy]) };
+  return shape;
+}
 
 function renderBuiltinObjectVisual(container, exhibit) {
   container.innerHTML = "";
@@ -2185,41 +2214,74 @@ function renderBuiltinObjectVisual(container, exhibit) {
     return;
   }
 
-  const { width: sceneWidth, height: sceneHeight } = viewBoxSize(cropInfo.shape.viewBox);
+  const { width: sceneWidth, height: sceneHeight } = scene.sourceImage ?? viewBoxSize(cropInfo.shape.viewBox);
   const b = shapeBounds(cropInfo.shape);
   const boxW = Math.max(1, b.maxX - b.minX);
   const boxH = Math.max(1, b.maxY - b.minY);
-  // Pad outward by BUILTIN_CROP_MARGIN of the box's own size, clamped to
-  // the scene image's own bounds so a near-edge object never asks for a
-  // crop region that would reach past the actual art.
-  const padX = boxW * BUILTIN_CROP_MARGIN;
-  const padY = boxH * BUILTIN_CROP_MARGIN;
-  const minX = Math.max(0, b.minX - padX);
-  const maxX = Math.min(sceneWidth, b.maxX + padX);
-  const minY = Math.max(0, b.minY - padY);
-  const maxY = Math.min(sceneHeight, b.maxY + padY);
-  const cropW = Math.max(1, maxX - minX);
-  const cropH = Math.max(1, maxY - minY);
+  const centerX = (b.minX + b.maxX) / 2;
+  const centerY = (b.minY + b.maxY) / 2;
 
-  const div = document.createElement("div");
-  div.className = "builtin-object-crop";
-  div.style.backgroundImage = `url(${sceneImageUrl(scene)})`;
-  // Scaling the FULL scene image up by (sceneWidth / cropW) horizontally
-  // and (sceneHeight / cropH) vertically makes the crop region exactly
-  // fill the container (background-size on the full image, not a sub-
-  // image) — then background-position places that scaled image so the
-  // crop region's own top-left lands at the container's own top-left.
-  // This is the standard CSS-sprite-crop technique: no server-side image
-  // cropping or new asset needed, just background-size/-position math
-  // derived from the shape's own bounding box.
-  const scaleX = sceneWidth / cropW;
-  const scaleY = sceneHeight / cropH;
-  div.style.backgroundSize = `${scaleX * 100}% ${scaleY * 100}%`;
-  const posX = cropW >= sceneWidth ? 0 : (minX / (sceneWidth - cropW)) * 100;
-  const posY = cropH >= sceneHeight ? 0 : (minY / (sceneHeight - cropH)) * 100;
-  div.style.backgroundPositionX = `${isFinite(posX) ? posX : 0}%`;
-  div.style.backgroundPositionY = `${isFinite(posY) ? posY : 0}%`;
-  container.appendChild(div);
+  let cropW = boxW * (1 + BUILTIN_CROP_MARGIN * 2);
+  let cropH = boxH * (1 + BUILTIN_CROP_MARGIN * 2);
+
+  // Grow (never stretch) the shorter dimension so the window's own aspect
+  // ratio matches the container's — a single uniform scale then fills it
+  // exactly, with no independent x/y scaling to distort the image.
+  if (cropW / cropH > BUILTIN_PREVIEW_ASPECT) {
+    cropH = cropW / BUILTIN_PREVIEW_ASPECT;
+  } else {
+    cropW = cropH * BUILTIN_PREVIEW_ASPECT;
+  }
+
+  // Cap magnification: widen the window further (showing more real
+  // surrounding context at the capped zoom level) rather than blow up the
+  // same few source pixels past the point of legibility.
+  const magnification = BUILTIN_PREVIEW_REFERENCE_WIDTH / cropW;
+  if (magnification > BUILTIN_MAX_MAGNIFICATION) {
+    const widen = magnification / BUILTIN_MAX_MAGNIFICATION;
+    cropW *= widen;
+    cropH *= widen;
+  }
+
+  // Clamp the window to the real image's own bounds — shifted back inside
+  // rather than shrunk, so a near-edge object still gets its full computed
+  // window size, centred as close to its own centroid as the image allows.
+  cropW = Math.min(cropW, sceneWidth);
+  cropH = Math.min(cropH, sceneHeight);
+  const minX = Math.min(Math.max(centerX - cropW / 2, 0), sceneWidth - cropW);
+  const minY = Math.min(Math.max(centerY - cropH / 2, 0), sceneHeight - cropH);
+
+  // An SVG (vector-scaled, so the browser rasterises the clipped image at
+  // whatever the container's real device-pixel size is, never a fixed
+  // intermediate resolution) with the real full scene image clipped to the
+  // object's own traced silhouette — everything outside it stays
+  // transparent, letting `.receipt-preview`'s own dark background show
+  // through instead of a neighbouring painted object.
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${cropW} ${cropH}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svg.setAttribute("class", "builtin-object-crop");
+
+  const clipId = nextClipId();
+  const defs = document.createElementNS(SVG_NS, "defs");
+  const clipPath = document.createElementNS(SVG_NS, "clipPath");
+  clipPath.setAttribute("id", clipId);
+  clipPath.appendChild(svgShapeNode(translateShape(cropInfo.shape, -minX, -minY)));
+  defs.appendChild(clipPath);
+  svg.appendChild(defs);
+
+  const image = document.createElementNS(SVG_NS, "image");
+  image.setAttributeNS("http://www.w3.org/1999/xlink", "href", sceneImageUrl(scene));
+  image.setAttribute("href", sceneImageUrl(scene));
+  image.setAttribute("x", String(-minX));
+  image.setAttribute("y", String(-minY));
+  image.setAttribute("width", String(sceneWidth));
+  image.setAttribute("height", String(sceneHeight));
+  image.setAttribute("clip-path", `url(#${clipId})`);
+  image.setAttribute("preserveAspectRatio", "xMidYMid slice");
+  svg.appendChild(image);
+
+  container.appendChild(svg);
 }
 
 // A built-in scene object (chandelier, guardian statue, portal door, etc.) —
@@ -2233,6 +2295,7 @@ function buildObjectGlow(object, scene) {
     hitPadding: object.hitPadding ?? 0,
     className: `interactive-object-${object.type}`,
     sceneImageKey: sceneImageUrl(scene),
+    sourceImageSize: scene.sourceImage,
   });
   attachHotspotBehaviour(node, { objectId, onActivate: () => handleObjectActivate(object) });
 
