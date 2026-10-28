@@ -39,6 +39,8 @@ function imageUrl(key) {
   return `/assets/gallery-scenes/${file}`;
 }
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
 // Builds (once per layer) the nested "room" structure a camera drives: the
 // art plane and the object/cameo plane share one transform (parallax 1.0,
 // so a glowing object hit-region can never visually drift off the painted
@@ -68,35 +70,61 @@ export function createIllustrationController({ layerA, layerB, world, onSceneCha
   });
   let backCamera = null;
 
+  // The art and the hotspot layer MUST share one coordinate system, not two
+  // independently-maintained ones: previously the art was a CSS `background-
+  // image` layer (`background-size: cover` normally, or a hand-derived
+  // `180%` + `50% 65%` for a `zoom` close-up) while the hotspot layer was an
+  // SVG `viewBox` + `preserveAspectRatio="xMidYMid slice"`. Both describe
+  // "fill the container, cropping from the centre of some window of the
+  // source image" — the SAME visual law — but CSS `background-size: X%`
+  // scales from the container's WIDTH only (then derives height to preserve
+  // the image's own aspect ratio), whereas SVG's `slice` fit scales by
+  // whichever of width/height needs the LARGER scale to cover the container
+  // (so it can crop either axis, not just the one left over from width).
+  // Those two scaling rules only produce the same crop at one specific
+  // container aspect ratio (here, ~1672:941, the source image's own ratio);
+  // at any other aspect ratio — a narrower window, a phone held upright —
+  // they diverge, and every close-up `<-closeup>` scene whose `zoom: true`
+  // reuses its gallery's own image at a CSS crop drifted further out of
+  // alignment the further the viewport got from that one ratio. This was
+  // the actual root cause behind every "hotspot is offset" report across
+  // multiple galleries, not a per-object tracing error — see
+  // docs/adr/0004-illustrated-scenes.md and the PR that added this fix for
+  // the full before/after measurement.
+  //
+  // The fix: render the art itself as an SVG `<image>`, inside an SVG whose
+  // own `viewBox`/`preserveAspectRatio` is set to the EXACT SAME values as
+  // the object layer's — not just "the same crop law," the same literal
+  // attribute values on both elements — so the browser's own single `slice`
+  // algorithm does the fitting for both layers identically. There is no
+  // longer a second, independently-expressed scaling rule for the art to
+  // drift out of sync with.
   function paint(layer, scene) {
     const { art } = roomLayers(layer);
-    art.style.backgroundImage = `url("${imageUrl(scene.image)}")`;
-    // A close-up scene flagged `zoom` reuses its gallery's own main image
-    // (no separate close-up photograph exists for every gallery) but crops
-    // in tighter and recentres — "focusing into a display" read from the
-    // same illustration rather than a second asset.
-    if (scene.zoom) {
-      art.style.backgroundSize = "180%";
-      art.style.backgroundPosition = "50% 65%";
-    } else {
-      art.style.backgroundSize = "cover";
-      art.style.backgroundPosition = "center";
+    const { width, height } = scene.sourceImage ?? { width: 1672, height: 941 };
+    const viewBox = scene.objectViewBox ?? `0 0 ${width} ${height}`;
+    art.setAttribute("viewBox", viewBox);
+    let image = art.querySelector("image");
+    if (!image) {
+      image = document.createElementNS(SVG_NS, "image");
+      image.setAttribute("preserveAspectRatio", "xMidYMid slice");
+      art.appendChild(image);
     }
+    const href = imageUrl(scene.image);
+    image.setAttributeNS("http://www.w3.org/1999/xlink", "href", href);
+    image.setAttribute("href", href);
+    image.setAttribute("x", "0");
+    image.setAttribute("y", "0");
+    image.setAttribute("width", String(width));
+    image.setAttribute("height", String(height));
+
     layer.dataset.sceneId = scene.id;
     layer.dataset.kind = scene.kind;
-    // The SVG object-shape layer shares the art's own source-image pixel
-    // coordinate system via `viewBox`, with `preserveAspectRatio="xMidYMid
-    // slice"` (set once in index.html) matching the art's own `background-
-    // size: cover; background-position: center` crop — the same "fill and
-    // crop from the centre" behaviour, so a traced shape stays pixel-locked
-    // to the painted object it represents at every viewport size. The scene
-    // itself declares this window explicitly (`objectViewBox`, server/src/
-    // world.js) rather than it being inferred from whichever object happens
-    // to be first in the list — every object in a scene is traced against
-    // the same window regardless of list order, so inference was always
-    // fragile, not just wrong for the zoom close-ups it actually broke.
+    // The object-shape layer shares the SAME viewBox as the art SVG above —
+    // this is what pixel-locks every traced hotspot to the painted item it
+    // represents at every viewport size, pan and zoom level.
     const objectLayer = layer.querySelector(".object-layer");
-    objectLayer?.setAttribute("viewBox", scene.objectViewBox ?? "0 0 1672 941");
+    objectLayer?.setAttribute("viewBox", viewBox);
   }
 
   paint(front, current);

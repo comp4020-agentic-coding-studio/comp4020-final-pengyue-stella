@@ -75,22 +75,24 @@ a {
   will-change: transform;
 }
 
+/* An <svg>, not a div with a CSS background-image: its own viewBox is the
+   scene's source-image pixel coordinate system (set per-scene in
+   illustration.js's `paint`) — the EXACT SAME viewBox the `.object-layer`
+   below is given, so both are fit by the browser's one `preserveAspectRatio
+   ="xMidYMid slice"` algorithm instead of two independently-expressed
+   scaling rules (CSS `background-size` vs SVG `viewBox` fitting) that only
+   agreed at one specific viewport aspect ratio. Width/height 100% is
+   required here because SVG defaults to its own intrinsic size otherwise,
+   unlike a div. */
 .scene-art {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
   background-color: #0a0908;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
 }
 
-/* Now an <svg>, not a div: its own viewBox is the scene's source-image
-   pixel coordinate system (set per-scene in illustration.js's `paint`), so
-   every traced object `<path>`/`<polygon>`/`<ellipse>` inside it is
-   authored in those same pixel units and stays aligned with the
-   `background-size: cover`-cropped art behind it via `preserveAspectRatio`
-   (set once in index.html). Width/height 100% is required here because SVG
-   defaults to its own intrinsic size otherwise, unlike a div. */
 .object-layer {
   position: absolute;
   inset: 0;

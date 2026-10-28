@@ -6,9 +6,10 @@
 //
 // Pan is 0-100 along the scene's own valid look-around range; zoom is a
 // multiplier over the scene's baseline "fit" framing. Both are applied as a
-// single CSS transform on the `.scene-art` layer; the pure math (clamping,
-// drag-to-pan conversion, inertia decay) lives in camera-math.js so it can
-// be unit-tested without a DOM.
+// single CSS transform on the `.scene-room` layer (art + object glows +
+// cameos all live inside it and move together — see illustration.js); the
+// pure math (clamping, drag-to-pan conversion, inertia decay) lives in
+// camera-math.js so it can be unit-tested without a DOM.
 import {
   clampPan,
   clampZoom,
