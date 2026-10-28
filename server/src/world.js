@@ -571,91 +571,91 @@ const GALLERY_LAYOUT = [
         label: "Look closer: The Shelf That Waits",
         text: "The shelf is dusted every week, the gap on the third row included, around whatever used to sit there.",
         closeupSceneId: "childhood-closeup",
-        shape: polygon([[470, 120], [650, 120], [650, 350], [470, 350]]),
+        shape: polygon([[478, 112], [700, 108], [702, 243], [480, 248]]),
       },
       {
         type: "lore",
         label: "A doll on the left",
         text: "It blinks on its own schedule, roughly once an hour, always when the gallery is otherwise empty of visitors. Staff have stopped checking.",
-        shape: polygon([[50, 230], [150, 230], [150, 380], [50, 380]]),
+        shape: polygon([[70, 257], [90, 256], [99, 263], [102, 278], [104, 298], [98, 318], [94, 333], [86, 348], [68, 348], [63, 333], [59, 313], [57, 293], [59, 274], [64, 262]]),
       },
       {
         type: "lore",
         label: "The waiting cot",
         text: "It is turned down fresh every morning. The nursery has had no occupant on record for longer than any living curator can confirm.",
-        shape: polygon([[1020, 460], [1210, 460], [1210, 620], [1020, 620]]),
+        shape: polygon([[1042, 438], [1078, 430], [1150, 427], [1192, 434], [1202, 458], [1198, 480], [1202, 520], [1198, 555], [1188, 570], [1150, 575], [1085, 573], [1050, 565], [1043, 540], [1038, 490]]),
       },
       {
         type: "lore",
         label: "A castle puppet-theatre diorama",
         text: "Wound once a century, according to the plaque, though no mechanism to wind it has ever been found. It has changed scenes twice in living memory, always overnight.",
-        shape: polygon([[215, 155], [390, 155], [390, 350], [215, 350]]),
+        shape: polygon([[180, 150], [360, 145], [365, 345], [175, 350]]),
       },
       {
         type: "lore",
         label: "A rocking horse worn smooth",
         text: "Its paint is worn through at the saddle and nowhere else, in a pattern consistent with decades of riding the collection has no record of ever permitting.",
-        shape: polygon([[160, 360], [310, 360], [310, 600], [160, 600]]),
+        shape: polygon([[90, 400], [150, 392], [195, 398], [225, 392], [245, 420], [238, 450], [225, 460], [228, 480], [235, 520], [225, 555], [205, 580], [195, 610], [165, 612], [170, 580], [150, 560], [120, 562], [100, 590], [80, 610], [60, 600], [70, 560], [85, 520], [78, 480], [88, 450], [75, 430]]),
       },
       {
         type: "lore",
         label: "A carousel beneath a glass dome",
         text: "It turns, very slowly, without a key, a motor, or a draft to explain it. Conservation has measured the rotation and confirmed only that it is consistent.",
-        shape: ellipse(305, 600, 110, 60),
+        shape: ellipse(296, 592, 62, 66),
       },
       {
         type: "lore",
         label: "A ballerina music box beneath the moon window",
         text: "The figure completes one full turn for every visitor who pauses here, never more, never fewer, by a count nobody has admitted to keeping.",
-        shape: polygon([[1375, 235], [1505, 235], [1505, 420], [1375, 420]]),
+        shape: polygon([[1416, 307], [1423, 307], [1427, 315], [1425, 323], [1430, 330], [1446, 348], [1440, 356], [1423, 360], [1420, 382], [1420, 398], [1412, 400], [1408, 398], [1407, 382], [1403, 360], [1392, 356], [1390, 348], [1402, 330], [1407, 323], [1405, 315]]),
       },
       {
         type: "lore",
         label: "A branched silver candelabra",
         text: "Its candles have never been lit, and never collect dust either, in a room where every other surface keeps a thin coat of it faithfully.",
-        shape: polygon([[780, 380], [850, 380], [850, 520], [780, 520]]),
+        shape: polygon([[788, 410], [800, 412], [798, 425], [808, 435], [815, 438], [822, 450], [820, 465], [812, 470], [815, 485], [805, 495], [795, 495], [798, 478], [790, 470], [782, 468], [780, 450], [786, 438], [782, 425]]),
       },
       {
         type: "lore",
         label: "A vase of peacock feathers",
         text: "Replaced each season from a bird nobody on staff has ever been asked to locate. The feathers never fade, and the vase has never once needed water.",
-        shape: polygon([[1225, 430], [1320, 430], [1320, 590], [1225, 590]]),
+        shape: polygon([[1225, 405], [1245, 395], [1265, 398], [1280, 410], [1290, 440], [1292, 470], [1295, 500], [1290, 520], [1278, 535], [1260, 540], [1240, 538], [1222, 530], [1212, 515], [1208, 490], [1210, 460], [1215, 430]]),
       },
       {
         type: "lore",
         label: "A dark trunk bound in gilt",
         text: "Logged in every inventory as 'empty, pending contents.' It has been logged that way since the gallery opened, and no curator has thought to correct it.",
-        shape: polygon([[555, 565], [735, 565], [735, 675], [555, 675]]),
+        shape: polygon([[550, 558], [565, 545], [583, 543], [596, 552], [600, 562], [610, 565], [622, 575], [628, 588], [625, 600], [630, 610], [635, 625], [628, 638], [615, 635], [600, 635], [585, 645], [570, 652], [558, 648], [548, 633], [545, 613], [536, 598], [533, 580], [540, 566]]),
       },
       {
         type: "lore",
-        label: "A painted round-topped chest",
-        text: "The painted scene on its lid changes very slightly between inventories — a window open that was shut, a figure a few steps further along a path — never enough that two staff members agree it happened at all.",
-        shape: polygon([[1005, 660], [1135, 660], [1135, 770], [1005, 770]]),
+        label: "A painted chest, angled on its base",
+        text: "The painted scene on its front changes very slightly between inventories — a window open that was shut, a figure a few steps further along a path — never enough that two staff members agree it happened at all.",
+        shape: polygon([[786, 590], [828, 585], [831, 598], [830, 667], [823, 676], [791, 676], [782, 667], [781, 602]]),
       },
       {
         type: "lore",
-        label: "A small music box left on the table",
+        label: "A jeweled music box, globed in gold",
         text: "It plays a lullaby nobody has been able to name, in a key no two listeners transcribe the same way.",
-        shape: polygon([[35, 755], [165, 755], [165, 870], [35, 870]]),
+        shape: ellipse(183, 687, 33, 32),
       },
       {
         type: "lore",
         label: "The worn teddy bear on the shelf",
         text: "Seated in the same spot every morning regardless of who last moved it the evening before — staff have stopped noting it in the handover log.",
-        shape: polygon([[505, 378], [590, 378], [590, 450], [505, 450]]),
+        shape: polygon([[515, 415], [555, 398], [585, 410], [598, 440], [597, 470], [513, 472], [500, 445]]),
       },
       {
         type: "lore",
         label: "A second carousel, unglassed",
         text: "Its twin sits sealed under glass nearby; this one has no dome at all, and turns exactly as slowly, exactly as unexplainably.",
-        shape: polygon([[505, 255], [615, 255], [615, 345], [505, 345]]),
+        shape: polygon([[495, 258], [690, 255], [692, 352], [493, 355]]),
       },
       {
         type: "lore",
         label: "A doll behind the cabinet glass",
         text: "Catalogued separately from the doll on the opposite shelf, though conservation's own notes describe them in identical handwriting, word for word, down to the punctuation.",
-        shape: polygon([[1560, 250], [1655, 250], [1655, 420], [1560, 420]]),
+        shape: polygon([[1600, 265], [1610, 268], [1615, 280], [1613, 292], [1618, 305], [1616, 320], [1618, 335], [1613, 350], [1618, 358], [1600, 362], [1588, 358], [1592, 345], [1588, 330], [1590, 310], [1586, 295], [1590, 280], [1593, 270]]),
       },
     ],
     closeupObjects: [
@@ -663,19 +663,19 @@ const GALLERY_LAYOUT = [
         type: "lore",
         label: "The worn teddy bear",
         text: "Mended the same way, by the same uneven stitch, every time the seam reopens — though no conservator currently on staff has ever been asked to do the mending.",
-        shape: polygon([[500, 380], [600, 380], [600, 520], [500, 520]], ZOOM_CLOSEUP_VIEWBOX),
+        shape: polygon([[522, 415], [595, 415], [595, 508], [522, 508]], ZOOM_CLOSEUP_VIEWBOX),
       },
       {
         type: "lore",
         label: "The second rocking horse, further back",
         text: "Identical to the one nearer the door, down to the same worn saddle patch, though the ledger lists only a single horse ever acquired.",
-        shape: polygon([[870, 390], [1030, 390], [1030, 580], [870, 580]], ZOOM_CLOSEUP_VIEWBOX),
+        shape: polygon([[878, 400], [1028, 400], [1028, 572], [878, 572]], ZOOM_CLOSEUP_VIEWBOX),
       },
       {
         type: "lore",
         label: "The crib's carved headboard",
         text: "Carved with a lullaby in a script the museum's own linguists have never fully translated, past the first and last lines.",
-        shape: polygon([[1070, 330], [1230, 330], [1230, 460], [1070, 460]], ZOOM_CLOSEUP_VIEWBOX),
+        shape: polygon([[1070, 435], [1238, 435], [1238, 540], [1070, 540]], ZOOM_CLOSEUP_VIEWBOX),
       },
     ],
   },
@@ -773,7 +773,7 @@ export function surfaceById(galleryId, surfaceId) {
 // left, distinct from the chained guestbook on the far right (its own
 // `lore` object below).
 export const DONOR_COUNTER = { x: 7, z: 62 };
-const DONOR_COUNTER_SHAPE = polygon([[30, 430], [310, 430], [310, 700], [30, 700]]);
+const DONOR_COUNTER_SHAPE = polygon([[10, 455], [290, 440], [300, 600], [300, 700], [15, 700], [5, 600]]);
 
 export function hallConfig() {
   return { image: "hall", donorCounter: DONOR_COUNTER };
@@ -796,10 +796,18 @@ export function hallConfig() {
 // every polygon below was traced against actual pixel positions in the
 // approved hall image, not a generic placeholder box.
 const HALL_PORTALS = [
-  { galleryId: "portraits", doorShape: polygon([[318, 385], [396, 385], [396, 580], [318, 580]]) },
-  { galleryId: "memento", doorShape: polygon([[480, 422], [680, 422], [680, 640], [480, 640]]) },
-  { galleryId: "specimen", doorShape: polygon([[970, 422], [1190, 422], [1190, 640], [970, 640]]) },
-  { galleryId: "childhood", doorShape: polygon([[1300, 270], [1410, 270], [1410, 420], [1300, 420]]) },
+  {
+    galleryId: "portraits",
+    doorShape: polygon([
+      [350, 335], [380, 345], [400, 400], [405, 430], [405, 600], [300, 600], [300, 430], [305, 400], [325, 345],
+    ]),
+  },
+  { galleryId: "memento", doorShape: polygon([[503, 385], [650, 385], [650, 655], [503, 655]]) },
+  { galleryId: "specimen", doorShape: polygon([[1000, 390], [1150, 390], [1150, 655], [1000, 655]]) },
+  {
+    galleryId: "childhood",
+    doorShape: polygon([[1350, 195], [1300, 245], [1298, 440], [1415, 440], [1413, 245]]),
+  },
 ];
 
 // galleryId -> the hall as "back" target for a gallery whose doorway isn't
@@ -819,52 +827,79 @@ const HALL_LORE_OBJECTS = [
     type: "lore",
     label: "The tiered chandelier",
     text: "Every candle on the lowest tier burns down at the same rate, night after night, regardless of how many visitors pass beneath it. The upper two tiers have never been lit in any record staff can find.",
-    shape: ellipse(805, 95, 195, 95),
-    hitPadding: 12,
+    shape: ellipse(805, 100, 215, 105),
+    hitPadding: 8,
   },
   {
     id: "hall-guardian-left",
     type: "lore",
     label: "The left guardian",
     text: "Catalogued as a griffin, though no two inventories describe the same number of wings. It faces the staircase in every photograph taken of this hall since the museum opened — except one, filed separately, which nobody will say where it is now.",
-    shape: polygon([[400, 130], [560, 130], [560, 420], [400, 420]]),
+    shape: polygon([
+      [452, 118], [470, 120], [495, 145], [500, 168], [518, 192], [508, 212], [515, 250], [524, 288],
+      [503, 328], [492, 356], [428, 358], [398, 340], [383, 303], [383, 248], [388, 188], [408, 148], [428, 122],
+    ]),
+    hitPadding: 3,
   },
   {
     id: "hall-guardian-right",
     type: "lore",
     label: "The right guardian",
     text: "Its twin, supposedly. Conservation measured a half-centimetre difference in wingspan between the two in 1964 and has re-measured every decade since. The difference has never been the same number twice.",
-    shape: polygon([[1115, 130], [1290, 130], [1290, 420], [1115, 420]]),
+    shape: polygon([
+      [1205, 188], [1242, 200], [1235, 228], [1270, 138], [1332, 160], [1322, 280], [1290, 332],
+      [1278, 340], [1272, 405], [1172, 408], [1148, 370], [1150, 298], [1160, 250], [1175, 205],
+    ]),
+    hitPadding: 3,
   },
   {
     id: "hall-compass",
     type: "lore",
     label: "The floor compass mosaic",
     text: "A star-and-compass mosaic set directly before the stair. Cleaning staff report it is always faintly warm to the touch, in every season, regardless of the hall's own temperature.",
-    shape: ellipse(845, 790, 290, 145),
+    shape: ellipse(845, 785, 345, 135),
   },
   {
     id: "hall-map",
     type: "guide",
     label: "The antique map",
     text: "A folded map of a coastline that matches no surveyed country. It has been re-folded along the same creases for as long as anyone has worked here, though no one admits to doing it.",
-    shape: polygon([[1295, 445], [1455, 445], [1455, 625], [1295, 625]]),
-    hitPadding: 10,
+    shape: polygon([[1352, 438], [1452, 445], [1458, 610], [1300, 618], [1295, 452]]),
+    hitPadding: 6,
   },
   {
     id: "hall-clock",
     type: "lore",
     label: "The mechanical clock",
     text: "A brass-and-wood clock that keeps correct time, checked against the city's own civic clock every month without fail. Staff still avoid being alone with it at the top of the hour.",
-    shape: polygon([[1470, 180], [1645, 180], [1645, 460], [1470, 460]]),
+    shape: polygon([
+      [1582, 243], [1592, 255], [1588, 278], [1620, 288], [1648, 300], [1655, 330], [1652, 420], [1650, 480],
+      [1652, 560], [1640, 600], [1495, 600], [1490, 560], [1488, 480], [1486, 420], [1492, 330], [1500, 300],
+      [1528, 288], [1562, 278], [1558, 255],
+    ]),
+    hitPadding: 2,
   },
   {
     id: "hall-guestbook",
     type: "lore",
     label: "The chained guestbook",
     text: "Chained to its podium, like a book meant never to leave, though several names inside are of visitors who the front desk has no record of ever admitting.",
-    shape: polygon([[1480, 525], [1655, 525], [1655, 750], [1480, 750]]),
-    hitPadding: 10,
+    shape: polygon([
+      [1495, 600], [1640, 600], [1648, 615], [1648, 640], [1660, 660], [1660, 840],
+      [1440, 840], [1440, 660], [1450, 640], [1450, 615],
+    ]),
+    hitPadding: 4,
+  },
+  {
+    id: "hall-angel",
+    type: "lore",
+    label: "The watching angel",
+    text: "Perched above the stair on its own pedestal, wings half-spread as though it only just landed there. Night staff swear its shadow falls the wrong way for where the moon window sits, and no one has ever caught it mid-turn, only ever already turned.",
+    shape: polygon([
+      [815, 335], [838, 330], [850, 345], [866, 355], [858, 365], [845, 362], [840, 380], [835, 400],
+      [832, 432], [800, 434], [795, 405], [792, 385], [785, 362], [772, 365], [760, 355], [775, 342], [790, 333], [800, 336],
+    ]),
+    hitPadding: 3,
   },
 ];
 
