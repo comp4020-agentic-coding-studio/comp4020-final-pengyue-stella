@@ -5,6 +5,26 @@ and its spec are on the course website, along with the specs for crits 8, 9 and
 10, which run in this repo. The brief poses the problem; the spec is the fixed
 contract.
 
+## What these checks protect
+
+The project's definition of good is a **participatory, living museum**:
+visitors discover objects, encounter competing interpretations, and leave
+durable contributions for later visitors. The app is not good merely because
+its endpoints respond or its Gothic artwork renders. These specs protect the
+mechanical invariants that make that experience trustworthy:
+
+- accounts can challenge one another without erasing prior accounts;
+- votes, donations, ownership changes, and free placements are durable and
+  broadcast only after their database transaction commits;
+- named ghost presence and Séance interactions are visible only to the right
+  logical room and never expose a visitor's raw identity;
+- built-in and visitor-donated objects use the same dossier model;
+- illustrated-object shapes, bounded camera movement, accessible controls,
+  and compatible placement surfaces preserve the authored museum experience.
+
+Tests can prove these contracts hold. Human walkthroughs still decide whether
+the resulting participation, atmosphere, and discovery are actually good.
+
 ## What ships
 
 `invariants.test.ts` checks the two things the course relies on:

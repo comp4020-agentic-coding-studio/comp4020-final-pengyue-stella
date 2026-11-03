@@ -1,244 +1,191 @@
 # Design — The Cursed Museum
 
-Source of creative truth: `design/The_Cursed_Museum_Project_Blueprint.pdf`.
-This file is the working translation of that blueprint into a buildable
-contract; where the two disagree, the blueprint wins unless a binding course
-constraint (see `PROCESS.md`) forces a change, in which case the change and
-its reason are recorded here.
+This is the current product contract. Historical pivots and their reasons are
+recorded in `docs/adr/`, `PROCESS.md`, and `reflections/`.
+
+## Design standard
+
+The Cursed Museum should feel like a **participatory, living museum**. Its
+central loop is discovery → interpretation → contribution → persistence:
+
+1. a visitor discovers an object embedded in a distinctive Gothic room;
+2. its dossier exposes an account and the context around it;
+3. the visitor encounters other interpretations and may contribute or vote;
+4. the resulting record remains available to later visitors.
+
+Multiplayer presence, the Séance, donation, voting, archival provenance, and
+visual atmosphere all serve this one loop. None should turn into a generic
+chat, CRUD form, or navigation menu detached from the museum.
 
 ## Visual identity
 
-Gothic cabinet of curiosities / Victorian wunderkammer: warm amber light in
-deep shadow, dark carved wood, brass fittings, crowded glass cases, aged
-parchment. Never gore or cheap horror; the unease is in suggestion and
-accumulation (how much is in the room, how it's lit), not shock.
+The visual language is a Gothic cabinet of curiosities / Victorian
+wunderkammer: warm amber light in deep shadow, dark carved wood, brass
+fittings, crowded glass cases, aged parchment, and dried-rose accents. The
+unease comes from suggestion and accumulation rather than gore or shock.
 
-| Role | Hex | Use |
-| --- | --- | --- |
-| Obsidian | `#11100F` | Deepest backgrounds, void beyond the walls |
-| Mahogany | `#35251C` | Architecture, floors, wood props |
-| Antique brass | `#88653D` | Ornament, metal trim, frame edges |
-| Old gold | `#C6A16B` | Highlights, interactive glow, focus rings |
-| Parchment | `#E9DDC5` | Text, dossier paper, UI panels |
-| Dried rose | `#663D43` | Disputes, warnings, "Definitely Cursed" |
+- **Obsidian `#11100F`:** deepest backgrounds and the void beyond rooms.
+- **Mahogany `#35251C`:** architecture, furniture, and supporting surfaces.
+- **Antique brass `#88653D`:** ornament, borders, and inactive controls.
+- **Old gold `#C6A16B`:** interactive glow, focus rings, and highlights.
+- **Parchment `#E9DDC5`:** dossier paper and long-form text.
+- **Dried rose `#663D43`:** disputes, warnings, and social accents.
 
-Typography: a serif display face for titles and brass nameplates, a neutral
-accessible sans for forms and long archival text (system font stacks —
-Georgia/Cormorant-style serif, system-ui sans — rather than a webfont
-dependency, since nothing here needs licensing risk for a four-gallery demo).
+Titles use a display serif; forms and archival text use a readable system
+sans. Lighting is authored into each illustration, giving every gallery a
+distinct atmosphere without a live 3D lighting engine.
 
-Lighting in the 3D world is a handful of warm point lights per room (per-room
-colour-graded ambient + 2–4 lamps), not one flat scene light, so the rooms
-read as distinct even built from the same modular geometry kit.
+## World and camera model
 
-## World model — one shared graph, illustrated scenes
+The museum is a server-authored graph of illustrated scenes in
+`server/src/world.js`: one Entrance Hall, a main scene for each of four
+galleries, and optional close-up scenes. The Hall connects the four rooms
+through visible doors and the persistent Floor Plan.
 
-The museum is a small, server-defined graph of **scenes**
-(`server/src/world.js`'s `GALLERY_LAYOUT`/`buildHallScenes`/
-`buildGalleryScenes`): the Entrance Hall (one of four "facings," turned
-between — see below), a main establishing view per gallery, and a close-up
-view per gallery aimed at its own hero display. Each scene carries a
-full-bleed illustration (`public/assets/gallery-scenes/`) and a list of
-**hotspots** — door, closeup, back, donate, lore, and every donated
-exhibit currently displayed there. See
-`docs/adr/0004-illustrated-scenes.md` for the decision to present scenes
-this way instead of as a live Three.js room (ADR 0003's version), and
-`docs/adr/0003-scene-exploration.md` for the earlier decision this
-extends: click-driven navigation between fixed vantages, not free-roam.
+Each scene includes:
 
-- **Turning** (the hub's only multi-exit case) is a cross-slide between
-  two illustrations — standing in place, turning to face a different
-  doorway.
-- **Every other navigation** (entering a gallery, looking closer, going
-  back) is a page-turn/cabinet-door cut: the incoming scene rotates in
-  from a hinge edge over the outgoing one.
+- a full-bleed source image and its native dimensions;
+- bounded `minPan`, `maxPan`, `minZoom`, and `maxZoom` camera settings;
+- SVG shapes traced over real painted objects;
+- quiet edge navigation to another scene or back;
+- scene-specific anchors for other visitors' ghosts;
+- real wall, shelf, cabinet, tabletop, or plinth shapes where donations may
+  be placed.
 
-Both transitions collapse to a near-instant swap under
-`prefers-reduced-motion`. There is no collision model and no camera a
-visitor steers — a scene is, by construction, always the exact view
-someone illustrated.
+The client applies a single CSS 2.5D transform to the illustration and every
+spatial layer above it. Drag/swipe and horizontal trackpad gestures pan;
+wheel/pinch and `+`/`-` zoom. Bounds prevent the illustration from being
+dragged beyond its authored view. This is deliberately not a claimed 360°
+panorama or collision-based 3D world.
 
-Floors, doors, and the four galleries are still static server-side config
-(not donated/user content), each with a stable `galleryId`. Each gallery
-still exposes a small number of **display slots** — predefined `{x, z}`
-percentage anchors (of the illustration's width/height) where a donated
-exhibit's card is positioned — enough per gallery that the opening room
-never looks sparse, with a documented behaviour for when a gallery's slots
-are all full (see Interaction below).
-
-Hotspots and exhibit cards are real, always-visible, focusable elements,
-positioned from their server-given percentage anchor — the same control a
-mouse clicks, a finger taps, or Tab+Enter reaches, with no separate
-raycast-under-cursor path to keep in sync.
+Interactive objects are transparent, focusable SVG controls whose geometry
+matches the item in the source art. Their exact silhouette glows on hover,
+focus, or touch. A padded invisible hit target improves accessibility without
+turning the glow back into a visible rectangular button.
 
 ## Exhibition architecture
 
-| Gallery | Theme | Staging |
-| --- | --- | --- |
-| I. The Portraits That Watch | Ambiguous portraits, identity | Framed portraits on walls, a worn runner rug |
-| II. Objects That Remember | Impossible provenance | Pedestal cases, a long table of small relics |
-| III. The Cabinet of Impossible Life | Unreliable natural history | Glass vitrines, specimen jars on shelving |
-| IV. The Forgotten Childhood | Unsettling toys | Velvet-topped plinths, shelved dolls and music boxes |
+- **The Portraits That Watch:** ambiguous portraits and identity; wall-based
+  donated paintings.
+- **Objects That Remember:** impossible provenance; shelves, cabinets, and
+  tabletops for small relics.
+- **The Cabinet of Impossible Life:** unreliable natural history; glass cases,
+  shelves, and plinths for specimens.
+- **The Forgotten Childhood:** unsettling toys; shelves, tables, and plinths
+  for dolls, books, and music boxes.
 
-Galleries connect off a central Entrance Hall (the default scene, donor
-counter, shared presence first impression). Each gallery has a sign naming
-it, a doorway hotspot back to the hall, and enough non-interactive clutter
-(generated prop instances, not hand-placed one by one) to read as inhabited
-rather than empty.
+The Entrance Hall is the shared first impression and onboarding space. Its
+physical map opens the Museum Guide; the `?` control opens the same guide, and
+**Rooms** opens it directly on the Floor Plan.
 
-## Core loops
+## Core interactions
 
-**Visitor journey.** Enter a display name → arrive in the Entrance Hall →
-turn to face a gallery doorway → click it → a crafted establishing shot of
-the gallery, its donated exhibits glowing → click an exhibit's label →
-dossier overlay opens → read competing accounts, vote, or add a new account
-→ Esc → back in the scene, now aware the archive just changed under other
-visitors too. A gallery's own close-up hotspot cuts to a tighter shot of its
-hero display, with a short environmental-lore popover, before a "back"
-hotspot returns to the main shot.
+### Inspect and interpret
 
-**Donate a relic.** A persistent "Donate a Relic" action is reachable from
-every main scene, not only the in-world donor counter (kept as an
-atmospheric secondary entrance). The form collects: gallery, category
-(portrait / memento / specimen / toy — one per gallery), title,
-one-sentence origin claim, donor display name, and a specific open display
-slot in that gallery (occupied slots are not offered). The server validates
-the gallery/category/slot combination inside one transaction, creates the
-exhibit, and broadcasts `exhibit.created` to every connected client, who
-render its dimensional display card at that slot without a page reload. A
-receipt overlay with a live rendered preview follows, offering "View My
-Relic" — a scene cut straight to the donated exhibit's gallery, landing on
-its dossier.
+Built-in museum objects, Founding Collection exhibits, and visitor donations
+all resolve to the same dossier model. A dossier contains provenance, an
+original account, later accounts in chronological order, the relationship
+between a challenge and its target, and each account's votes.
 
-**Find and inspect a relic.** A persistent "Archive" action lists every
-exhibit grouped by gallery, each with its number and current classification,
-so a visitor can find one without knowing which room it's in; selecting one
-navigates there and opens its dossier directly. Every real exhibit also
-renders in its gallery as a framed, dimensional display card (a small live
-preview of its 3D model, title, donor), with hover/focus lifting it and
-dimming its neighbours. Clicking a card opens the dossier: exhibit number,
-the same live preview, title, gallery, donor, every account in chronological
-order each tagged *Original Account / New Testimony / Contradiction /
-Proposed Revision / Counter-Evidence*, each account's own vote tally and the
-visitor's own current vote, and an "Add Counter-Evidence" action. Esc
-returns to the scene underneath. The overlay is reachable and operable by
-Tab/Enter alone.
+Publishing testimony, contradiction, revision, or counter-evidence always
+creates a new account row. It never mutates or deletes the challenged account.
+One active vote is stored per `(account_id, visitor_id)` and may be changed.
+The three verdicts are **Believable**, **Suspicious**, and **Definitely
+Cursed**; ties render as **Disputed**, while an account with no votes remains
+**Unclassified**.
 
-**Rewrite history.** Publishing a new account never mutates or removes an
-existing row. A new account optionally carries `challengedAccountId`,
-pointing at the account it disputes; the exhibit's "currently accepted"
-account is a derived pointer (highest `Believable`-weighted vote total among
-accounts with no higher-voted account between them in time) recomputed on
-each vote change, not a field anyone writes directly — so the audit trail
-(every account, every vote) is always the complete, honest history, and the
-"accepted" label is a view over it, not the archive itself.
+Built-in objects use cropped details from their own scene art in the dossier.
+Donated relics use their chosen curated illustration. A marquee object may
+also offer **Inspect Closer**, which enters its authored close-up scene.
 
-**Verdicts.** One active vote per `(accountId, visitorId)` pair —
-`Believable | Suspicious | Definitely Cursed` — upserted, not duplicated,
-so changing your mind just changes the row. A tied top verdict renders as
-**Disputed** rather than picking a winner arbitrarily. An account with no
-votes shows **Unclassified**, never a default verdict.
+### Donate and place a relic
 
-**A donor manages their own relic.** Ownership is the HttpOnly visitor
-cookie that made the donation (`exhibits.donor_visitor_id`), never the
-free-text donor display name — a dossier only shows Edit/Withdraw to the
-cookie that actually donated it, checked server-side on every request, not
-inferred client-side. Editing the title is a direct field update; editing
-the origin claim goes through the same account-revision mechanism a
-counter-evidence submission uses, so an edited description is a new
-account row, never an overwrite of the original. Withdrawing is a
-transactional soft delete: the exhibit stops appearing anywhere (room,
-archive, dossier) for every visitor, its display slot is released for a
-new donation in the same transaction, and its accounts/votes/event history
-are kept forever, never deleted — broadcast to every connected client only
-after the delete commits. A built-in or Founding Collection exhibit has no
-recorded owner and never exposes these controls to anyone.
+**Donate a Relic** is available from the main interface. The donor chooses one
+of four curated appearances; that choice fixes the compatible gallery,
+category, subtype, and physical surface types. The donor then provides a
+title, one-sentence origin claim, and donor name.
 
-## Primary domain tables
+After selecting **Place Relic**, the visitor enters the destination scene with
+a draggable preview. Only compatible placement surfaces glow. The client
+snaps the preview to the surface, but the server is authoritative: it verifies
+the gallery, visual preset, subtype, surface, normalized `u`/`v` point, scale,
+surface containment, collision distance, and one internal capacity slot in a
+single transaction. After commit, an SSE event makes the relic appear in the
+room and Archive for other visitors without a reload.
 
+`display_slots` remain in the database as an internal capacity, uniqueness,
+and backwards-compatibility mechanism. They are not visitor-facing placement
+boxes. Older slot-only exhibits receive a stable derived surface position.
+
+### Manage a donated relic
+
+Ownership is tied to the HttpOnly visitor cookie that created a donation, not
+the free-text donor name. Only that visitor can edit or withdraw it.
+
+Changing the title updates the exhibit. Changing the origin claim publishes a
+new revision account so the original claim remains visible. Withdrawal is a
+transactional soft delete: the exhibit disappears from ordinary room,
+Archive, and dossier reads; its historical rows remain in SQLite; and its
+internal capacity slot becomes reusable. Built-in and Founding Collection
+objects never expose owner controls.
+
+### Encounter other visitors
+
+Each visitor chooses a display name and one of three illustrated apparition
+forms. Other visitors in the same logical room appear as named ghosts at
+scene-specific anchors; the current visitor is not rendered in their own
+first-person view. Main and close-up scenes for one gallery share a logical
+room even though their visual anchors differ.
+
+Selecting a ghost opens the room-scoped **Séance**. It supports short messages,
+a fixed reaction vocabulary, threaded replies, and wordless reach-outs. These
+events are ephemeral and delivered only to other visitors currently in the
+same logical room. This makes co-presence visible without adding a permanent,
+museum-wide social feed to the archive.
+
+### Find rooms and records
+
+The architectural Floor Plan shows the current visitor, other connected
+visitors, and room occupancy as distinct markers. Selecting a room navigates
+there. The Archive lists every active built-in, founding, and donated exhibit
+by gallery and opens any dossier directly.
+
+## Data and realtime model
+
+The durable domain is SQLite in WAL mode:
+
+```text
+visitors       id, display_name, created_at, last_seen_at
+galleries      id, name, category, order_index
+display_slots  id, gallery_id, occupied_exhibit_id, legacy anchor fields
+exhibits       gallery/slot, category/subtype, title/donor, surface/u/v/scale,
+               visual/origin/ownership fields, close-up link, deleted_at
+accounts       exhibit, challenged/parent account, kind, body, author, time
+votes          account, visitor, verdict, updated_at; unique per visitor/account
+events         actor, event type, JSON payload, time
 ```
-visitors        id, display_name, created_at, last_seen_at
-galleries       id, name, order_index              -- static config, not writable via API
-display_slots   id, gallery_id, x, z, rotation_y, occupied_exhibit_id
-exhibits        id, gallery_id, slot_id, category, title, donor_id, created_at
-accounts        id, exhibit_id, parent_id, kind, body, author_id, created_at
-votes           id, account_id, visitor_id, verdict, updated_at
-events          id, actor_id, event_type, payload_json, created_at
-```
 
-`galleries` and each gallery's `display_slots` are seeded once at startup
-from static config (see `server/src/world.js`) and never created via the
-public API — only their `occupied_exhibit_id` changes, inside the same
-transaction that creates the exhibit claiming them. `votes` is unique on
-`(account_id, visitor_id)`; a repeat vote is an `UPDATE`, enforced at the
-database layer, not just in application code. `events` is an append-only
-audit trail, written alongside every exhibit/account/vote write in the same
-transaction, used only to recover/replay state after a reconnect — never
-edited.
+Every durable mutation commits before it is broadcast. One Server-Sent Events
+hub distributes exhibit, account, vote, ownership, presence, focus, and
+Séance events. Presence, focus, and Séance transcripts are deliberately
+ephemeral and held only for connected sessions; museum records are durable.
 
-Scene presence is **not** written to SQLite at all: which scene each
-visitor currently has open is relayed over the live SSE channel only,
-held in memory per connected visitor (see
-`docs/adr/0003-scene-exploration.md`).
+Visitor identity is an HttpOnly cookie. A public non-reversible key is used in
+presence payloads so another browser can recognise a reconnecting ghost
+without receiving the raw identity.
 
-## Realtime and persistence
+## Safety, accessibility, and limits
 
-**Transport.** One shared Server-Sent Events hub (`GET /api/events`),
-reused from the prior project's proven architecture: every connected browser
-holds one open stream; the server writes `scene-presence`, `exhibit`,
-`account`, `vote`, and `activity` events to all of them. Presence is
-scene-scoped, not a continuous position: a visitor reports which fixed scene
-they're currently viewing over a plain rate-limited `POST /api/presence`
-whenever they navigate, and the server rebroadcasts a live per-scene
-headcount plus a roster of that scene's visible cameos — each only a
-stable, non-reversible public key and display name, never the raw visitor
-cookie (`identity.js`'s `publicKeyFor`, `sse.js`'s `visitorsInScene`). See
-`docs/adr/0002-transport.md` for the original transport decision,
-`docs/adr/0003-scene-exploration.md` for scene-scoped presence, and
-`docs/adr/0004-illustrated-scenes.md` for restoring visible cameos on top
-of it.
-
-**Persistence.** SQLite via Node's built-in `node:sqlite` (stable, unflagged,
-in Node 24 — confirmed in this environment), at `/data/museum.db` on the Fly
-volume, `journal_mode = WAL`. Every donation, account, and vote is a
-synchronous transaction before its broadcast goes out, so nothing is ever
-announced to other visitors before it is durable.
-
-## Safety and ergonomics
-
-- All user-supplied text (display names, titles, origin claims, accounts)
-  renders via `textContent`/DOM construction on the client, never
-  `innerHTML` — carried over unchanged from the prior project's rule.
-- Every text field has a server-enforced max length; donation and account
-  submission are rate-limited per visitor, matching the prior project's
-  cooldown pattern.
-- No login system: a visitor is an HttpOnly cookie-backed id with a
-  self-chosen display name, stable across reloads, distinct per browser
-  context — exactly the identity model the brief asks for ("no account
-  system required unless needed for stronger vote integrity").
-- There is no movement input to protect form focus from any more (see
-  `docs/adr/0003-scene-exploration.md`) — the only global keyboard bindings
-  left are Esc (close/back) and the hub's left/right turn, neither of
-  which a visitor would ever type while filling in a form field.
-- Reduced-motion: scene-cut fades and hub turns shorten to a near-instant
-  swap, and ambient animation (dust, glow breathing, watching-portrait eye
-  tracking) is skipped entirely, under `prefers-reduced-motion`.
-
-## Known limitations (first version)
-
-- A donation now requires choosing one of four curated relic-appearance
-  presets (`server/src/relic-presets.js`) — a donor picks the image, not
-  the model family. The procedural Three.js/Canvas renderer
-  (`ASSETS.md`'s original per-subtype generator) survives only as a
-  defensive fallback for a row that predates the preset catalog; every
-  exhibit present before the catalog existed was backfilled with a
-  category-matched preset at startup (`server/src/db.js`'s
-  `backfillLegacyVisualIds`), captioned honestly in its dossier as an
-  archival stand-in rather than the donor's own choice. A built-in museum
-  object's dossier preview is a real cropped detail from its own gallery
-  illustration (its hand-traced hotspot shape's bounding box against the
-  scene's own source image), not a relic preset or a procedural shape.
-- No moderation queue beyond length caps and rate limits — acceptable for a
-  classroom-scale deployment, not for open public UGC at scale.
-- Spatial audio is the blueprint's explicitly optional item and is out of
-  this first version.
+- User-supplied text renders through `textContent`/DOM construction, never
+  `innerHTML`.
+- Server-side length limits, rate limits, vocabulary validation, ownership
+  checks, and database constraints apply even if the client is bypassed.
+- Object, ghost, doorway, dossier, Archive, Guide, donation, and Séance
+  controls are keyboard reachable. Pan and zoom have keyboard alternatives.
+- `prefers-reduced-motion` disables camera inertia and shortens decorative
+  transitions.
+- There is no login, user-uploaded image system, or moderation queue beyond
+  validation and rate limits; this is a classroom-scale shared museum.
+- Four curated donated-relic illustrations intentionally scaffold
+  contribution and keep new objects visually coherent. Three.js remains only
+  as a defensive preview fallback for a legacy row with no curated visual.

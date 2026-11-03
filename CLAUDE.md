@@ -9,15 +9,45 @@ to **The Cursed Museum** for the Final Project per
 pivot commit still belongs to this repo's process evidence — never rewrite
 or force-push it away.
 
+## What “good” means for this project
+
+The Cursed Museum is good when it works as a **participatory, living
+museum**, not a themed chat room or a static gallery. A visitor must be able
+to discover an object, interpret it, encounter somebody else's competing
+account, and leave a durable contribution that changes what a later visitor
+finds. Four product qualities serve that single standard:
+
+- **Participation creates shared value.** Donations, accounts, and votes
+  become part of the collection for later visitors, not disposable UI
+  activity visible only to the contributor.
+- **Disagreement remains legible.** Testimony, contradiction, revision, and
+  counter-evidence add to the record; they never erase the accounts they
+  challenge. Authors, timestamps, relationships, and vote histories remain
+  visible.
+- **Other visitors feel present without taking over the museum.** Named
+  apparition forms, room-scoped presence, the Floor Plan, and the Séance
+  make shared exploration visible. They support interpretation rather than
+  becoming a generic site-wide social feed.
+- **Atmosphere focuses curiosity on objects.** Distinct illustrated Gothic
+  rooms, object-shaped hotspots, and bounded 2.5D panning/zoom create a
+  specific museum worth exploring; visual polish is part of the interaction
+  model, not decoration added after it.
+
+When choosing between implementations, prefer the one that strengthens this
+cycle of discovery → interpretation → contribution → persistence. Automated
+checks protect its invariants, but a green test run alone does not establish
+that the experience is good.
+
 ## Stack, fixed for this project
 
 Node.js, ESM, **zero runtime npm dependencies** beyond what Node itself
 ships — `node:http`, `node:sqlite` (stable and unflagged on the pinned Node
 version; confirmed working before committing to it), Server-Sent Events, and
 Three.js vendored as a static file in `public/vendor/` (the one deliberate
-exception, documented in `public/vendor/README.md` — it never touches the
-server's own dependency graph and is fetched by the browser, not installed
-by npm). If a future crit genuinely needs a new dependency, add it
+exception, documented in `public/vendor/README.md` — it is now only a
+defensive preview fallback for legacy records, never the main room or normal
+donation presentation; it never touches the server's own dependency graph
+and is fetched by the browser, not installed by npm). If a future crit genuinely needs a new dependency, add it
 deliberately and say why in `PROCESS.md`; don't reach for one by habit.
 
 - Persistence is SQLite at `/data/museum.db` (the Fly volume in production,
@@ -33,19 +63,21 @@ deliberately and say why in `PROCESS.md`; don't reach for one by habit.
   reused unchanged in spirit from the prior project — see
   `docs/adr/0002-transport.md` for why this is one channel, not a second
   WebSocket layer, and don't add one without updating that ADR first.
-- The world is a fixed **scene graph**, not a live-steered camera: a small,
-  server-defined set of illustrated scenes (`server/src/world.js`), each
-  with hotspots and display slots placed as a `{x, z}` percentage anchor
-  of that scene's image, not a 3D world coordinate (see
-  `docs/adr/0004-illustrated-scenes.md`). There is no camera a visitor
-  steers and no collision; moving between scenes is a click/tap on a
-  hotspot or exhibit card, never a movement key. Three.js is kept only for
-  small, disposable, non-interactive still-frame previews of a donated
-  exhibit's procedural model (`public/world/artifacts.js`'s
-  `renderArtifactPreview`) — never a live render loop. A visitor's visible
-  cameo (medallion + display name) is derived from their scene presence and
-  a stable, non-reversible per-visitor key (`identity.js`'s
-  `publicKeyFor`), never their raw cookie or visitor id.
+- The world is a server-defined **illustrated scene graph**, not a 3D
+  collision world (`server/src/world.js`). Each scene has authored bounds
+  for horizontal pan and zoom; drag/swipe, wheel/pinch, and keyboard input
+  drive one CSS 2.5D camera transform (`public/world/camera.js`). SVG shapes
+  traced in each source image define interactive objects and placement
+  surfaces, so glows and clicks remain locked to the painted item at every
+  viewport and camera state. Navigation between scenes is still explicit
+  through a doorway, close-up, Floor Plan, Archive, or back action, never
+  free-roam movement.
+- Other visitors are named illustrated **ghosts**, derived from room-scoped
+  SSE presence, a chosen `ghostType`, and a stable non-reversible public key
+  (`identity.js`'s `publicKeyFor`). The current visitor is omitted from their
+  own first-person scene. A gallery's main and close-up views share one
+  logical room for presence and Séance delivery, while exact-scene
+  `visitorAnchors` keep each ghost visually grounded in the current artwork.
 
 ## Conventions that matter here
 
@@ -65,18 +97,20 @@ deliberately and say why in `PROCESS.md`; don't reach for one by habit.
   repeat vote is an `UPDATE`, never a second row. A tie renders as
   **Disputed**; an account with zero votes renders as **Unclassified** —
   never silently default either case to a specific verdict.
-- **Exhibits occupy a specific, validated display slot.** A donation names a
-  gallery and a slot; the server checks the slot belongs to that gallery and
-  is currently free, inside the same transaction that creates the exhibit.
-  Never let two donations race onto the same slot — this is exactly the
-  kind of invariant a unique constraint (`display_slots.occupied_exhibit_id`
-  claimed once) should enforce, not a check-then-write in application code.
-- **Every interaction works with a mouse, a touchscreen and a keyboard.**
-  Every hotspot and exhibit card is a real focusable element mouse-click,
-  tap, and Tab+Enter all resolve the same way; the dossier, donation/account
-  forms, archive, and hub-turn controls are reachable and operable by
-  Tab/Enter alone. This is checked live at crits — don't let it regress
-  silently behind a mouse-only feature.
+- **A donated exhibit occupies a validated point on a real placement
+  surface.** A donation names a gallery, compatible `surfaceId`, normalized
+  `u`/`v` point, scale, subtype, and one curated `visualId`. The server must
+  verify that the point lies inside the authored SVG surface, the relic type
+  belongs on that surface, the scale is allowed, and it does not collide
+  with another relic. The legacy `slot_id` remains an internal capacity and
+  backwards-compatibility invariant; it is allocated transactionally but is
+  never presented to a visitor as a list of boxes.
+- **Every essential interaction works with a mouse, touchscreen and
+  keyboard.** Every SVG object, ghost, doorway, and control is focusable;
+  click, tap, and Tab+Enter resolve the same action. Panning and zoom have
+  keyboard alternatives, and the dossier, donation/account forms, Archive,
+  Museum Guide, Floor Plan, and Séance remain operable without a mouse. This
+  is checked live — don't let it regress behind a pointer-only feature.
 - Keep the four galleries visually distinct (lighting colour-grade, prop
   density, palette accent) so "which gallery am I in" never relies on
   reading the sign text alone.
@@ -93,7 +127,7 @@ firing twice, and one path's bookkeeping silently corrupted the other's.
 Fixed by giving the render-dedupe set exactly one job. The general rule:
 **a dedupe/seen-set is scoped to one concern.** If two code paths both want
 "have I handled this id before," that's two sets, not one. This applies
-directly here: cameo-presence dedup (by `publicKey`, in `sse.js`'s
+directly here: ghost-presence dedup (by `publicKey`, in `sse.js`'s
 `visitorsInScene`) and archive-event dedup must not share a set either.
 
 ## Process discipline
