@@ -2,71 +2,102 @@
 
 Every object has a story. None of them can be trusted.
 
-The Cursed Museum is a shared, illustrated Gothic museum: you walk in under
-a display name, step between richly illustrated scenes in four haunted
-galleries — The Portraits That Watch, Objects That Remember, The Cabinet of
-Impossible Life, The Forgotten Childhood — and find relics other visitors
-have already donated: a spoon that remembers dinner-table secrets, a
-portrait whose hallway keeps changing. Other visitors are there with you,
-visible as small cameo medallions carrying their chosen names, and the
-archive changes under your eyes as they donate, dispute and vote.
+## Marker quick start
 
-Every relic has a dossier: who donated it, what they claimed, and everyone
-since who has disputed it. Publishing a new account never erases the old
-one — a "rewrite" is a competing claim alongside the one it contradicts,
-permanently attributed and timestamped. Visitors vote each account
-**Believable**, **Suspicious**, or **Definitely Cursed**; the "accepted"
-account can change as votes shift, but every earlier version stays in the
-record. The archive only grows.
+**Deployed app:** [Open The Cursed Museum](https://comp4020-final-pengyue-stella.fly.dev/)
 
-## What "good" means here
+No login, demo account, command, MCP client, school-network connection, or
+paid service is required. Start here at `/readme/`, then follow **Enter the
+museum**. The first request can take a few seconds while the course Fly.io
+machine wakes from its automatic stop.
 
-A stranger should be able to walk in, notice a glowing exhibit card, inspect
-it, and donate or dispute something — without being told how. Two visitors
-in two browsers must see each other's cameo, must see what the other
-donates or disputes appear without a reload, and must still find it all
-there the next day, after a restart, after a redeploy. A tie vote is shown
-as **Disputed**, never silently resolved in either direction.
+For the multi-user checks, use **two separate Chrome profiles** (not two tabs
+in one profile). Each profile has its own cookie-backed visitor identity.
 
-So, for this project, "good" currently means:
+### Five-minute marking walkthrough
 
-- the museum reads as Gothic-Victorian and specifically itself on first
-  screen — amber light, dark wood, crowded cabinets — never a generic
-  slideshow of flat photographs;
-- every scene, inspection, donation and the archive are reachable with
-  nothing but a mouse click, a tap, or Tab/Enter — no movement keys;
-- other visitors' presence is visibly real — a cameo with a name in
-  whatever scene you're standing in, not just a headcount string;
-- donating, writing a competing account, and voting are all one honest
-  shared write, seen by everyone else within about a second;
-- the record survives a refresh, a server restart, and a real redeploy.
+1. Open the deployed URL in Chrome profile A and profile B. In each profile, enter a different display name, choose a different apparition form, and enter the museum.
+2. Leave both visitors in the Entrance Hall. Each profile should show the other visitor as a named, coloured ghost. Click the other ghost to open the room-scoped **Séance**; send a short message or reaction and confirm it appears in the other profile without a reload.
+3. Open **Rooms**. The Floor Plan shows the current visitor, the other visitor, room occupancy, and donated-relic markers. Move one visitor to a gallery and confirm the live markers and in-room ghost update.
+4. In a gallery, drag horizontally (or use Left/Right) to look around and use the mouse wheel or `+`/`-` to zoom. Click a glowing object. Built-in museum objects and donated relics use the same dossier model: read the original account, add a testimony/contradiction/revision/counter-evidence, and vote **Believable**, **Suspicious**, or **Definitely Cursed**. The other profile should receive the shared update without reloading.
+5. Select **Donate a Relic**. Choose one of the four illustrated appearances, provide a title and origin claim, and select **Place Relic**. Drag the preview to a glowing compatible surface in the destination gallery and confirm placement. If a position is occupied, choose another point on the surface. The relic should appear for both visitors and in **Archive**.
+6. Refresh both profiles. The donated relic, accounts, votes, and placement should still be present. The donor can also reopen their relic to test owner-only **Edit** and **Withdraw** controls; museum-owned objects cannot be edited or withdrawn.
 
-## What this deliberately isn't
+### Useful secondary checks
 
-Not free-roam, and not a live 3D room either — there is no camera a visitor
-steers; exploration is a small fixed graph of full-bleed illustrated
-scenes, moved between by clicking glowing hotspots or a framed exhibit card
-(see `docs/adr/0004-illustrated-scenes.md` for why this replaced an earlier
-live-Three.js-room version this repo shipped). Not embodied avatars — other
-visitors are cameo medallions with a name and a restrained idle motion,
-never a character a visitor controls. Not a moderated social network — no
-accounts, no profile pages, no likes; a visitor is a cookie-backed identity
-with a chosen display name, and abuse handling is validation, length caps,
-and rate limits, not a moderation queue.
+- Click the physical map in the Entrance Hall, or `?`, to open the Museum Guide. **Rooms** opens the same guide directly on its Floor Plan tab.
+- Use **Archive** to browse every museum-owned, founding, and donated exhibit by gallery and reopen its dossier.
+- Visitors in different rooms do not share an in-room ghost or Séance transcript. Visitors in a gallery's main and close-up scenes still belong to the same logical room.
+- `Tab` and `Enter` can reach and activate the main controls and exhibits; `Esc` closes the active panel or returns from a close-up.
+
+If the second visitor is counted but no ghost is visible, first confirm the
+two windows really use different Chrome profiles and that both visitors are
+in the same logical room.
+
+## What the project is
+
+The Cursed Museum is a shared, illustrated Gothic museum. Visitors enter
+under a chosen display name and apparition form, explore an Entrance Hall and
+four haunted galleries, and discover a growing collection of museum-owned
+objects and visitor-donated relics:
+
+- The Portraits That Watch
+- Objects That Remember
+- The Cabinet of Impossible Life
+- The Forgotten Childhood
+
+Every collection object has a dossier. Publishing a new account never erases
+the old one: testimony, contradiction, revision, and counter-evidence remain
+attributed and timestamped beside the claim they challenge. Visitors vote on
+each account; classifications can change as the shared evidence changes, but
+the history remains visible.
+
+The illustrated scenes support bounded drag-to-pan and zoom rather than
+free-roam movement. Object-shaped hotspots are traced over real items in the
+artwork. Other visitors appear as coloured Gothic ghosts, the architectural
+Floor Plan reports live room presence, and the room-scoped Séance provides
+ephemeral messages and reactions while the archive itself remains durable.
+
+## What the marker should be able to verify
+
+- **Multi-user presence:** two independent browser profiles see one another in the same room as distinct named ghosts.
+- **Real-time collaboration:** presence, donations, accounts, votes, edits, withdrawals, and Séance events update without a page reload.
+- **Persistence:** museum records and relic placement survive refreshes, server restarts, and redeploys through the mounted SQLite database.
+- **Shared provenance:** built-in and donated objects use the same dossier, account, classification, and voting machinery.
+- **Spatial contribution:** a donor chooses an illustrated relic and freely places it on a compatible, non-colliding surface in the relevant gallery.
+- **Ownership boundaries:** only a relic's donor can edit or withdraw it; museum-owned and Founding Collection records are not privately editable.
+- **Accessible exploration:** all essential actions are available with mouse, touch, or keyboard, and reduced-motion preferences are respected.
 
 ## Controls
 
-| Input | Action |
-| --- | --- |
-| Click a glowing hotspot | Move to another scene, look closer, or go back |
-| Click a framed exhibit card | Open its dossier |
-| `◀` / `▶` (or arrow keys, in the hall) | Turn to face a different gallery doorway |
-| `Esc` | Close an overlay, or step back a scene |
-| `Tab` / `Enter` | Reach and activate any control without a mouse |
+- **Look around:** drag horizontally or use Left/Right.
+- **Zoom:** use the mouse wheel or `+`/`-`.
+- **Inspect or enter:** click a glowing object or press `Enter` when it is focused.
+- **Open Séance:** click another visitor's ghost.
+- **Open the live Floor Plan:** select **Rooms**.
+- **Browse collection dossiers:** select **Archive**.
+- **Create and place a visitor-owned relic:** select **Donate a Relic**.
+- **Close or step back:** press `Esc`.
+- **Move between controls:** press `Tab` or `Shift+Tab`.
 
-## Stack
+## Technical notes
 
-Node.js, ESM, **zero runtime npm dependencies** beyond what Node ships —
-`node:http`, `node:sqlite`, Server-Sent Events, and Three.js vendored as a
-static file (used only for small disposable exhibit preview thumbnails —
-see `PROCESS.md` for the full decision record on this stack).
+The application is a Node.js ESM server with no runtime npm dependencies
+beyond Node's built-ins. It uses `node:http`, `node:sqlite`, Server-Sent
+Events, SVG scene overlays, and static illustrated assets. The course-managed
+Fly.io volume is mounted at `/data`, where the SQLite database persists.
+
+The course repository contains all source code and Git history. Architectural
+decisions are recorded under `docs/adr/`; implementation and agentic-coding
+evidence are in `PROCESS.md` and `reflections/`.
+
+For local development only, start the server before running the checks:
+
+```sh
+MUSEUM_DB_FILE=/tmp/cursed-museum.db PORT=8080 node server/src/server.js
+pnpm check
+pnpm check:evidence
+```
+
+The deployed marker walkthrough above does not require any of these local
+commands.

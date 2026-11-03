@@ -12,12 +12,12 @@ export function renderReadmePage() {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Traces of ANU — About</title>
+    <title>The Cursed Museum — Marker Guide</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body class="readme-page">
     <main class="readme">
-      <p class="readme-back"><a href="/">&larr; Back to the map</a></p>
+      <p class="readme-back"><a href="/">&larr; Enter the museum</a></p>
       ${body}
     </main>
   </body>
