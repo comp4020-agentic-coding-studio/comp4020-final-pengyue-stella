@@ -1,0 +1,1324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Hotspot Editor (dev tool — not part of the museum)</title>
+<style>
+  :root {
+    --bg: #1b1b1f;
+    --panel: #242429;
+    --panel-border: #38383f;
+    --text: #e8e8ec;
+    --muted: #9a9aa4;
+    --accent: #7fd1ff;
+    --accent-dim: #3a6b80;
+    --danger: #ff6b6b;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    overscroll-behavior: none;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  header {
+    flex: 0 0 auto;
+    padding: 8px 14px;
+    background: #111113;
+    border-bottom: 1px solid var(--panel-border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  header h1 {
+    font-size: 14px;
+    margin: 0;
+    font-weight: 600;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  header .warn {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .main {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+  }
+  .sidebar {
+    flex: 0 0 320px;
+    max-width: 320px;
+    overflow-y: auto;
+    background: var(--panel);
+    border-right: 1px solid var(--panel-border);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .stage-wrap {
+    flex: 1 1 auto;
+    position: relative;
+    overflow: hidden;
+    background:
+      linear-gradient(45deg, #222 25%, transparent 25%) -10px 0/20px 20px,
+      linear-gradient(-45deg, #222 25%, transparent 25%) -10px 0/20px 20px,
+      linear-gradient(45deg, transparent 75%, #222 75%) -10px 0/20px 20px,
+      linear-gradient(-45deg, transparent 75%, #222 75%) -10px 0/20px 20px,
+      #151517;
+    touch-action: none;
+  }
+  svg#stage {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    cursor: crosshair;
+    display: block;
+  }
+  fieldset {
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 10px;
+    margin: 0;
+  }
+  legend {
+    padding: 0 6px;
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  select, input[type="text"], textarea {
+    width: 100%;
+    background: #121214;
+    color: var(--text);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 13px;
+    margin-bottom: 8px;
+    font-family: inherit;
+    resize: vertical;
+  }
+  .shape-list {
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .shape-item {
+    background: #1a1a1e;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 12px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .shape-item .shape-item-info { flex: 1 1 auto; min-width: 0; }
+  .shape-item .shape-item-name {
+    color: var(--accent);
+    font-weight: 600;
+    word-break: break-word;
+  }
+  .shape-item .shape-item-meta {
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .shape-item button {
+    flex: 0 0 auto;
+    padding: 3px 8px;
+  }
+  .row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .row:last-child { margin-bottom: 0; }
+  button {
+    background: #2d2d33;
+    color: var(--text);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    flex: 1 1 auto;
+    white-space: nowrap;
+  }
+  button:hover { background: #38383f; }
+  button:active { background: #45454e; }
+  button.primary {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: #eafaff;
+  }
+  button.primary:hover { background: #4a86a0; }
+  button.danger {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+  button.toggle-active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+  }
+  button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .mode-group {
+    display: flex;
+    gap: 4px;
+  }
+  .mode-group button {
+    flex: 1;
+  }
+  .stat {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .stat b { color: var(--text); font-weight: 600; }
+  pre#codePreview {
+    background: #0e0e10;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.5;
+    color: #b8f0b8;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 260px;
+    overflow-y: auto;
+    margin: 0;
+  }
+  #copyStatus {
+    font-size: 11px;
+    color: var(--accent);
+    min-height: 14px;
+  }
+  .hud {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(10, 10, 12, 0.78);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--muted);
+    pointer-events: none;
+    line-height: 1.5;
+    z-index: 5;
+  }
+  .hud b { color: var(--text); }
+  .zoom-readout {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(10, 10, 12, 0.78);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    pointer-events: none;
+    z-index: 5;
+  }
+  .help {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .vertex-handle {
+    fill: #ffdd55;
+    stroke: #3a2c00;
+    stroke-width: 1.5;
+    cursor: grab;
+  }
+  .vertex-handle.selected {
+    fill: var(--accent);
+    stroke: #003344;
+  }
+  .vertex-handle:hover {
+    fill: #fff3b0;
+  }
+  .edge-midpoint {
+    fill: rgba(127, 209, 255, 0.55);
+    stroke: #003344;
+    stroke-width: 1;
+    cursor: copy;
+  }
+  .edge-midpoint:hover {
+    fill: rgba(127, 209, 255, 0.95);
+  }
+  .poly-fill {
+    fill: rgba(255, 90, 90, 0.22);
+    stroke: #ff5a5a;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+  }
+  .poly-draft-line {
+    fill: none;
+    stroke: #ff5a5a;
+    stroke-width: 2;
+    stroke-dasharray: 6 4;
+    vector-effect: non-scaling-stroke;
+  }
+  .ellipse-shape {
+    fill: rgba(90, 170, 255, 0.22);
+    stroke: #5aaaff;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+  }
+  .ellipse-handle {
+    fill: #5aaaff;
+    stroke: #00233a;
+    stroke-width: 1.5;
+    cursor: grab;
+  }
+  .center-handle {
+    fill: #ffffff;
+    stroke: #00233a;
+    stroke-width: 1.5;
+    cursor: move;
+  }
+  details summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 11.5px;
+    margin-bottom: 6px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Hotspot Editor</h1>
+  <span class="warn">Local dev tool — traces geometry for server/src/world.js. Not part of museum navigation. Does not write any file.</span>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+
+    <fieldset>
+      <legend>Scene</legend>
+      <label for="roomSelect">Room / image</label>
+      <select id="roomSelect"></select>
+      <div class="stat" id="imageDims">—</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Mode</legend>
+      <div class="mode-group">
+        <button id="modePolygon" class="toggle-active">Polygon</button>
+        <button id="modeEllipse">Ellipse</button>
+        <button id="modeSelect">Select/Edit</button>
+      </div>
+      <div class="help" style="margin-top:8px;">
+        Polygon: click/tap to add vertices, double-click or press Done to finish.<br/>
+        Ellipse: press and drag from the centre outward.<br/>
+        Select/Edit: drag vertices, click an edge-dot to insert, click a vertex then Delete Selected to remove.
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Polygon controls</legend>
+      <div class="row">
+        <button id="undoPoint">Undo last point</button>
+        <button id="clearPolygon" class="danger">Clear polygon</button>
+      </div>
+      <div class="row">
+        <button id="finishPolygon" class="primary">Finish polygon</button>
+        <button id="deleteVertex" class="danger">Delete selected</button>
+      </div>
+      <div class="help">Insert a vertex by clicking the small dot shown on an edge midpoint while editing.</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Ellipse controls</legend>
+      <div class="row">
+        <button id="clearEllipse" class="danger">Clear ellipse</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>View</legend>
+      <div class="row">
+        <button id="viewBoth" class="toggle-active">Image + overlay</button>
+      </div>
+      <div class="row">
+        <button id="viewImageOnly">Image only</button>
+        <button id="viewOverlayOnly">Overlay only</button>
+      </div>
+      <div class="row">
+        <button id="resetView">Reset view (fit)</button>
+      </div>
+      <div class="help">Scroll/pinch to zoom (up to 800%), drag empty space to pan.</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Object metadata</legend>
+      <label for="objectName">Object id / name (required to add to list)</label>
+      <input type="text" id="objectName" placeholder="e.g. childhood-left-doll" />
+      <label for="objectNote">Story hint (optional — a sentence or two; gets handed over for the lore write-up)</label>
+      <textarea id="objectNote" rows="3" placeholder="e.g. a porcelain doll that no catalogue entry has ever named"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Current shape</legend>
+      <pre id="codePreview">// draw a shape to see exported code</pre>
+      <div class="row" style="margin-top:8px;">
+        <button id="copyCode">Copy this shape only</button>
+      </div>
+      <div class="row">
+        <button id="addToList" class="primary">Add to list →</button>
+      </div>
+      <div id="copyStatus"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Collected shapes (<span id="listCount">0</span>)</legend>
+      <div id="shapeList" class="shape-list">
+        <div class="help">Nothing added yet — finish a shape, name it, then "Add to list".</div>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button id="copyAllJson" class="primary">Copy ALL as JSON</button>
+      </div>
+      <div class="row">
+        <button id="clearList" class="danger">Clear list</button>
+      </div>
+      <div id="listCopyStatus"></div>
+      <div class="help" style="margin-top:6px;">
+        Draw/name/add as many shapes as you like, across any rooms, then copy
+        the whole list once and hand it over in one go — no need to copy each
+        shape individually.
+      </div>
+    </fieldset>
+
+  </div>
+
+  <div class="stage-wrap" id="stageWrap">
+    <svg id="stage" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="hud" id="hud">
+      pointer: <b id="hudPointer">—, —</b><br/>
+      selected vertex: <b id="hudVertex">—</b>
+    </div>
+    <div class="zoom-readout" id="zoomReadout">100%</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- Room catalogue -----------------------------------------------
+  // File + native pixel size for each real source image. Dimensions here
+  // are only a starting guess for the SVG viewBox; the editor re-measures
+  // the actual decoded <image> via naturalWidth/naturalHeight once it
+  // loads and corrects the viewBox if they differ, so the exported
+  // coordinate system always matches the real file exactly.
+  const ROOMS = [
+    { id: "hall", label: "Entrance Hall", file: "entrance-hall-v2.png", width: 1672, height: 941 },
+    { id: "portraits", label: "Portraits", file: "portraits.webp", width: 1672, height: 941 },
+    { id: "memento", label: "Objects That Remember", file: "memento.webp", width: 1672, height: 940 },
+    { id: "specimen", label: "Cabinet of Impossible Life", file: "specimen.webp", width: 1672, height: 940 },
+    { id: "childhood", label: "Forgotten Childhood", file: "childhood.webp", width: 1672, height: 941 },
+    { id: "portrait-reference", label: "Portraits — close-up reference", file: "portrait-reference.webp", width: 419, height: 398 },
+    { id: "cabinet-reference", label: "Memento/Specimen — close-up reference (cabinet)", file: "cabinet-reference.webp", width: 494, height: 398 },
+    { id: "entrance-reference", label: "Entrance — close-up reference (legacy)", file: "entrance-reference.webp", width: 494, height: 398 },
+    { id: "spoon-reference", label: "Spoon close-up reference (legacy)", file: "spoon-reference.webp", width: 257, height: 344 },
+  ];
+
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const stage = document.getElementById("stage");
+  const stageWrap = document.getElementById("stageWrap");
+  const roomSelect = document.getElementById("roomSelect");
+  const imageDims = document.getElementById("imageDims");
+  const objectNameInput = document.getElementById("objectName");
+  const objectNoteInput = document.getElementById("objectNote");
+  const codePreview = document.getElementById("codePreview");
+  const copyStatus = document.getElementById("copyStatus");
+  const shapeListEl = document.getElementById("shapeList");
+  const listCountEl = document.getElementById("listCount");
+  const listCopyStatus = document.getElementById("listCopyStatus");
+  const hudPointer = document.getElementById("hudPointer");
+  const hudVertex = document.getElementById("hudVertex");
+  const zoomReadout = document.getElementById("zoomReadout");
+
+  for (const room of ROOMS) {
+    const opt = document.createElement("option");
+    opt.value = room.id;
+    opt.textContent = room.label;
+    roomSelect.appendChild(opt);
+  }
+
+  // ---- SVG scaffold ----------------------------------------------------
+  // Everything lives inside one root <g> ("world") whose transform encodes
+  // pan/zoom. Because the SVG's own viewBox equals the image's real native
+  // pixel size, every coordinate read from a pointer event via
+  // getScreenCTM().inverse() (applied to the OUTER svg, not the world
+  // group) already lands in exact source-image pixels, regardless of
+  // current pan/zoom/devicePixelRatio/window size. We never hand-roll a
+  // screen->image pixel conversion.
+  let currentRoom = ROOMS[4]; // default to childhood per the brief
+  let imageEl = null;
+  let overlayGroup = null;
+  let worldGroup = null;
+
+  function buildStageSkeleton() {
+    stage.innerHTML = "";
+    worldGroup = document.createElementNS(SVG_NS, "g");
+    worldGroup.setAttribute("id", "world");
+
+    imageEl = document.createElementNS(SVG_NS, "image");
+    imageEl.setAttribute("id", "roomImage");
+    imageEl.setAttribute("x", "0");
+    imageEl.setAttribute("y", "0");
+    imageEl.setAttribute("preserveAspectRatio", "none");
+
+    overlayGroup = document.createElementNS(SVG_NS, "g");
+    overlayGroup.setAttribute("id", "overlay");
+
+    worldGroup.appendChild(imageEl);
+    worldGroup.appendChild(overlayGroup);
+    stage.appendChild(worldGroup);
+  }
+  buildStageSkeleton();
+
+  // Deliberately NOT a `viewBox` on the outer #stage: with no viewBox, 1 SVG
+  // user unit on #stage equals 1 real CSS pixel of its own rendered box
+  // (set to 100%/100% of stageWrap in CSS). Pan/zoom is applied entirely as
+  // an explicit `transform` on `worldGroup` below, so there is exactly one
+  // coordinate remapping happening, not two stacked ones — a `viewBox` here
+  // would make the browser silently apply ITS OWN stretch-to-fit scaling on
+  // top of our own hand-rolled fit/zoom math, which is what caused clicks to
+  // land away from the rendered point and made handle radii compute wrong.
+  function loadRoom(room) {
+    currentRoom = room;
+    imageEl.setAttribute("width", String(room.width));
+    imageEl.setAttribute("height", String(room.height));
+    imageEl.setAttribute("href", `/assets/gallery-scenes/${room.file}`);
+    imageEl.setAttributeNS("http://www.w3.org/1999/xlink", "href", `/assets/gallery-scenes/${room.file}`);
+    imageDims.textContent = `${room.width} × ${room.height} px (declared) — verifying…`;
+
+    const probe = new Image();
+    probe.onload = () => {
+      const realW = probe.naturalWidth;
+      const realH = probe.naturalHeight;
+      if (realW && realH && (realW !== room.width || realH !== room.height)) {
+        room.width = realW;
+        room.height = realH;
+        imageEl.setAttribute("width", String(realW));
+        imageEl.setAttribute("height", String(realH));
+      }
+      imageDims.textContent = `${room.width} × ${room.height} px (native, verified)`;
+      resetView();
+    };
+    probe.onerror = () => {
+      imageDims.textContent = `${room.width} × ${room.height} px (declared — could not verify)`;
+    };
+    probe.src = `/assets/gallery-scenes/${room.file}`;
+
+    resetPolygonDraft();
+    clearEllipse();
+    renderOverlay();
+    resetView();
+  }
+
+  roomSelect.addEventListener("change", () => {
+    const room = ROOMS.find((r) => r.id === roomSelect.value);
+    if (room) loadRoom(room);
+  });
+  roomSelect.value = currentRoom.id;
+
+  // ---- Pan/zoom ---------------------------------------------------------
+  // Pan/zoom is purely a CSS-style transform on `worldGroup`; the SVG
+  // viewBox/coordinate system never changes, so exported shape coordinates
+  // are completely independent of view state.
+  let viewScale = 1;
+  let viewTx = 0;
+  let viewTy = 0;
+  const MIN_SCALE_FACTOR = 1; // relative to fit-to-stage
+  const MAX_SCALE_FACTOR = 8; // 800%
+  let fitScale = 1;
+
+  function applyWorldTransform() {
+    worldGroup.setAttribute("transform", `translate(${viewTx} ${viewTy}) scale(${viewScale})`);
+    const pct = Math.round((viewScale / fitScale) * 100);
+    zoomReadout.textContent = `${pct}%`;
+  }
+
+  function computeFitScale() {
+    const rect = stageWrap.getBoundingClientRect();
+    if (!rect.width || !rect.height) return 1;
+    return Math.min(rect.width / currentRoom.width, rect.height / currentRoom.height);
+  }
+
+  function resetView() {
+    fitScale = computeFitScale() || 1;
+    viewScale = fitScale;
+    const rect = stageWrap.getBoundingClientRect();
+    viewTx = (rect.width - currentRoom.width * viewScale) / 2;
+    viewTy = (rect.height - currentRoom.height * viewScale) / 2;
+    applyWorldTransformClamped();
+  }
+
+  function clampScale(s) {
+    return Math.min(fitScale * MAX_SCALE_FACTOR, Math.max(fitScale * MIN_SCALE_FACTOR, s));
+  }
+
+  function applyWorldTransformClamped() {
+    viewScale = clampScale(viewScale);
+    applyWorldTransform();
+  }
+
+  document.getElementById("resetView").addEventListener("click", resetView);
+  window.addEventListener("resize", () => {
+    // Keep the current scale relative to the new fit baseline being stable
+    // is not required by the spec; a plain re-fit on resize is sufficient
+    // and keeps behaviour predictable.
+    resetView();
+  });
+
+  // Convert a pointer event's client coordinates into exact source-image
+  // pixel coordinates using the browser's own CTM inversion, taken on
+  // `worldGroup` (not the outer `stage`) — `worldGroup` is the one element
+  // whose `transform` actually carries our pan/zoom, and since `stage` has
+  // no viewBox of its own, worldGroup's screen CTM already encodes the
+  // exact mapping we need in one step. Never hand-roll this math using
+  // offsetX/clientX deltas.
+  function clientToImagePoint(evt) {
+    const pt = stage.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    const ctm = worldGroup.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    const local = pt.matrixTransform(ctm.inverse());
+    return { x: local.x, y: local.y };
+  }
+
+  // ---- Wheel zoom (mouse wheel + trackpad pinch-as-wheel) ---------------
+  stage.addEventListener(
+    "wheel",
+    (evt) => {
+      evt.preventDefault();
+      const zoomFactor = Math.exp(-evt.deltaY * 0.0015);
+      zoomAt(evt.clientX, evt.clientY, zoomFactor);
+    },
+    { passive: false }
+  );
+
+  function zoomAt(clientX, clientY, factor) {
+    const rect = stageWrap.getBoundingClientRect();
+    const localX = clientX - rect.left;
+    const localY = clientY - rect.top;
+    // Point in world-space (pre-scale image pixels) under the cursor before zoom.
+    const worldX = (localX - viewTx) / viewScale;
+    const worldY = (localY - viewTy) / viewScale;
+    const newScale = clampScale(viewScale * factor);
+    viewTx = localX - worldX * newScale;
+    viewTy = localY - worldY * newScale;
+    viewScale = newScale;
+    applyWorldTransform();
+    // Vertex/ellipse handle radii are authored in screen pixels (divided by
+    // viewScale in screenPx()) so they stay a constant ON-SCREEN size
+    // instead of scaling up with the art — but that only holds if their `r`
+    // attribute is recomputed at the new viewScale. Wheel-zoom changed
+    // viewScale without re-rendering, so already-drawn handles kept their
+    // old (now stale) radius and were then visually blown up by the SVG
+    // scale transform along with everything else.
+    renderOverlay();
+  }
+
+  // ---- Pointer-driven pan + two-finger pinch zoom -----------------------
+  const activePointers = new Map(); // pointerId -> {x,y}
+  let panState = null; // {startX, startY, startTx, startTy}
+  let pinchState = null; // {startDist, startScale, midpoint...}
+
+  stage.addEventListener("pointerdown", onPointerDown);
+  stage.addEventListener("pointermove", onPointerMove);
+  stage.addEventListener("pointerup", onPointerUp);
+  stage.addEventListener("pointercancel", onPointerUp);
+  stage.addEventListener("pointerleave", onPointerUpSoft);
+
+  let draggingVertex = null; // {type:'polygon', index} or {type:'ellipse', handle: 'center'|'rx'|'ry'}
+  let suppressNextClick = false;
+
+  // setPointerCapture can throw (e.g. a pointerId the browser never
+  // associated with an active pointer session) — that must never abort the
+  // rest of a handler, since drag/pan/ellipse-creation still work fine
+  // without capture; capture is just an optimization against losing events
+  // if the pointer leaves the element mid-drag.
+  function safeCapture(pointerId) {
+    try { stage.setPointerCapture(pointerId); } catch { /* no-op */ }
+  }
+
+  function onPointerDown(evt) {
+    activePointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+
+    if (activePointers.size === 2) {
+      // Entering pinch: cancel any single-pointer pan/drag in progress.
+      panState = null;
+      draggingVertex = null;
+      const pts = [...activePointers.values()];
+      const dx = pts[0].x - pts[1].x;
+      const dy = pts[0].y - pts[1].y;
+      pinchState = {
+        startDist: Math.hypot(dx, dy) || 1,
+        startScale: viewScale,
+        midClientX: (pts[0].x + pts[1].x) / 2,
+        midClientY: (pts[0].y + pts[1].y) / 2,
+      };
+      return;
+    }
+
+    if (activePointers.size > 2) return;
+
+    const target = evt.target;
+    const handleIndex = target && target.dataset ? target.dataset.vertexIndex : undefined;
+    const ellipseHandle = target && target.dataset ? target.dataset.ellipseHandle : undefined;
+    const edgeIndex = target && target.dataset ? target.dataset.edgeInsertIndex : undefined;
+
+    if (mode === "select" || mode === "polygon" || mode === "ellipse") {
+      if (handleIndex !== undefined) {
+        safeCapture(evt.pointerId);
+        selectedVertex = Number(handleIndex);
+        draggingVertex = { type: "polygon", index: selectedVertex };
+        renderOverlay();
+        return;
+      }
+      if (ellipseHandle !== undefined) {
+        safeCapture(evt.pointerId);
+        draggingVertex = { type: "ellipse", handle: ellipseHandle };
+        return;
+      }
+      if (edgeIndex !== undefined) {
+        insertVertexAfter(Number(edgeIndex), clientToImagePoint(evt));
+        suppressNextClick = true;
+        return;
+      }
+    }
+
+    if (mode === "polygon" && !polygonFinished) {
+      addPolygonPoint(clientToImagePoint(evt));
+      return;
+    }
+
+    if (mode === "ellipse" && !ellipseFinished) {
+      const p = clientToImagePoint(evt);
+      safeCapture(evt.pointerId);
+      ellipse = { cx: p.x, cy: p.y, rx: 1, ry: 1 };
+      draggingVertex = { type: "ellipse", handle: "dragNew" };
+      renderOverlay();
+      return;
+    }
+
+    // Otherwise: begin panning empty space.
+    safeCapture(evt.pointerId);
+    panState = { startX: evt.clientX, startY: evt.clientY, startTx: viewTx, startTy: viewTy };
+  }
+
+  function onPointerMove(evt) {
+    if (activePointers.has(evt.pointerId)) {
+      activePointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+    }
+
+    const p = clientToImagePoint(evt);
+    hudPointer.textContent = `${Math.round(p.x)}, ${Math.round(p.y)}`;
+
+    if (pinchState && activePointers.size === 2) {
+      const pts = [...activePointers.values()];
+      const dx = pts[0].x - pts[1].x;
+      const dy = pts[0].y - pts[1].y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const factor = dist / pinchState.startDist;
+      const newScale = clampScale(pinchState.startScale * factor);
+      const rect = stageWrap.getBoundingClientRect();
+      const localX = pinchState.midClientX - rect.left;
+      const localY = pinchState.midClientY - rect.top;
+      const worldX = (localX - viewTx) / viewScale;
+      const worldY = (localY - viewTy) / viewScale;
+      viewTx = localX - worldX * newScale;
+      viewTy = localY - worldY * newScale;
+      viewScale = newScale;
+      applyWorldTransform();
+      return;
+    }
+
+    if (draggingVertex) {
+      if (draggingVertex.type === "polygon") {
+        polygonPoints[draggingVertex.index] = { x: p.x, y: p.y };
+        renderOverlay();
+        updateCodePreview();
+      } else if (draggingVertex.type === "ellipse") {
+        if (draggingVertex.handle === "dragNew" || draggingVertex.handle === "radius") {
+          ellipse.rx = Math.max(1, Math.abs(p.x - ellipse.cx));
+          ellipse.ry = Math.max(1, Math.abs(p.y - ellipse.cy));
+        } else if (draggingVertex.handle === "center") {
+          const dx = p.x - (ellipse.dragStartX ?? p.x);
+          const dy = p.y - (ellipse.dragStartY ?? p.y);
+          ellipse.cx += dx;
+          ellipse.cy += dy;
+          ellipse.dragStartX = p.x;
+          ellipse.dragStartY = p.y;
+        } else if (draggingVertex.handle === "rx") {
+          ellipse.rx = Math.max(1, Math.abs(p.x - ellipse.cx));
+        } else if (draggingVertex.handle === "ry") {
+          ellipse.ry = Math.max(1, Math.abs(p.y - ellipse.cy));
+        }
+        renderOverlay();
+        updateCodePreview();
+      }
+      return;
+    }
+
+    if (panState) {
+      const dx = evt.clientX - panState.startX;
+      const dy = evt.clientY - panState.startY;
+      viewTx = panState.startTx + dx;
+      viewTy = panState.startTy + dy;
+      applyWorldTransform();
+    }
+  }
+
+  function onPointerUp(evt) {
+    activePointers.delete(evt.pointerId);
+    if (activePointers.size < 2) pinchState = null;
+    if (draggingVertex && draggingVertex.type === "ellipse" && draggingVertex.handle === "dragNew") {
+      ellipseFinished = true;
+      activeShapeKind = "ellipse";
+      renderOverlay();
+      updateCodePreview();
+    }
+    draggingVertex = null;
+    panState = null;
+    try { stage.releasePointerCapture(evt.pointerId); } catch { /* no-op */ }
+  }
+
+  function onPointerUpSoft(evt) {
+    // pointerleave: only clear pan (dragging with capture still receives
+    // move/up even if the pointer visually left the element).
+  }
+
+  // Double-click / double-tap to finish a polygon.
+  stage.addEventListener("dblclick", (evt) => {
+    if (mode === "polygon" && !polygonFinished && polygonPoints.length >= 3) {
+      finishPolygon();
+      evt.preventDefault();
+    }
+  });
+
+  // ---- Mode state --------------------------------------------------------
+  let mode = "polygon"; // 'polygon' | 'ellipse' | 'select'
+  const modePolygonBtn = document.getElementById("modePolygon");
+  const modeEllipseBtn = document.getElementById("modeEllipse");
+  const modeSelectBtn = document.getElementById("modeSelect");
+
+  function setMode(next) {
+    mode = next;
+    modePolygonBtn.classList.toggle("toggle-active", mode === "polygon");
+    modeEllipseBtn.classList.toggle("toggle-active", mode === "ellipse");
+    modeSelectBtn.classList.toggle("toggle-active", mode === "select");
+    renderOverlay();
+  }
+  modePolygonBtn.addEventListener("click", () => setMode("polygon"));
+  modeEllipseBtn.addEventListener("click", () => setMode("ellipse"));
+  modeSelectBtn.addEventListener("click", () => setMode("select"));
+
+  // ---- View toggles --------------------------------------------------
+  const viewBothBtn = document.getElementById("viewBoth");
+  const viewImageOnlyBtn = document.getElementById("viewImageOnly");
+  const viewOverlayOnlyBtn = document.getElementById("viewOverlayOnly");
+
+  function setViewMode(which) {
+    viewBothBtn.classList.toggle("toggle-active", which === "both");
+    viewImageOnlyBtn.classList.toggle("toggle-active", which === "image");
+    viewOverlayOnlyBtn.classList.toggle("toggle-active", which === "overlay");
+    imageEl.style.display = which === "overlay" ? "none" : "";
+    overlayGroup.style.display = which === "image" ? "none" : "";
+  }
+  viewBothBtn.addEventListener("click", () => setViewMode("both"));
+  viewImageOnlyBtn.addEventListener("click", () => setViewMode("image"));
+  viewOverlayOnlyBtn.addEventListener("click", () => setViewMode("overlay"));
+
+  // ---- Polygon state -------------------------------------------------
+  let polygonPoints = []; // [{x,y}, ...] in image-space
+  let polygonFinished = false;
+  let selectedVertex = null;
+  // Which shape the code preview/export should reflect when both a
+  // finished polygon and a finished ellipse exist at once (e.g. the user
+  // traced a polygon, then switched modes and drew an ellipse without
+  // clearing it) — always whichever was completed most recently, not a
+  // hardcoded "polygon wins" order.
+  let activeShapeKind = null; // 'polygon' | 'ellipse' | null
+
+  function resetPolygonDraft() {
+    polygonPoints = [];
+    polygonFinished = false;
+    selectedVertex = null;
+    if (activeShapeKind === "polygon") activeShapeKind = null;
+    updateCodePreview();
+  }
+
+  function addPolygonPoint(p) {
+    polygonPoints.push({ x: p.x, y: p.y });
+    renderOverlay();
+    updateCodePreview();
+  }
+
+  function finishPolygon() {
+    if (polygonPoints.length < 3) return;
+    polygonFinished = true;
+    activeShapeKind = "polygon";
+    renderOverlay();
+    updateCodePreview();
+  }
+
+  document.getElementById("undoPoint").addEventListener("click", () => {
+    if (polygonFinished) return;
+    polygonPoints.pop();
+    renderOverlay();
+    updateCodePreview();
+  });
+  document.getElementById("clearPolygon").addEventListener("click", () => {
+    resetPolygonDraft();
+    renderOverlay();
+  });
+  document.getElementById("finishPolygon").addEventListener("click", finishPolygon);
+  document.getElementById("deleteVertex").addEventListener("click", () => {
+    if (selectedVertex === null) return;
+    if (polygonPoints.length <= 3) {
+      // Keep a minimum of 3 points for a valid polygon.
+      return;
+    }
+    polygonPoints.splice(selectedVertex, 1);
+    selectedVertex = null;
+    renderOverlay();
+    updateCodePreview();
+  });
+
+  function insertVertexAfter(edgeIndex, point) {
+    // edgeIndex i = the edge between point i and point i+1 (wrapping).
+    polygonPoints.splice(edgeIndex + 1, 0, { x: point.x, y: point.y });
+    selectedVertex = edgeIndex + 1;
+    renderOverlay();
+    updateCodePreview();
+  }
+
+  // ---- Ellipse state ----------------------------------------------------
+  let ellipse = null; // {cx, cy, rx, ry}
+  let ellipseFinished = false;
+
+  function clearEllipse() {
+    ellipse = null;
+    ellipseFinished = false;
+    if (activeShapeKind === "ellipse") activeShapeKind = null;
+    updateCodePreview();
+    renderOverlay();
+  }
+  document.getElementById("clearEllipse").addEventListener("click", clearEllipse);
+
+  // ---- Rendering ----------------------------------------------------
+  // Vertex handle radius is specified in SCREEN pixels (constant visual
+  // size regardless of zoom) by dividing by the current view scale, since
+  // the handles live inside the same scaled `worldGroup`.
+  function screenPx(n) {
+    return n / viewScale;
+  }
+
+  function renderOverlay() {
+    overlayGroup.innerHTML = "";
+
+    if (mode !== "ellipse" || (!ellipse && !ellipseFinished)) {
+      renderPolygon();
+    }
+    if (mode === "ellipse" || ellipse) {
+      renderEllipse();
+    }
+
+    hudVertex.textContent =
+      selectedVertex !== null && polygonPoints[selectedVertex]
+        ? `${Math.round(polygonPoints[selectedVertex].x)}, ${Math.round(polygonPoints[selectedVertex].y)}`
+        : "—";
+  }
+
+  function renderPolygon() {
+    if (polygonPoints.length === 0) return;
+
+    const pointsAttr = polygonPoints.map((p) => `${p.x},${p.y}`).join(" ");
+
+    if (polygonFinished) {
+      const poly = document.createElementNS(SVG_NS, "polygon");
+      poly.setAttribute("points", pointsAttr);
+      poly.setAttribute("class", "poly-fill");
+      overlayGroup.appendChild(poly);
+
+      // Edge-midpoint insert handles.
+      for (let i = 0; i < polygonPoints.length; i++) {
+        const a = polygonPoints[i];
+        const b = polygonPoints[(i + 1) % polygonPoints.length];
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
+        const dot = document.createElementNS(SVG_NS, "circle");
+        dot.setAttribute("cx", String(mx));
+        dot.setAttribute("cy", String(my));
+        dot.setAttribute("r", String(screenPx(6)));
+        dot.setAttribute("class", "edge-midpoint");
+        dot.dataset.edgeInsertIndex = String(i);
+        overlayGroup.appendChild(dot);
+      }
+    } else {
+      const line = document.createElementNS(SVG_NS, "polyline");
+      line.setAttribute("points", pointsAttr);
+      line.setAttribute("class", "poly-draft-line");
+      overlayGroup.appendChild(line);
+    }
+
+    // Vertex handles (draggable always, even mid-trace).
+    polygonPoints.forEach((p, i) => {
+      const handle = document.createElementNS(SVG_NS, "circle");
+      handle.setAttribute("cx", String(p.x));
+      handle.setAttribute("cy", String(p.y));
+      handle.setAttribute("r", String(screenPx(8)));
+      handle.setAttribute("class", "vertex-handle" + (selectedVertex === i ? " selected" : ""));
+      handle.dataset.vertexIndex = String(i);
+      handle.addEventListener("click", (evt) => {
+        evt.stopPropagation();
+        if (suppressNextClick) { suppressNextClick = false; return; }
+        selectedVertex = i;
+        renderOverlay();
+      });
+      overlayGroup.appendChild(handle);
+    });
+  }
+
+  function renderEllipse() {
+    if (!ellipse) return;
+    const el = document.createElementNS(SVG_NS, "ellipse");
+    el.setAttribute("cx", String(ellipse.cx));
+    el.setAttribute("cy", String(ellipse.cy));
+    el.setAttribute("rx", String(ellipse.rx));
+    el.setAttribute("ry", String(ellipse.ry));
+    el.setAttribute("class", "ellipse-shape");
+    overlayGroup.appendChild(el);
+
+    const center = document.createElementNS(SVG_NS, "circle");
+    center.setAttribute("cx", String(ellipse.cx));
+    center.setAttribute("cy", String(ellipse.cy));
+    center.setAttribute("r", String(screenPx(7)));
+    center.setAttribute("class", "center-handle");
+    center.dataset.ellipseHandle = "center";
+    overlayGroup.appendChild(center);
+
+    const rxHandle = document.createElementNS(SVG_NS, "circle");
+    rxHandle.setAttribute("cx", String(ellipse.cx + ellipse.rx));
+    rxHandle.setAttribute("cy", String(ellipse.cy));
+    rxHandle.setAttribute("r", String(screenPx(7)));
+    rxHandle.setAttribute("class", "ellipse-handle");
+    rxHandle.dataset.ellipseHandle = "rx";
+    overlayGroup.appendChild(rxHandle);
+
+    const ryHandle = document.createElementNS(SVG_NS, "circle");
+    ryHandle.setAttribute("cx", String(ellipse.cx));
+    ryHandle.setAttribute("cy", String(ellipse.cy + ellipse.ry));
+    ryHandle.setAttribute("r", String(screenPx(7)));
+    ryHandle.setAttribute("class", "ellipse-handle");
+    ryHandle.dataset.ellipseHandle = "ry";
+    overlayGroup.appendChild(ryHandle);
+  }
+
+  // Ellipse center-drag needs a drag-start reference point; wire it in
+  // onPointerDown for the center handle specifically.
+  stage.addEventListener("pointerdown", (evt) => {
+    const target = evt.target;
+    if (target && target.dataset && target.dataset.ellipseHandle === "center" && ellipse) {
+      const p = clientToImagePoint(evt);
+      ellipse.dragStartX = p.x;
+      ellipse.dragStartY = p.y;
+    }
+  });
+
+  // ---- Code preview / export -------------------------------------------
+  function roundPt(n) {
+    return Math.round(n);
+  }
+
+  // The single source of truth for "what finished shape exists right now,
+  // if any" — returns a plain structured object (never a text string), so
+  // both the inline code preview and the collected-list entry below build
+  // off the exact same values instead of two copies of the same logic.
+  function currentFinishedShape() {
+    const polygonReady = polygonFinished && polygonPoints.length >= 3;
+    const ellipseReady = ellipse && ellipseFinished;
+    // When both exist (finished one shape, then started another without
+    // clearing the first), prefer whichever finished most recently.
+    const showPolygon = polygonReady && (activeShapeKind === "polygon" || !ellipseReady);
+    const showEllipse = ellipseReady && (activeShapeKind === "ellipse" || !polygonReady);
+
+    if (showPolygon) {
+      return { kind: "polygon", points: polygonPoints.map((p) => [roundPt(p.x), roundPt(p.y)]) };
+    }
+    if (showEllipse) {
+      return {
+        kind: "ellipse",
+        cx: roundPt(ellipse.cx), cy: roundPt(ellipse.cy),
+        rx: roundPt(ellipse.rx), ry: roundPt(ellipse.ry),
+      };
+    }
+    return null;
+  }
+
+  function codeForShape(shape, name) {
+    const lines = [];
+    if (name) lines.push(`// ${name}`);
+    if (shape.kind === "polygon") {
+      lines.push("polygon([");
+      for (const [x, y] of shape.points) lines.push(`  [${x}, ${y}],`);
+      lines.push("])");
+    } else {
+      lines.push(`ellipse(${shape.cx}, ${shape.cy}, ${shape.rx}, ${shape.ry})`);
+    }
+    return lines.join("\n");
+  }
+
+  function buildCode() {
+    const shape = currentFinishedShape();
+    if (shape) return codeForShape(shape, objectNameInput.value.trim());
+
+    if (mode === "polygon" && polygonPoints.length > 0) {
+      return `// polygon in progress (${polygonPoints.length} point${polygonPoints.length === 1 ? "" : "s"}) — finish to export`;
+    }
+    if (mode === "ellipse" && ellipse) {
+      return "// ellipse in progress — release pointer to finish";
+    }
+    return "// draw a shape to see exported code";
+  }
+
+  function updateCodePreview() {
+    codePreview.textContent = buildCode();
+  }
+
+  objectNameInput.addEventListener("input", updateCodePreview);
+
+  async function copyText(text, statusEl) {
+    try {
+      await navigator.clipboard.writeText(text);
+      statusEl.textContent = "Copied to clipboard.";
+    } catch {
+      // Clipboard API can fail (older Safari, insecure context, no focus).
+      // Fall back to a selection-based copy via a temporary textarea.
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand("copy");
+        statusEl.textContent = "Copied to clipboard.";
+      } catch {
+        statusEl.textContent = "Copy failed — select the text manually.";
+      }
+      document.body.removeChild(ta);
+    }
+    setTimeout(() => { statusEl.textContent = ""; }, 2500);
+  }
+
+  document.getElementById("copyCode").addEventListener("click", () => {
+    copyText(buildCode(), copyStatus);
+  });
+
+  // ---- Collected-shape list ---------------------------------------------
+  // Lets the user draw/name many shapes, in any room, before handing
+  // anything over — rather than copy-pasting one shape's code at a time and
+  // manually figuring out where each one belongs in world.js. Each entry
+  // remembers which room it was traced against (critical: a coordinate is
+  // meaningless without knowing which image it's relative to) plus an
+  // optional free-text "story hint" for the lore write-up. Kept only in
+  // memory for this page load — reloading the editor clears it, same as
+  // every other draft state here.
+  let collectedShapes = [];
+
+  function renderShapeList() {
+    listCountEl.textContent = String(collectedShapes.length);
+    shapeListEl.innerHTML = "";
+    if (collectedShapes.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "help";
+      empty.textContent = 'Nothing added yet — finish a shape, name it, then "Add to list".';
+      shapeListEl.appendChild(empty);
+      return;
+    }
+    collectedShapes.forEach((entry, i) => {
+      const row = document.createElement("div");
+      row.className = "shape-item";
+
+      const info = document.createElement("div");
+      info.className = "shape-item-info";
+      const nameEl = document.createElement("div");
+      nameEl.className = "shape-item-name";
+      nameEl.textContent = entry.name;
+      const metaEl = document.createElement("div");
+      metaEl.className = "shape-item-meta";
+      metaEl.textContent = `${entry.room} — ${entry.shape.kind}`;
+      info.appendChild(nameEl);
+      info.appendChild(metaEl);
+      if (entry.note) {
+        const noteEl = document.createElement("div");
+        noteEl.className = "shape-item-meta";
+        noteEl.textContent = entry.note;
+        info.appendChild(noteEl);
+      }
+
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "danger";
+      removeBtn.textContent = "Remove";
+      removeBtn.addEventListener("click", () => {
+        collectedShapes.splice(i, 1);
+        renderShapeList();
+      });
+
+      row.appendChild(info);
+      row.appendChild(removeBtn);
+      shapeListEl.appendChild(row);
+    });
+  }
+
+  document.getElementById("addToList").addEventListener("click", () => {
+    const shape = currentFinishedShape();
+    const name = objectNameInput.value.trim();
+    if (!shape) {
+      copyStatus.textContent = "Finish a polygon or ellipse first.";
+      setTimeout(() => { copyStatus.textContent = ""; }, 2500);
+      return;
+    }
+    if (!name) {
+      copyStatus.textContent = "Give it an object id/name first.";
+      setTimeout(() => { copyStatus.textContent = ""; }, 2500);
+      return;
+    }
+    collectedShapes.push({
+      name,
+      room: currentRoom.id,
+      roomLabel: currentRoom.label,
+      note: objectNoteInput.value.trim(),
+      shape,
+    });
+    renderShapeList();
+
+    // Clear the draft so the next shape starts clean, but keep the name
+    // field's placeholder-style hint by just emptying both text inputs.
+    resetPolygonDraft();
+    clearEllipse();
+    objectNameInput.value = "";
+    objectNoteInput.value = "";
+    renderOverlay();
+    updateCodePreview();
+    copyStatus.textContent = `Added "${name}". Draw the next shape.`;
+    setTimeout(() => { copyStatus.textContent = ""; }, 2500);
+  });
+
+  document.getElementById("clearList").addEventListener("click", () => {
+    if (collectedShapes.length === 0) return;
+    if (!confirm(`Clear all ${collectedShapes.length} collected shape(s)? This cannot be undone.`)) return;
+    collectedShapes = [];
+    renderShapeList();
+  });
+
+  document.getElementById("copyAllJson").addEventListener("click", () => {
+    if (collectedShapes.length === 0) {
+      listCopyStatus.textContent = "List is empty — add at least one shape first.";
+      setTimeout(() => { listCopyStatus.textContent = ""; }, 2500);
+      return;
+    }
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      shapes: collectedShapes.map((entry) => ({
+        name: entry.name,
+        room: entry.room,
+        roomLabel: entry.roomLabel,
+        note: entry.note || undefined,
+        shape: entry.shape,
+        code: codeForShape(entry.shape, entry.name),
+      })),
+    };
+    copyText(JSON.stringify(payload, null, 2), listCopyStatus);
+  });
+
+  renderShapeList();
+
+  // ---- Keyboard support ---------------------------------------------
+  // Essential interaction works with a keyboard too: arrow keys nudge the
+  // selected vertex by 1px (10px with Shift), Delete removes it, Escape
+  // deselects.
+  window.addEventListener("keydown", (evt) => {
+    if (document.activeElement === objectNameInput) return;
+
+    if (evt.key === "Escape") {
+      selectedVertex = null;
+      renderOverlay();
+      return;
+    }
+    if (selectedVertex === null) return;
+    const step = evt.shiftKey ? 10 : 1;
+    const p = polygonPoints[selectedVertex];
+    if (!p) return;
+    let handled = true;
+    if (evt.key === "ArrowLeft") p.x -= step;
+    else if (evt.key === "ArrowRight") p.x += step;
+    else if (evt.key === "ArrowUp") p.y -= step;
+    else if (evt.key === "ArrowDown") p.y += step;
+    else if (evt.key === "Delete" || evt.key === "Backspace") {
+      if (polygonPoints.length > 3) {
+        polygonPoints.splice(selectedVertex, 1);
+        selectedVertex = null;
+      }
+    } else {
+      handled = false;
+    }
+    if (handled) {
+      evt.preventDefault();
+      renderOverlay();
+      updateCodePreview();
+    }
+  });
+
+  // ---- Init --------------------------------------------------------
+  loadRoom(currentRoom);
+  setMode("polygon");
+  setViewMode("both");
+})();
+</script>
+</body>
+</html>
