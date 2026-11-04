@@ -705,22 +705,22 @@ const FOUNDING_COLLECTION = {
   portraits: {
     subtype: "painting",
     title: "The Unfinished Sitter",
-    originClaim: "Commissioned in 1884; the sitter's face was never completed. The museum acquired it exactly as left on the easel.",
+    originClaim: "Commissioned in 1884; the sitter's face was never completed. The museum's first curator acquired it exactly as left on the easel, and signed the intake card — the only founding piece in the collection she signed by name, a name no later record repeats.",
   },
   memento: {
     subtype: "clock",
     title: "The Clock That Keeps No Hour",
-    originClaim: "Found stopped at no particular time in an estate clearance. It has never been wound since arriving, yet it is never found at the same hour twice.",
+    originClaim: "Found stopped at no particular time in an estate clearance, in the same lot as the first curator's own effects. It has never been wound since arriving, yet it is never found at the same hour twice.",
   },
   specimen: {
     subtype: "biological",
     title: "The Cataloguer's Specimen",
-    originClaim: "Logged by the museum's first curator in 1901 as 'pending identification.' It remains pending.",
+    originClaim: "Logged by the museum's first curator in 1901 as 'pending identification.' It remains pending — the same word she used for the trunk in the nursery, and for little else besides.",
   },
   childhood: {
     subtype: "doll",
     title: "The Nursery's First Doll",
-    originClaim: "The founding donation to this gallery — present, by the ledger's account, before the nursery it depicts was ever furnished.",
+    originClaim: "The founding donation to this gallery — present, by the ledger's account, before the nursery it depicts was ever furnished, and entered in the first curator's hand the same year she stopped signing anything else.",
   },
 };
 

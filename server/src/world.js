@@ -340,7 +340,7 @@ const GALLERY_LAYOUT = [
     closeup: {
       image: "portrait-reference",
       caption: "The Watching Portrait",
-      lore: "The mirror fogs from the edges inward, never from breath. Conservation notes say the fog always clears last around whoever has already looked away.",
+      lore: "The mirror fogs from the edges inward, never from breath. Conservation notes say the fog always clears last around whoever has already looked away — the same note, in the same hand, every time it is written.",
     },
     // Eight real painted objects in portraits.webp (1672x941), each
     // hand-traced against the actual illustration rather than a percentage
@@ -354,14 +354,14 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "Look closer: The Watching Portrait",
-        text: "The mirror fogs from the edges inward, never from breath. Conservation notes say the fog always clears last around whoever has already looked away.",
+        text: "The mirror fogs from the edges inward, never from breath. Conservation notes say the fog always clears last around whoever has already looked away — the same note, in the same hand, every time it is written.",
         closeupSceneId: "portraits-closeup",
         shape: polygon([[670, 235], [820, 235], [820, 610], [670, 610]]),
       },
       {
         type: "lore",
         label: "The left plinth bust",
-        text: "The bust carries no accession record. Staff rotate it a quarter turn at every inventory, to see if a visitor notices it now faces a different way. Someone always does.",
+        text: "The bust carries no accession record, only a small pencilled '1.' on its underside, in the same hand as the first curator's own notebooks. Staff rotate it a quarter turn at every inventory, to see if a visitor notices it now faces a different way. Someone always does.",
         shape: polygon([
           [659, 507.5], [634, 507.5], [633.5, 502], [639.5, 499], [638.5, 489],
           [623.5, 474], [625.5, 466], [636, 461.5], [639.5, 458], [634.5, 443],
@@ -392,7 +392,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "The second framed portrait",
-        text: "Unsigned, undated, and — by every conservator's measurement — painted in exactly the same hand as the gallery's central portrait, though the museum has never catalogued them as a pair.",
+        text: "Unsigned, undated, and — by every conservator's measurement — painted in exactly the same hand as the gallery's central portrait, though the museum has never catalogued them as a pair. A loan slip once tucked behind the canvas named a borrower; only the surname survives the damp, and it matches no curator the museum has ever listed on staff.",
         shape: polygon([
           [1065, 283], [1075, 290], [1085, 298], [1090, 305], [1097, 310],
           [1100, 320], [1100, 395], [1095, 405], [1085, 408], [1020, 408],
@@ -423,7 +423,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "A cabinet of pinned moths",
-        text: "Each moth is labelled with a date of collection and nothing else — no collector's name, no location, across a span of hand-writing styles that covers at least three centuries.",
+        text: "Each moth is labelled with a date of collection and nothing else — no collector's name, no location, across a span of hand-writing styles that covers at least three centuries. The most recent label is also the smallest, written in a hand matched nowhere else in this gallery, though a conservator insists she has seen it before, in a different room entirely.",
         shape: polygon([
           [1503, 494], [1592, 489], [1600, 500], [1602, 600], [1600, 690],
           [1590, 698], [1505, 698], [1497, 690], [1497, 505],
@@ -515,7 +515,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "A brass armillary sphere on its stand",
-        text: "Its rings are set to a date in the sky that hasn't occurred yet. The astronomer who calibrates such things for the museum has refused to return a second time.",
+        text: "Its rings are set to a date in the sky that hasn't occurred yet. The astronomer who calibrates such things for the museum has refused to return a second time — the third such sphere in the collection, and the third left set to the same unarrived date, though no two were acquired within a decade of each other.",
         shape: polygon([
           [1122, 592], [1155, 585], [1185, 600], [1195, 620], [1190, 645],
           [1175, 655], [1178, 670], [1168, 685], [1172, 700], [1160, 715],
@@ -528,7 +528,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "The gilt frame's crest",
-        text: "The carved cartouche at the frame's crown has no family crest the heralds' office can identify. It has been asked to identify it four separate times, by four separate curators, each unaware the others had already asked.",
+        text: "The carved cartouche at the frame's crown has no family crest the heralds' office can identify. It has been asked to identify it four separate times, by four separate curators, each unaware the others had already asked — the fourth request filed by the first curator, and the last request on record bearing that title at all.",
         shape: polygon([[207, 47], [212, 40], [222, 34], [234, 31], [246, 30], [258, 32], [268, 36], [278, 42], [285, 49], [288, 55], [282, 60], [270, 64], [255, 66], [240, 65], [225, 62], [213, 57]], PORTRAIT_REF_VIEWBOX),
       },
       {
@@ -555,13 +555,13 @@ const GALLERY_LAYOUT = [
     closeup: {
       image: "cabinet-reference",
       caption: "The Long Cabinet",
-      lore: "Every drawer is catalogued; no two catalogues agree on a date. Objects That Remember keeps the disagreements as carefully as the objects.",
+      lore: "Every drawer is catalogued; no two catalogues agree on a date. Objects That Remember keeps the disagreements as carefully as the objects — including the one drawer whose card names a curator no later catalogue repeats.",
     },
     objects: [
       {
         type: "lore",
         label: "Look closer: The Long Cabinet",
-        text: "Every drawer is catalogued; no two catalogues agree on a date. Objects That Remember keeps the disagreements as carefully as the objects.",
+        text: "Every drawer is catalogued; no two catalogues agree on a date. Objects That Remember keeps the disagreements as carefully as the objects — including the one drawer whose card names a curator no later catalogue repeats.",
         closeupSceneId: "memento-closeup",
         shape: polygon([[685, 438], [1010, 438], [1010, 745], [685, 745]]),
       },
@@ -580,7 +580,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "A locked drawer",
-        text: "Every other drawer in the cabinet opens freely. This one has never been recorded unlocked, and no key has ever been catalogued for it.",
+        text: "Every other drawer in the cabinet opens freely. This one has never been recorded unlocked, and no key has ever been catalogued for it — only a card taped beside the keyhole, in the first curator's hand, reading simply 'later.'",
         shape: polygon([[712, 582], [897, 580], [897, 609], [712, 611]]),
       },
       {
@@ -614,7 +614,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "A brass armillary globe",
-        text: "Its rings are set to a sky that matches no hemisphere's stars as drawn. An astronomer consulted twice has twice declined to say more on the record.",
+        text: "Its rings are set to a sky that matches no hemisphere's stars as drawn — the second such sphere in the collection, set to the same unarrived date as its counterpart across the hall. An astronomer consulted twice has twice declined to say more on the record.",
         shape: ellipse(332, 563, 68, 68),
       },
       {
@@ -653,7 +653,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "A pressed herbarium of unlabelled flowers",
-        text: "Every specimen is mounted and dated, and not one is named. The botanist who assembled the collection left the binomial column blank on every single card, on purpose, according to a note pinned to the back.",
+        text: "Every specimen is mounted and dated, and not one is named. The first curator left the binomial column blank on every single card, on purpose, according to a note pinned to the back — the same purpose claimed, in the same words, on an unrelated card three rooms away.",
         shape: polygon([
           [20, 480], [95, 472], [102, 495], [100, 560], [95, 600],
           [85, 615], [25, 615], [15, 600], [15, 520],
@@ -692,7 +692,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "A shelf of brass orrery clocks",
-        text: "Both timepieces are wound on the same schedule by the same hand, and both have drifted to show the same wrong hour, independently, every month for as long as anyone has checked.",
+        text: "Both timepieces are wound on the same schedule by the same hand, and both have drifted to show the same wrong hour, independently, every month for as long as anyone has checked — the hour the hall's own mechanical clock was once stopped and restarted, by nobody who signed for it.",
         shape: polygon([
           [1305, 345], [1340, 330], [1375, 345], [1385, 380], [1382, 420],
           [1388, 440], [1370, 460], [1380, 480], [1382, 510], [1370, 540],
@@ -717,7 +717,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "A gilt shrine with no name plate",
-        text: "The figure inside has been dusted so many times its face has worn soft. No label has ever been affixed, though the fixing-holes for one are there.",
+        text: "The figure inside has been dusted so many times its face has worn soft. No label has ever been affixed, though the fixing-holes for one are there, drilled — a conservator once noted — to fit a plate already engraved with the first curator's own initials, never installed.",
         shape: polygon(
           [
             [260, 149], [266, 156], [263, 161], [270, 163], [279, 171],
@@ -754,21 +754,21 @@ const GALLERY_LAYOUT = [
       image: "specimen",
       zoom: true,
       caption: "Under Glass",
-      lore: "Logged as botanical in 1911, biological in 1958, and 'undetermined — do not reclassify again' in 2003. The jar has not been opened since.",
+      lore: "Logged as botanical in 1911, biological in 1958, and 'undetermined — do not reclassify again' in 2003, in the same hand as the first entry. The jar has not been opened since.",
       closeupCamera: { initialPan: 50, minPan: 30, maxPan: 70, initialZoom: 1.7, minZoom: 1.5, maxZoom: 2.3 },
     },
     objects: [
       {
         type: "lore",
         label: "Look closer: Under Glass",
-        text: "Logged as botanical in 1911, biological in 1958, and 'undetermined — do not reclassify again' in 2003. The jar has not been opened since.",
+        text: "Logged as botanical in 1911, biological in 1958, and 'undetermined — do not reclassify again' in 2003, in the same hand as the first entry. The jar has not been opened since.",
         closeupSceneId: "specimen-closeup",
         shape: polygon([[828, 398], [1068, 398], [1068, 580], [828, 580]]),
       },
       {
         type: "lore",
         label: "The skeletal figure on the shelf",
-        text: "Collection records list only one sculpture for this gallery. Nobody currently on staff remembers the other one arriving, nor can anyone say with confidence what species it was assembled to represent.",
+        text: "Collection records list only one sculpture for this gallery. Nobody currently on staff remembers the other one arriving, nor can anyone say with confidence what species it was assembled to represent — only that the armature inside carries the same maker's stamp as the skeletal wing across the room, filed a decade apart.",
         shape: polygon([
           [683.0, 422.5], [659.0, 422.5], [658.0, 418.5], [562.5, 410.0], [562.5, 232.0],
           [577.0, 234.5], [578.5, 250.0], [590.0, 248.5], [593.5, 253.0], [595.0, 286.5],
@@ -832,7 +832,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "A ram-horned skull on the shelf",
-        text: "Field notes describe the animal as 'goat-like, but wrong in the jaw.' No photograph of the living specimen survives, and the collector who shot it never filed a species name.",
+        text: "Field notes describe the animal as 'goat-like, but wrong in the jaw,' signed only with the first curator's initials. No photograph of the living specimen survives, and the collector who shot it never filed a species name.",
         shape: polygon([
           [145, 448], [175, 415], [195, 445], [220, 470], [245, 485], [265, 490],
           [285, 500], [300, 520], [310, 540], [315, 560], [320, 590], [318, 615],
@@ -843,7 +843,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "An armillary sphere, still turning",
-        text: "Unplugged, unwound, and nowhere near a draft, its rings nonetheless complete one slow rotation roughly every nine days. Maintenance logs it as 'observed, not touched.'",
+        text: "Unplugged, unwound, and nowhere near a draft, its rings nonetheless complete one slow rotation roughly every nine days — the third of its kind in the collection, and the only one still moving. Maintenance logs it as 'observed, not touched.'",
         shape: polygon([
           [365, 420], [390, 415], [415, 425], [430, 445], [445, 470], [462, 500],
           [465, 530], [460, 560], [448, 590], [430, 615], [405, 635], [378, 642],
@@ -896,7 +896,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "A mounted dragon skull",
-        text: "No fossil record supports the species. The mounting plaque reads only 'donor requested anonymity,' a line repeated on nothing else in the collection.",
+        text: "No fossil record supports the species. The mounting plaque reads only 'donor requested anonymity' — a line repeated, word for word, on the gallery's own founding specimen, catalogued the same year.",
         shape: polygon([
           [1540, 295], [1565, 292], [1585, 300], [1600, 312], [1612, 325], [1618, 340],
           [1610, 355], [1600, 365], [1595, 380], [1585, 400], [1570, 415], [1555, 418],
@@ -930,7 +930,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "An ammonite fossil under glass",
-        text: "Its spiral runs the wrong direction for its catalogued species — a detail noted once, in pencil, in the margin of a logbook nobody has been able to relocate since.",
+        text: "Its spiral runs the wrong direction for its catalogued species — a detail noted once, in pencil, in the margin of the first curator's own logbook, which nobody has been able to relocate since.",
         shape: ellipse(487, 480, 27, 26, ZOOM_CLOSEUP_VIEWBOX),
       },
       {
@@ -969,14 +969,14 @@ const GALLERY_LAYOUT = [
       image: "childhood",
       zoom: true,
       caption: "The Shelf That Waits",
-      lore: "The shelf is dusted every week, the gap on the third row included, around whatever used to sit there.",
+      lore: "The shelf is dusted every week, the gap on the third row included, around whatever used to sit there — and whatever it was, the inventory card for that slot still bears the first curator's own initials, never crossed out.",
       closeupCamera: { initialPan: 28, minPan: 10, maxPan: 50, initialZoom: 1.6, minZoom: 1.4, maxZoom: 2.2 },
     },
     objects: [
       {
         type: "lore",
         label: "Look closer: The Shelf That Waits",
-        text: "The shelf is dusted every week, the gap on the third row included, around whatever used to sit there.",
+        text: "The shelf is dusted every week, the gap on the third row included, around whatever used to sit there — and whatever it was, the inventory card for that slot still bears the first curator's own initials, never crossed out.",
         closeupSceneId: "childhood-closeup",
         shape: polygon([[478, 112], [700, 108], [702, 243], [480, 248]]),
       },
@@ -1005,7 +1005,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "The waiting cot",
-        text: "It is turned down fresh every morning. The nursery has had no occupant on record for longer than any living curator can confirm.",
+        text: "It is turned down fresh every morning, a duty the handover log attributes to 'standing instruction, see curator's file' without naming which curator or producing the file. The nursery has had no occupant on record for longer than anyone currently on staff can confirm.",
         shape: polygon([[1042, 438], [1078, 430], [1150, 427], [1192, 434], [1202, 458], [1198, 480], [1202, 520], [1198, 555], [1188, 570], [1150, 575], [1085, 573], [1050, 565], [1043, 540], [1038, 490]]),
       },
       {
@@ -1042,7 +1042,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "A second rocking horse, deeper in the cabinet",
-        text: "Identical to the one nearer the door, down to the same worn saddle patch, though the ledger lists only a single horse ever acquired.",
+        text: "Identical to the one nearer the door, down to the same worn saddle patch, though the ledger lists only a single horse ever acquired — the first curator's own handwriting, re-entering the same acquisition twice, a year apart, as though the first entry had been forgotten rather than corrected.",
         shape: polygon([[905, 415], [925, 405], [940, 412], [950, 425], [958, 440], [968, 455], [990, 465], [1015, 475], [1030, 490], [1033, 505], [1025, 518], [1040, 528], [1055, 545], [1050, 560], [1025, 565], [1000, 560], [975, 552], [950, 548], [928, 552], [905, 558], [885, 560], [872, 548], [880, 528], [890, 508], [894, 488], [896, 468], [898, 448], [900, 430]]),
       },
       {
@@ -1105,7 +1105,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "A dark trunk bound in gilt",
-        text: "Logged in every inventory as 'empty, pending contents.' It has been logged that way since the gallery opened, and no curator has thought to correct it.",
+        text: "Logged in every inventory as 'empty, pending contents' — the first curator's own phrase, unchanged for as long as the gallery has existed, and the same word, 'pending,' that recurs in the specimen gallery's own founding entry.",
         shape: polygon([[533, 626], [578, 623], [582, 633], [580, 650], [585, 655], [582, 665], [580, 695], [578, 703], [568, 710], [540, 712], [530, 705], [528, 695], [530, 665], [527, 655], [530, 648], [528, 633]]),
       },
       {
@@ -1168,7 +1168,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "The second rocking horse, further back",
-        text: "Identical to the one nearer the door, down to the same worn saddle patch, though the ledger lists only a single horse ever acquired.",
+        text: "Identical to the one nearer the door, down to the same worn saddle patch, though the ledger lists only a single horse ever acquired — the first curator's own handwriting, re-entering the same acquisition twice, a year apart.",
         shape: polygon([
           [897, 455], [902, 448], [908, 452], [916, 446], [928, 450],
           [945, 458], [958, 470], [966, 482], [978, 483], [995, 484],
@@ -1181,7 +1181,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "The crib's carved headboard",
-        text: "Carved with a lullaby in a script the museum's own linguists have never fully translated, past the first and last lines.",
+        text: "Carved with a lullaby in a script the museum's own linguists have never fully translated, past the first and last lines — the last line naming, as near as anyone can render it, a curator rather than a child.",
         shape: polygon([
           [1063, 448], [1070, 460], [1066, 468], [1075, 470], [1090, 465],
           [1097, 453], [1104, 463], [1112, 468], [1119, 449], [1127, 463],
@@ -1353,7 +1353,7 @@ const HALL_LORE_OBJECTS = [
     id: "hall-chandelier",
     type: "lore",
     label: "The tiered chandelier",
-    text: "Every candle on the lowest tier burns down at the same rate, night after night, regardless of how many visitors pass beneath it. The upper two tiers have never been lit in any record staff can find.",
+    text: "Only the lowest tier is ever lit, and it burns down at the same rate every night regardless of how many visitors pass beneath it. The upper two tiers were wired for candles that were never once supplied — by the first curator's own specification, according to a margin note nobody has been able to date.",
     shape: ellipse(805, 100, 215, 105),
     hitPadding: 8,
   },
@@ -1361,7 +1361,7 @@ const HALL_LORE_OBJECTS = [
     id: "hall-guardian-left",
     type: "lore",
     label: "The left guardian",
-    text: "Catalogued as a griffin, though no two inventories describe the same number of wings. It faces the staircase in every photograph taken of this hall since the museum opened — except one, filed separately, which nobody will say where it is now.",
+    text: "Catalogued as a griffin, though no two inventories describe the same number of wings. It faces the staircase in every photograph taken of this hall since the museum opened — except one, filed under the first curator's own name, which nobody will say where it is now.",
     shape: polygon([
       [415, 122], [398, 132], [388, 148], [384, 170], [383, 195], [384, 220], [386, 245],
       [389, 270], [393, 295], [398, 320], [402, 345], [400, 365], [405, 380], [420, 388],
@@ -1376,7 +1376,7 @@ const HALL_LORE_OBJECTS = [
     id: "hall-guardian-right",
     type: "lore",
     label: "The right guardian",
-    text: "Its twin, supposedly. Conservation measured a half-centimetre difference in wingspan between the two in 1964 and has re-measured every decade since. The difference has never been the same number twice.",
+    text: "Its twin, supposedly. Conservation measured a half-centimetre difference in wingspan between the two in 1964 — the last year the first curator's own measurements appear anywhere in the ledger — and has re-measured every decade since. The difference has never been the same number twice.",
     shape: polygon([
       [1198, 163], [1215, 168], [1225, 180], [1238, 155], [1248, 130], [1258, 128], [1270, 140],
       [1283, 155], [1293, 170], [1298, 190], [1300, 215], [1298, 240], [1293, 265], [1288, 285],
@@ -1391,14 +1391,14 @@ const HALL_LORE_OBJECTS = [
     id: "hall-compass",
     type: "lore",
     label: "The floor compass mosaic",
-    text: "A star-and-compass mosaic set directly before the stair. Cleaning staff report it is always faintly warm to the touch, in every season, regardless of the hall's own temperature.",
+    text: "A star-and-compass mosaic set directly before the stair, its needle fixed to point at none of the four doorways. Cleaning staff report it is always faintly warm to the touch, in every season, regardless of the hall's own temperature.",
     shape: ellipse(845, 785, 345, 135),
   },
   {
     id: "hall-map",
     type: "guide",
     label: "The antique map",
-    text: "A folded map of a coastline that matches no surveyed country. It has been re-folded along the same creases for as long as anyone has worked here, though no one admits to doing it.",
+    text: "A folded map of a coastline that matches no surveyed country, in what conservation believes is the first curator's own hand. It has been re-folded along the same creases for as long as anyone has worked here, though no one admits to doing it.",
     shape: polygon([[1352, 463], [1452, 470], [1458, 635], [1300, 643], [1295, 477]]),
     hitPadding: 6,
   },
@@ -1406,7 +1406,7 @@ const HALL_LORE_OBJECTS = [
     id: "hall-clock",
     type: "lore",
     label: "The mechanical clock",
-    text: "A brass-and-wood clock that keeps correct time, checked against the city's own civic clock every month without fail. Staff still avoid being alone with it at the top of the hour.",
+    text: "A brass-and-wood clock that keeps correct time, checked against the city's own civic clock every month without fail. It was stopped and restarted exactly once, the same year every gallery's own founding piece was logged — the only date the whole collection agrees on.",
     shape: polygon([
       [1582, 243], [1592, 255], [1588, 278], [1620, 288], [1648, 300], [1655, 330], [1652, 420], [1650, 480],
       [1652, 560], [1640, 600], [1495, 600], [1490, 560], [1488, 480], [1486, 420], [1492, 330], [1500, 300],
@@ -1418,7 +1418,7 @@ const HALL_LORE_OBJECTS = [
     id: "hall-guestbook",
     type: "lore",
     label: "The chained guestbook",
-    text: "Chained to its podium, like a book meant never to leave, though several names inside are of visitors who the front desk has no record of ever admitting.",
+    text: "Chained to its podium, like a book meant never to leave, though several names inside are of visitors who the front desk has no record of ever admitting. The first page is missing, cut rather than torn, and no later page names a curator by title again.",
     shape: polygon([
       [1495, 600], [1640, 600], [1648, 615], [1648, 640], [1660, 660], [1660, 840],
       [1440, 840], [1440, 660], [1450, 640], [1450, 615],
@@ -1429,7 +1429,7 @@ const HALL_LORE_OBJECTS = [
     id: "hall-angel",
     type: "lore",
     label: "The watching angel",
-    text: "Perched above the stair on its own pedestal, wings half-spread as though it only just landed there. Night staff swear its shadow falls the wrong way for where the moon window sits, and no one has ever caught it mid-turn, only ever already turned.",
+    text: "Perched above the stair on its own pedestal, wings half-spread as though it only just landed there — installed, the ledger says, the same season the first curator stopped signing the acquisition book. Night staff swear its shadow falls the wrong way for where the moon window sits, and no one has ever caught it mid-turn, only ever already turned.",
     shape: polygon([
       [859, 420], [830, 420], [834, 407], [828, 400], [832, 384], [826, 386], [830, 371], [826, 372],
       [815, 358], [812, 358], [790, 333], [790, 328], [819, 336], [830, 346], [833, 354], [842, 340],
