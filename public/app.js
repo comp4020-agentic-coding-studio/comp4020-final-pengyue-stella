@@ -158,8 +158,7 @@ function populateDonateForm() {
   // Default to whichever gallery the visitor is currently looking at, if
   // any — a small convenience, not a restriction: every gallery stays
   // selectable regardless of current scene (CLAUDE.md: donation must be
-  // reachable from every main scene, not gated by orientation). Superseded
-  // below by whichever gallery the default preset belongs to, if any.
+  // reachable from every main scene, not gated by orientation).
   const scene = illustrator?.currentScene();
   if (scene?.galleryId) gallerySelect.value = scene.galleryId;
 
@@ -172,20 +171,17 @@ function populateDonateForm() {
     el("donate-error").textContent = "";
   }
 
-  // The visual picker: all four curated presets, always shown together,
-  // regardless of which gallery happens to be selected — selecting one
-  // DRIVES the gallery/subtype choice (preset-first), rather than being
-  // filtered down to whichever single preset matches an already-chosen
-  // gallery (the old "only one preset + Classic" bug). Changing the
-  // gallery dropdown directly (without clicking a preset) no longer clears
-  // the chosen preset to a "Classic" fallback — the picker and the gallery
-  // dropdown both just reflect the same preset's own category; a donor
-  // changing the dropdown away from that category is gently corrected back
-  // by reselecting the matching gallery whenever a tile is clicked, and the
-  // submit handler below refuses to submit a mismatch either way.
+  // Gallery-first workflow: a donor picks the room *before* the appearance,
+  // and the picker only ever shows presets that belong to the currently
+  // selected gallery's category — a preset can never silently change the
+  // room the donor already chose (this replaces the old "preset-first,
+  // auto-switch the gallery dropdown" behaviour, which a donor reported as
+  // surprising/unwanted). Re-run whenever the gallery dropdown changes.
   function buildVisualGrid() {
+    const gallery = world.galleries.find((g) => g.id === gallerySelect.value);
+    const compatible = gallery ? relicPresets.filter((p) => p.category === gallery.category) : [];
     visualGrid.innerHTML = "";
-    for (const preset of relicPresets) {
+    for (const preset of compatible) {
       const tile = document.createElement("button");
       tile.type = "button";
       tile.className = "visual-preset-tile";
@@ -199,29 +195,30 @@ function populateDonateForm() {
       name.className = "visual-preset-name";
       name.textContent = preset.name;
       tile.appendChild(name);
-      tile.addEventListener("click", () => {
-        const targetGalleryId = world.galleries.find((g) => g.category === preset.category)?.id;
-        if (targetGalleryId) gallerySelect.value = targetGalleryId;
-        selectVisual(preset.id, preset.subtype);
-      });
+      // Only ever sets the appearance — the gallery dropdown is never
+      // touched here, so a donor's room choice always stays put.
+      tile.addEventListener("click", () => selectVisual(preset.id, preset.subtype));
       visualGrid.appendChild(tile);
+    }
+    // Default to the first preset compatible with the now-selected gallery,
+    // so a donor still sees an integrated illustrated relic by default
+    // without having to click into the picker first.
+    if (compatible.length > 0) {
+      selectVisual(compatible[0].id, compatible[0].subtype);
+    } else {
+      selectVisual(null, null);
     }
   }
 
+  // Changing the room re-filters the picker to that room's own presets
+  // (clearing whichever appearance was selected for the previous room,
+  // since it may no longer belong here) — the gallery is always the thing
+  // driving the picker, never the other way around. Assigned (not
+  // addEventListener) since populateDonateForm re-runs on every gate open
+  // and would otherwise stack a duplicate listener per open.
+  gallerySelect.onchange = buildVisualGrid;
+
   buildVisualGrid();
-  // Default to the first curated preset overall, so a donor sees an
-  // integrated illustrated relic by default rather than having to discover
-  // the picker — this also sets the gallery to match that preset's own
-  // category, superseding the "default to the visitor's current gallery"
-  // convenience above when a default preset is available.
-  if (relicPresets.length > 0) {
-    const first = relicPresets[0];
-    const targetGalleryId = world.galleries.find((g) => g.category === first.category)?.id;
-    if (targetGalleryId) gallerySelect.value = targetGalleryId;
-    selectVisual(first.id, first.subtype);
-  } else {
-    selectVisual(null, null);
-  }
 }
 
 function openDonateGate() {
@@ -261,15 +258,11 @@ el("donate-form").addEventListener("submit", (e) => {
     return;
   }
 
-  // The chosen preset's own category is what actually determines the
-  // gallery a preset-driven donation belongs to — read it back off the
-  // preset rather than trusting the gallery <select>'s current value,
-  // which a donor could in principle still have changed after picking a
-  // tile (buildVisualGrid's click handler already re-syncs it, but this is
-  // the authoritative source either way, consistent with "the preset IS
-  // the subtype/category choice").
-  const preset = presetById(selectedVisualId);
-  const galleryId = world.galleries.find((g) => g.category === preset?.category)?.id ?? form.galleryId.value;
+  // Gallery-first: the gallery <select> is now the authoritative choice
+  // (the picker above only ever offers presets compatible with it, and
+  // never changes it itself — see populateDonateForm), so read the gallery
+  // straight off the form rather than re-deriving it from the preset.
+  const galleryId = form.galleryId.value;
   const gallery = world.galleries.find((g) => g.id === galleryId);
   const free = gallery.slots.filter((s) => !occupiedSlotIdsForGallery(galleryId).has(s.id));
   if (free.length === 0) {

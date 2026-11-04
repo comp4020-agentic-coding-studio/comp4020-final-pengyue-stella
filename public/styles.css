@@ -741,6 +741,29 @@ a {
   display: none;
 }
 
+/* Same themed-scrollbar treatment as `.gate-card` (see its own comment) — the
+   lore drawer shares its cream `.side-drawer` background, so it gets the
+   same parchment/brass pairing. `.dossier-drawer` overrides this further
+   below for its own darker palette. */
+.side-drawer {
+  scrollbar-width: thin;
+  scrollbar-color: var(--brass) var(--parchment);
+}
+.side-drawer::-webkit-scrollbar {
+  width: 10px;
+}
+.side-drawer::-webkit-scrollbar-track {
+  background: var(--parchment);
+}
+.side-drawer::-webkit-scrollbar-thumb {
+  background: var(--brass);
+  border-radius: 999px;
+  border: 2px solid var(--parchment);
+}
+.side-drawer::-webkit-scrollbar-thumb:hover {
+  background: var(--gold);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .side-drawer {
     transition: none;
@@ -822,30 +845,39 @@ a {
      already provides one. */
 }
 
+/* Overrides `.side-drawer`'s cream scrollbar pairing above for this drawer's
+   own dark obsidian palette. */
+.dossier-drawer {
+  scrollbar-color: var(--gold) rgba(17, 13, 10, 0.4);
+}
+.dossier-drawer::-webkit-scrollbar-track {
+  background: rgba(17, 13, 10, 0.4);
+}
+.dossier-drawer::-webkit-scrollbar-thumb {
+  background: var(--gold);
+  border-color: rgba(17, 13, 10, 0.4);
+}
+
 /* A restrained antique-brass corner flourish, echoing `.dossier-card`'s own
    corner treatment in the lighter gate-card forms — kept small and low-
    contrast so it reads as ornament, never gore or visual noise.
-   `position: sticky`, not `absolute` — `.side-drawer` (this element's own
-   container) is the scroll container whenever a dossier's content overflows
-   its height, which is routine (long account threads, the donation form's
-   own visual-preset grid when this class is reused there). An `absolute`
-   corner is positioned against the container's padding box, which only
-   spans its visible height, not its full scrolled height, so `bottom: 10px`
-   landed 10px above the bottom of the VIEWPORT — the middle of the actual
-   scrolled content, not the drawer's true bottom-right corner (confirmed
-   live: the gold triangle floated over mid-list content once a dossier
-   needed scrolling). `sticky` pins each ornament to whichever real edge of
-   the scrollED frame it belongs to, the same fix as `.dossier-close`'s own
-   `position: sticky` just above for the identical problem. `display: block`
-   is set explicitly since a pseudo-element defaults to inline, and `sticky`
-   needs a block box to anchor correctly; the after's `margin-left: auto`
-   pushes it to the container's right edge in normal block flow (no flex
-   context needed here, unlike `.dossier-card`'s flex-column equivalent). */
+   `position: absolute`, anchored to `.side-drawer`'s own padding box (it
+   already establishes the positioning context via `position: absolute;
+   top: 0; bottom: 0`) — this pins each ornament to the drawer's fixed
+   VISIBLE frame regardless of scroll offset. An earlier `position: sticky`
+   attempt here (reasoning that `absolute` would anchor to the scrolled
+   CONTENT instead) had it backwards and made things worse: `sticky`
+   re-anchors to wherever the scroll position currently puts "the edge of
+   the visible frame" as a point in the document, which drifts under
+   mid-scroll zero-margin math — confirmed live, scrolling a long dossier
+   dragged the bottom-right triangle up over list content instead of
+   resting in the true corner. Plain `absolute` + `top/bottom: 0` is instead
+   measured straight from the (non-scrolling) container box, so it's exactly
+   the fix `.dossier-card`'s identical corner ornaments above now use too. */
 .dossier-drawer::before,
 .dossier-drawer::after {
   content: "";
-  display: block;
-  position: sticky;
+  position: absolute;
   width: 46px;
   height: 46px;
   pointer-events: none;
@@ -854,11 +886,11 @@ a {
 }
 .dossier-drawer::before {
   top: 10px;
-  margin: -10px 0 -46px -10px;
+  left: 10px;
 }
 .dossier-drawer::after {
   bottom: 10px;
-  margin: -46px -10px -10px auto;
+  right: 10px;
   transform: rotate(180deg);
 }
 
@@ -1292,6 +1324,34 @@ a {
   gap: 0.6rem;
 }
 
+/* The default UA scrollbar reads as a flat grey system-chrome strip against
+   this card's own parchment/brass palette — every other surface here is
+   hand-themed, so the one strip a donor actually drags through a long preset
+   grid shouldn't be the one unthemed element. Firefox via `scrollbar-color`,
+   WebKit/Blink via the `::-webkit-scrollbar*` pseudo-elements; both target
+   the same two colours (parchment track, brass thumb, gold on hover) so the
+   fallback and the themed path never visibly disagree. `.archive-card`,
+   `.guide-card` and `.seance-card` override this below since they flip the
+   card itself to a dark obsidian palette instead of parchment. */
+.gate-card {
+  scrollbar-width: thin;
+  scrollbar-color: var(--brass) var(--parchment);
+}
+.gate-card::-webkit-scrollbar {
+  width: 10px;
+}
+.gate-card::-webkit-scrollbar-track {
+  background: var(--parchment);
+}
+.gate-card::-webkit-scrollbar-thumb {
+  background: var(--brass);
+  border-radius: 999px;
+  border: 2px solid var(--parchment);
+}
+.gate-card::-webkit-scrollbar-thumb:hover {
+  background: var(--gold);
+}
+
 .gate-card h2 {
   margin: 0 0 0.1rem;
   font-family: Georgia, "Cormorant Garamond", serif;
@@ -1398,12 +1458,13 @@ a {
    `.gate-card .archive-exhibit-row`'s own technique) so a tile is a dark
    Gothic card, never a solid burgundy pill. */
 .gate-card .visual-preset-tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.35rem;
   padding: 0.6rem;
-  border: 1px solid var(--brass);
+  border: 2px solid var(--brass);
   border-radius: 8px;
   background: var(--obsidian);
   color: var(--parchment);
@@ -1411,6 +1472,9 @@ a {
   font: inherit;
   aspect-ratio: 1 / 1.1;
   justify-content: center;
+  /* Border width is fixed at 2px for both the resting and selected state
+     (selection only changes its COLOUR/fill below) so a tile never resizes
+     or reflows its neighbours the moment it's picked. */
 }
 
 .visual-preset-tile img {
@@ -1428,15 +1492,45 @@ a {
   line-height: 1.2;
 }
 
+/* Hover uses a brightened BRASS (not gold) specifically so it can never be
+   mistaken for the gold-bordered "selected" state below — previously both
+   states used the identical `var(--gold)` border colour, so hovering any
+   unselected tile looked indistinguishable from the one actually chosen
+   (the only real difference, the box-shadow glow, is easy to miss at a
+   glance). */
 .visual-preset-tile:hover {
-  border-color: var(--gold);
+  border-color: color-mix(in srgb, var(--brass) 55%, white 45%);
 }
 
-/* The selected state is a thin brass/gold outline + soft glow, never a
-   large solid-colour fill over the relic's own artwork. */
+/* The selected state: a gold outline + soft glow + a persistent checkmark
+   badge. The badge is the belt-and-braces part — even if a hover colour
+   elsewhere ever drifted close to gold again, the badge only ever renders
+   for the one tile with `aria-checked="true"`, so "which relic is actually
+   chosen" stays legible independent of hover/focus and never resets itself
+   when the gallery `<select>` is changed separately (selectVisual in app.js
+   is the only code path that ever (re)toggles aria-checked). */
 .visual-preset-tile[aria-checked="true"] {
   border-color: var(--gold);
   box-shadow: 0 0 0 2px rgba(198, 161, 107, 0.35), 0 0 14px rgba(198, 161, 107, 0.25);
+}
+
+.visual-preset-tile[aria-checked="true"]::after {
+  content: "\2713";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  background: var(--gold);
+  color: var(--obsidian);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
 .visual-preset-tile:focus-visible {
@@ -1532,6 +1626,23 @@ a {
    panel, antique-gold framing, warm ivory text, muted burgundy reserved for
    small accents only, no large solid burgundy pill rows). Declared after
    `.gate-card`'s own rules so it wins the cascade at equal specificity. */
+.archive-card,
+.guide-card,
+.seance-card {
+  scrollbar-color: var(--gold) rgba(17, 13, 10, 0.4);
+}
+.archive-card::-webkit-scrollbar-track,
+.guide-card::-webkit-scrollbar-track,
+.seance-card::-webkit-scrollbar-track {
+  background: rgba(17, 13, 10, 0.4);
+}
+.archive-card::-webkit-scrollbar-thumb,
+.guide-card::-webkit-scrollbar-thumb,
+.seance-card::-webkit-scrollbar-thumb {
+  background: var(--gold);
+  border-color: rgba(17, 13, 10, 0.4);
+}
+
 .archive-card {
   width: min(620px, 100%);
   background: linear-gradient(160deg, rgba(26, 20, 16, 0.97), rgba(17, 13, 10, 0.98));
@@ -2243,43 +2354,37 @@ a {
   position: relative;
 }
 
-/* `position: sticky`, not `absolute` — `.dossier-card` is a `.gate-card`,
-   which is the scroll container whenever its content overflows (every
-   preset now in the donation form's picker made this overflow routine, not
-   an edge case). An `absolute` corner ornament is positioned against the
-   container's padding BOX, which only spans its visible `clientHeight`, not
-   its full scrolled `scrollHeight` — so `bottom: 8px` landed 8px above the
-   bottom of the VIEWPORT, which is the middle of the actual scrolled
-   content, not the true bottom-right corner of the card (confirmed live:
-   the gold triangle floated mid-form over the visual-preset grid once it
-   had enough presets to need scrolling). `sticky` + `align-self` (this
-   element is a flex child of `.gate-card`'s `flex-direction: column`) keeps
-   each ornament pinned to whichever edge of the VISIBLE frame it belongs to
-   — exactly the same fix already applied to `.dossier-close`/`.drawer-close`
-   for the identical "absolute positioning breaks once the container actually
-   scrolls" problem. Negative margins pull each flush into its padding
-   corner and cancel out the flex-column gap it would otherwise reserve,
-   mirroring `.dossier-close`'s own margin technique. */
+/* `position: absolute` against `.dossier-card`'s own `position: relative`
+   (above) pins each ornament to the CARD's fixed-size padding box itself,
+   not to anything that scrolls inside it — so it sits in the one true
+   visible corner at every scroll position. An earlier `position: sticky` +
+   flex-`align-self` attempt here (to dodge a now-outdated belief that
+   `absolute` anchors to the scrolled content instead of the card) actually
+   made things worse: `sticky` re-anchors to whatever the CURRENT scroll
+   offset makes "the top/bottom of the visible frame", which is a moving
+   target as a flex sibling — confirmed live, scrolling the donation form's
+   long preset grid dragged the bottom-right triangle up over the "Place
+   Relic…" button and the last row of tiles instead of resting in the
+   corner. Plain `absolute` + `top/left`/`bottom/right: 0` has no such
+   dependency on scroll offset, since it's measured from the card's own
+   border box, which never moves or resizes as its content scrolls. */
 .dossier-card::before,
 .dossier-card::after {
   content: "";
-  position: sticky;
+  position: absolute;
   width: 34px;
   height: 34px;
   pointer-events: none;
   background: linear-gradient(135deg, var(--gold) 0%, var(--gold) 38%, transparent 40%);
-  flex-shrink: 0;
 }
 .dossier-card::before {
   top: 0;
-  align-self: flex-start;
-  margin: -1.1rem 0 -34px -1.2rem;
+  left: 0;
 }
 .dossier-card::after {
   bottom: 0;
-  align-self: flex-end;
+  right: 0;
   transform: rotate(180deg);
-  margin: -34px -1.2rem -1.1rem 0;
 }
 
 /* `position: sticky`, matching `.drawer-close`'s own fix above and for the
