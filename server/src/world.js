@@ -1489,6 +1489,49 @@ const HALL_LORE_OBJECTS = [
     ]),
     hitPadding: 3,
   },
+  {
+    id: "hall-banner-left",
+    type: "lore",
+    label: "A hanging banner, left of the stair",
+    text: "The device worked into its border matches no family the heralds' office has on file, and the thread has faded everywhere except the crest itself, which keeps its colour a half-shade brighter than the cloth around it. Its twin hangs opposite, dyed from the same lot — according to the receipt pinned behind it, in the first curator's own hand.",
+    shape: polygon([
+      [440, 374], [457, 379], [496, 385], [507, 385], [506, 389], [500, 391], [497, 497],
+      [473, 526], [471, 535], [470, 526], [446, 496], [450, 381], [442, 381], [438, 381], [438, 375],
+    ]),
+    hitPadding: 3,
+  },
+  {
+    id: "hall-banner-right",
+    type: "lore",
+    label: "A hanging banner, right of the stair",
+    text: "Identical to its counterpart across the hall, down to the same unplaceable crest and the same brighter patch of thread — except that this one was re-hung eleven centimetres lower at some point, a discrepancy conservation has measured twice and corrected neither time.",
+    shape: polygon([
+      [1182, 387], [1193, 385], [1238, 377], [1245, 376], [1242, 381], [1237, 382], [1239, 439],
+      [1241, 496], [1216, 530], [1192, 499], [1190, 447], [1190, 391], [1184, 392], [1181, 390],
+    ]),
+    hitPadding: 3,
+  },
+  {
+    id: "hall-carpet",
+    type: "lore",
+    label: "The stair carpet",
+    text: "Re-dyed to the same red on a fixed schedule, with a maintenance card that notes the exact shade by name and nothing else — the same card, in the same hand, that logs the chandelier's unlit upper tiers and the mirror in the portrait gallery, though no single conservator's name appears on all three.",
+    shape: polygon([
+      [781, 483], [914, 484], [914, 488], [916, 490], [916, 494], [917, 496], [917, 499], [919, 500],
+      [919, 506], [921, 507], [921, 511], [922, 513], [921, 518], [924, 519], [924, 525], [926, 526],
+      [925, 531], [926, 533], [927, 538], [929, 539], [929, 544], [931, 546], [932, 554], [935, 561],
+      [937, 563], [937, 571], [939, 572], [939, 579], [941, 581], [942, 588], [943, 590], [943, 598],
+      [946, 600], [946, 609], [950, 610], [950, 619], [952, 620], [952, 629], [955, 631], [956, 641],
+      [958, 643], [959, 654], [964, 655], [964, 668], [975, 673], [722, 673], [729, 667], [729, 656],
+      [733, 654], [733, 644], [738, 641], [737, 633], [741, 630], [741, 621], [745, 618], [745, 611],
+      [748, 608], [747, 601], [750, 597], [750, 590], [753, 589], [753, 581], [756, 578], [756, 571],
+      [759, 569], [758, 564], [761, 560], [761, 556], [763, 553], [763, 548], [766, 544], [766, 540],
+      [767, 537], [767, 534], [769, 531], [769, 527], [770, 524], [771, 520], [772, 518], [773, 514],
+      [774, 512], [774, 508], [776, 505], [776, 503], [778, 500], [777, 497], [780, 494], [780, 491],
+      [781, 486],
+    ]),
+    hitPadding: 3,
+  },
 ];
 
 function buildHallScenes() {
