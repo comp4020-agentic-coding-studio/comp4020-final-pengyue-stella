@@ -824,11 +824,28 @@ a {
 
 /* A restrained antique-brass corner flourish, echoing `.dossier-card`'s own
    corner treatment in the lighter gate-card forms — kept small and low-
-   contrast so it reads as ornament, never gore or visual noise. */
+   contrast so it reads as ornament, never gore or visual noise.
+   `position: sticky`, not `absolute` — `.side-drawer` (this element's own
+   container) is the scroll container whenever a dossier's content overflows
+   its height, which is routine (long account threads, the donation form's
+   own visual-preset grid when this class is reused there). An `absolute`
+   corner is positioned against the container's padding box, which only
+   spans its visible height, not its full scrolled height, so `bottom: 10px`
+   landed 10px above the bottom of the VIEWPORT — the middle of the actual
+   scrolled content, not the drawer's true bottom-right corner (confirmed
+   live: the gold triangle floated over mid-list content once a dossier
+   needed scrolling). `sticky` pins each ornament to whichever real edge of
+   the scrollED frame it belongs to, the same fix as `.dossier-close`'s own
+   `position: sticky` just above for the identical problem. `display: block`
+   is set explicitly since a pseudo-element defaults to inline, and `sticky`
+   needs a block box to anchor correctly; the after's `margin-left: auto`
+   pushes it to the container's right edge in normal block flow (no flex
+   context needed here, unlike `.dossier-card`'s flex-column equivalent). */
 .dossier-drawer::before,
 .dossier-drawer::after {
   content: "";
-  position: absolute;
+  display: block;
+  position: sticky;
   width: 46px;
   height: 46px;
   pointer-events: none;
@@ -837,11 +854,11 @@ a {
 }
 .dossier-drawer::before {
   top: 10px;
-  left: 10px;
+  margin: -10px 0 -46px -10px;
 }
 .dossier-drawer::after {
   bottom: 10px;
-  right: 10px;
+  margin: -46px -10px -10px auto;
   transform: rotate(180deg);
 }
 
@@ -2226,23 +2243,43 @@ a {
   position: relative;
 }
 
+/* `position: sticky`, not `absolute` — `.dossier-card` is a `.gate-card`,
+   which is the scroll container whenever its content overflows (every
+   preset now in the donation form's picker made this overflow routine, not
+   an edge case). An `absolute` corner ornament is positioned against the
+   container's padding BOX, which only spans its visible `clientHeight`, not
+   its full scrolled `scrollHeight` — so `bottom: 8px` landed 8px above the
+   bottom of the VIEWPORT, which is the middle of the actual scrolled
+   content, not the true bottom-right corner of the card (confirmed live:
+   the gold triangle floated mid-form over the visual-preset grid once it
+   had enough presets to need scrolling). `sticky` + `align-self` (this
+   element is a flex child of `.gate-card`'s `flex-direction: column`) keeps
+   each ornament pinned to whichever edge of the VISIBLE frame it belongs to
+   — exactly the same fix already applied to `.dossier-close`/`.drawer-close`
+   for the identical "absolute positioning breaks once the container actually
+   scrolls" problem. Negative margins pull each flush into its padding
+   corner and cancel out the flex-column gap it would otherwise reserve,
+   mirroring `.dossier-close`'s own margin technique. */
 .dossier-card::before,
 .dossier-card::after {
   content: "";
-  position: absolute;
+  position: sticky;
   width: 34px;
   height: 34px;
   pointer-events: none;
   background: linear-gradient(135deg, var(--gold) 0%, var(--gold) 38%, transparent 40%);
+  flex-shrink: 0;
 }
 .dossier-card::before {
-  top: 8px;
-  left: 8px;
+  top: 0;
+  align-self: flex-start;
+  margin: -1.1rem 0 -34px -1.2rem;
 }
 .dossier-card::after {
-  bottom: 8px;
-  right: 8px;
+  bottom: 0;
+  align-self: flex-end;
   transform: rotate(180deg);
+  margin: -34px -1.2rem -1.1rem 0;
 }
 
 /* `position: sticky`, matching `.drawer-close`'s own fix above and for the
