@@ -262,18 +262,21 @@ export function legacySlotPlacement(gallery, slot, subtype) {
   return { surfaceId: surface.id, u: Math.min(0.9, Math.max(0.1, u + jitter)), v, scale: 1 };
 }
 
-// An 8-point anchor arrangement for a gallery's display slots: two rows —
-// a lower row of five sitting on the room's own floor-level furniture
-// (plinths/tables/cabinet tops every reference composition shows along the
-// bottom two-thirds) and an upper row of three on wall-height shelf/alcove
-// positions, clear of the doorway/arch each composition centres near the
-// top and clear of VISITOR_ANCHORS below so a donated relic and a visitor
-// cameo never occupy the same illustrated spot. Each slot is a small BOX
-// (width/height alongside x/z) — kept only as the legacy donation path's
-// own addressable id space (server/src/db.js's `slot_id` column, still
-// referenced by exhibits donated before the surface model shipped); it is
-// never rendered as a placement option to a visitor any more (see
-// `placementSurfaces` below, the only thing a donor is offered now).
+// An anchor arrangement for a gallery's display slots: an original 8-point
+// arrangement — a lower row of five sitting on the room's own floor-level
+// furniture (plinths/tables/cabinet tops every reference composition shows
+// along the bottom two-thirds) and an upper row of three on wall-height
+// shelf/alcove positions, clear of the doorway/arch each composition
+// centres near the top and clear of VISITOR_ANCHORS below so a donated
+// relic and a visitor cameo never occupy the same illustrated spot — plus
+// extra anchors appended below at the same two z-bands, purely to grow this
+// id pool's capacity. Each slot is a small BOX (width/height alongside x/z)
+// — kept only as the legacy donation path's own addressable id space
+// (server/src/db.js's `slot_id` column, still referenced by exhibits
+// donated before the surface model shipped); it is never rendered as a
+// placement option to a visitor any more (see `placementSurfaces` below,
+// the only thing a donor is offered now), so x/z/width/height past the
+// original 8 are never drawn anywhere — they only need to be distinct ids.
 const SLOT_ANCHORS = [
   { x: 12, z: 70, width: 9, height: 15 },
   { x: 28, z: 78, width: 9, height: 15 },
@@ -283,6 +286,26 @@ const SLOT_ANCHORS = [
   { x: 90, z: 66, width: 9, height: 15 },
   { x: 20, z: 40, width: 8, height: 13 },
   { x: 70, z: 40, width: 8, height: 13 },
+  // Capacity headroom for Stage 2's larger preset catalog (up to 5 presets
+  // now share a single category, e.g. memento) plus the test suite's own
+  // concurrent donation volume — this pool was never meant to be a visible
+  // display-case count, only a legacy uniqueness constraint (see comment
+  // above), so it is grown generously rather than tuned to a guessed-tight
+  // minimum.
+  { x: 15, z: 55, width: 8, height: 13 },
+  { x: 35, z: 60, width: 8, height: 13 },
+  { x: 55, z: 55, width: 8, height: 13 },
+  { x: 85, z: 60, width: 8, height: 13 },
+  { x: 25, z: 30, width: 8, height: 13 },
+  { x: 50, z: 30, width: 8, height: 13 },
+  { x: 80, z: 30, width: 8, height: 13 },
+  { x: 10, z: 85, width: 8, height: 13 },
+  { x: 95, z: 85, width: 8, height: 13 },
+  { x: 40, z: 90, width: 8, height: 13 },
+  { x: 60, z: 90, width: 8, height: 13 },
+  { x: 5, z: 50, width: 8, height: 13 },
+  { x: 95, z: 50, width: 8, height: 13 },
+  { x: 30, z: 15, width: 8, height: 13 },
 ];
 
 // Where another visitor's silhouette may stand in a main/close-up scene —

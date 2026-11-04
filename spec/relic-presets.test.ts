@@ -242,26 +242,43 @@ describe("the curated donated-relic visual catalog", () => {
     expect(founding.visualIdBackfilled).toBe(true);
   });
 
-  // Each of the 4 curated presets maps to exactly one category/gallery —
-  // looping all of them (not just one hard-coded "memento" case) proves the
-  // server's own donation validation isn't accidentally restricted to a
-  // single category the way the old CLIENT-side picker bug was.
-  it("accepts a donation using any of the four presets' own declared category/subtype/surface combo", async () => {
+  // Each curated preset must still donate successfully into its own
+  // category-matched gallery — looping all of them (not just one
+  // hard-coded "memento" case) proves the server's own donation validation
+  // isn't accidentally restricted to a single category the way the old
+  // CLIENT-side picker bug was. This always uses the gallery's freeform
+  // region (never a named legacy surface, whose own small, fixed set of
+  // surface types some of the newer subtypes — e.g. "sketch", "biological",
+  // "book" — were never traced for) and spreads each retry attempt's u/v by
+  // a comfortable margin, since this now exercises every one of a
+  // category's presets (up to 5, for memento) against that one gallery's
+  // small fixed slot pool, concurrently with every other spec file's own
+  // donations into the same shared database.
+  it("accepts a donation using each curated preset's own declared category/subtype/surface combo", async () => {
     const { presets } = await (await fetch(url("/api/relic-presets"))).json();
     for (const preset of presets) {
-      const galleries = (await (await fetch(url("/api/world"))).json()).galleries;
+      const { galleries } = await (await fetch(url("/api/world"))).json();
       const gallery = galleries.find((g: { category: string }) => g.category === preset.category);
       expect(gallery, `no gallery for preset category ${preset.category}`).toBeTruthy();
-      const surfaceType = preset.compatibleSurfaceTypes[0];
 
       let res: Response | undefined;
       let lastStatus = 0;
       for (let attempt = 0; attempt < 5; attempt++) {
-        const { gallery: g, slot, surface, u, v } = await freeSpotFor(gallery.id, surfaceType);
+        const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
+        const occupied = new Set(exhibits.map((e: { slotId: string }) => e.slotId));
+        const slot = gallery.slots.find((s: { id: string }) => !occupied.has(s.id));
+        expect(slot, `no free slot in ${gallery.id}`).toBeTruthy();
+        const freeform = gallery.placementSurfaces.find((s: Surface) => s.surfaceType === "freeform");
+        // Offset by attempt so a retry after a 409 lands on a different
+        // point, comfortably clear of MIN_FREE_PLACEMENT_PIXEL_SEPARATION
+        // (110px, server/src/db.js) and of other spec files' own concurrent
+        // donations into this same freeform region.
+        const centroid = centroidOf(freeform.shape);
+        const { u, v } = uvFromPoint(freeform.shape, centroid.x + attempt * 150, centroid.y + attempt * 90);
         res = await donate({
-          galleryId: g.id,
+          galleryId: gallery.id,
           slotId: slot.id,
-          surfaceId: surface.id,
+          surfaceId: freeform.id,
           u,
           v,
           subtype: preset.subtype,

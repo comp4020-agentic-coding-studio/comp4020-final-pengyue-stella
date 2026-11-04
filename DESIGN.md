@@ -101,7 +101,7 @@ also offer **Inspect Closer**, which enters its authored close-up scene.
 ### Donate and place a relic
 
 **Donate a Relic** is available from the main interface. The donor chooses one
-of four curated appearances; that choice fixes the compatible gallery,
+of twelve curated appearances; that choice fixes the compatible gallery,
 category, subtype, and physical surface types. The donor then provides a
 title, one-sentence origin claim, and donor name.
 

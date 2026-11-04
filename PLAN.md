@@ -83,7 +83,7 @@ from normal reads but their rows, accounts, votes, and events remain retained.
 
 ## Explicit limits
 
-The current version deliberately has four galleries, four curated donation
+The current version deliberately has four galleries, twelve curated donation
 visuals, three apparition forms, no login, no arbitrary image upload, and no
 moderation queue beyond validation and rate limits. The Séance is ephemeral
 and room-scoped; it is not part of the durable museum archive. The experience

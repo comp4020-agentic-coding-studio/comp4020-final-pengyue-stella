@@ -58,7 +58,7 @@ Each visitor may classify an account as **Believable**, **Suspicious**, or **Def
 
 ### Donate and place a relic
 
-The donation flow provides four curated illustrated relic appearances, each designed for one gallery's visual language. After choosing an appearance, the donor supplies a title, a one-sentence origin claim, and a donor name.
+The donation flow provides twelve curated illustrated relic appearances, one per relic subtype. After choosing an appearance, the donor supplies a title, a one-sentence origin claim, and a donor name.
 
 Placement happens inside the destination room. The relic preview can be dragged across compatible walls, shelves, cabinets, tabletops, or plinths. The server validates the chosen surface, position, scale, compatibility, and separation from existing relics before saving it. The new relic then appears for connected visitors and in the Archive without a reload.
 
@@ -96,7 +96,7 @@ Reduced-motion preferences disable inertia and shorten decorative transitions. E
 - **Realtime:** one Server-Sent Events stream distributes presence, exhibit, account, vote, ownership, and Séance events.
 - **Identity:** an HttpOnly cookie stores a visitor identity per browser profile; no account or login is required.
 - **World model:** a server-authored graph of illustrated scenes with bounded 2.5D camera settings, SVG object shapes, visitor anchors, and compatible relic-placement surfaces.
-- **Visual assets:** full-bleed gallery artwork, three transparent ghost templates, four curated donated-relic images, and cropped details from the scene artwork for built-in-object dossiers.
+- **Visual assets:** full-bleed gallery artwork, three transparent ghost templates, twelve curated donated-relic images, and cropped details from the scene artwork for built-in-object dossiers.
 - **Safety:** user text is rendered with DOM text nodes rather than `innerHTML`; server-side length limits, ownership checks, rate limits, surface validation, and transactional writes protect shared state.
 - **Deployment:** Docker on Fly.io with automated checks and deployment from the course repository.
 
