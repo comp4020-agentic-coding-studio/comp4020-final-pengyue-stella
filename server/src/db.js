@@ -385,15 +385,16 @@ export function donateExhibit({
   // only the INSERT path below is affected.
   if (visualId === undefined || visualId === null) return { error: "visual_required" };
   const preset = RELIC_PRESETS_BY_ID.get(visualId);
-  // The free-placement region ("freeform") never appears in a preset's own
-  // `compatibleSurfaceTypes` (that list only ever names real wall/shelf/
-  // tabletop/cabinet/plinth surface types) — a free placement only needs
-  // the preset's category/subtype to match, the same compatibility a named
-  // surface's own subtype-vs-surfaceType check already enforced above via
-  // `allowedRelicTypes`.
+  // A preset may now be placed in ANY gallery, independent of its own
+  // category (the gallery's `category` no longer gates what can be donated
+  // into it — see world.js's freeform `allowedRelicTypes`) — this only
+  // checks the preset's own subtype matches the claimed subtype, and that
+  // it's compatible with the chosen surface. The free-placement region
+  // ("freeform") never appears in a preset's own `compatibleSurfaceTypes`
+  // (that list only ever names real wall/shelf/tabletop/cabinet/plinth
+  // surface types), so a free placement skips that check entirely.
   const validVisual =
     preset &&
-    preset.category === galleryRow.category &&
     preset.subtype === subtype &&
     (surface.surfaceType === "freeform" || preset.compatibleSurfaceTypes.includes(surface.surfaceType));
   if (!validVisual) return { error: "invalid_visual" };
@@ -422,9 +423,14 @@ export function donateExhibit({
       return { error: "surface_taken" };
     }
 
+    // `category` is the PRESET's own category (what the object actually
+    // is), not the gallery's — now that a relic may be placed in any room,
+    // `galleryId` alone says where it sits; `category` keeps meaning "what
+    // kind of object this is" for the dossier kicker and the legacy-visual
+    // backfill's own category-matched lookup.
     db.prepare(
       "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype, surface_id, placement_u, placement_v, placement_scale, placement_rotation, visual_id, donor_visitor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(exhibitId, galleryId, slotId, galleryRow.category, title, donorName, now, subtype, surfaceId, u, v, appliedScale, appliedRotation, appliedVisualId, visitorId ?? null);
+    ).run(exhibitId, galleryId, slotId, preset.category, title, donorName, now, subtype, surfaceId, u, v, appliedScale, appliedRotation, appliedVisualId, visitorId ?? null);
 
     db.prepare("UPDATE display_slots SET occupied_exhibit_id = ? WHERE id = ?").run(
       exhibitId,

@@ -36,7 +36,7 @@
 // directly; the other two stay reachable the same way they always were for
 // a gallery not in frame at the hub — the persistent "Rooms" menu.
 
-import { SUBTYPES_BY_CATEGORY } from "./constants.js";
+import { SUBTYPES_BY_CATEGORY, SUBTYPE_SET } from "./constants.js";
 
 // Object-shaped hotspots and placement surfaces, replacing this file's
 // previous `anchor: {x, y, width, height}` box model (see docs/adr/0007-
@@ -1422,15 +1422,21 @@ export const GALLERIES = GALLERY_LAYOUT.map((g) => ({
       ...s,
       allowedRelicTypes: (SUBTYPES_BY_CATEGORY[g.category] ?? []).filter((subtype) => surfaceAllows(s, subtype)),
     })),
-    // The one free-placement region a NEW donation of any subtype valid for
-    // this gallery's category is placed into — no surface-type compatibility
-    // restriction, since there's no real "wall" vs. "shelf" distinction left
-    // to enforce once placement is free-roam across the whole scene.
+    // The one free-placement region a NEW donation is placed into — allows
+    // EVERY real subtype, not just this gallery's own category's, so a
+    // donor can place any curated relic in any of the four galleries (no
+    // surface-type compatibility restriction either, since there's no real
+    // "wall" vs. "shelf" distinction left to enforce once placement is
+    // free-roam across the whole scene). The gallery's own `category`
+    // field still describes what the ROOM is themed around for display
+    // purposes; it's no longer a gate on what can be placed inside it —
+    // see donateExhibit's `validVisual`, which only checks the preset's
+    // own subtype/surface compatibility now, never the gallery's category.
     {
       id: `${g.id}-free`,
       surfaceType: "freeform",
       shape: freePlacementShape(),
-      allowedRelicTypes: SUBTYPES_BY_CATEGORY[g.category] ?? [],
+      allowedRelicTypes: [...SUBTYPE_SET],
       minScale: 0.5,
       maxScale: 1.5,
       depth: 0.4,

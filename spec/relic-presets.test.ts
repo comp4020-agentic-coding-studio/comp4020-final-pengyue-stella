@@ -390,3 +390,58 @@ describe("donor-controlled scale and rotation", () => {
     }
   });
 });
+
+describe("any-room placement", () => {
+  // A toy-category preset (the doll), placed via a DIFFERENT gallery's own
+  // freeform region (portraits, a portrait-category room) with a matching
+  // subtype — this is the real regression guard for "place in any room":
+  // the gallery's own category must no longer gate what can be donated
+  // into it, only the preset's own subtype/surface compatibility matters.
+  it("accepts a preset whose own category differs from the destination gallery's, given a matching subtype", async () => {
+    const { presets } = await (await fetch(url("/api/relic-presets"))).json();
+    const doll = presets.find((p: { id: string }) => p.id === "burgundy-porcelain-doll");
+    expect(doll.category).toBe("toy");
+
+    let res: Response | undefined;
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { gallery, slot, surface, u, v } = await freeSpotFor("portraits", "freeform");
+      res = await donate({
+        galleryId: gallery.id,
+        slotId: slot.id,
+        surfaceId: surface.id,
+        u,
+        v,
+        subtype: doll.subtype,
+        title: `any-room test ${Date.now()}-${attempt}`,
+        originClaim: "x",
+        donorName: "Spec Visitor",
+        visualId: doll.id,
+      });
+      lastStatus = res.status;
+      if (res.status !== 409) break;
+    }
+    expect(lastStatus).toBe(201);
+    const { exhibit } = await res!.json();
+    // `category` on the persisted exhibit is the PRESET's own category
+    // (what the object is), never the gallery's — the gallery it actually
+    // sits in is `galleryId`, already separate.
+    expect(exhibit.category).toBe("toy");
+    expect(exhibit.galleryId).toBe("portraits");
+  });
+
+  it("every gallery's freeform region now lists every real subtype, not just its own category's", async () => {
+    const { galleries } = await (await fetch(url("/api/world"))).json();
+    const { presets } = await (await fetch(url("/api/relic-presets"))).json();
+    const everySubtype = new Set(presets.map((p: { subtype: string }) => p.subtype));
+    for (const gallery of galleries) {
+      const freeform = gallery.placementSurfaces.find((s: Surface) => s.surfaceType === "freeform");
+      for (const subtype of everySubtype) {
+        expect(
+          freeform.allowedRelicTypes.includes(subtype),
+          `${gallery.id}'s freeform region should allow subtype ${subtype}`,
+        ).toBe(true);
+      }
+    }
+  });
+});

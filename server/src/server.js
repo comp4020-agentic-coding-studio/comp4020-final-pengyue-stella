@@ -9,7 +9,7 @@ import { RELIC_PRESETS } from "./relic-presets.js";
 import {
   ACCOUNT_KIND_SET,
   VERDICT_SET,
-  SUBTYPES_BY_CATEGORY,
+  SUBTYPE_SET,
   MAX_NAME_LENGTH,
   MAX_TITLE_LENGTH,
   MAX_ACCOUNT_LENGTH,
@@ -392,7 +392,13 @@ const server = createServer(async (req, res) => {
         !isNonEmptyString(title, MAX_TITLE_LENGTH) ||
         !isNonEmptyString(originClaim, MAX_CLAIM_LENGTH) ||
         !isNonEmptyString(donorName, MAX_NAME_LENGTH) ||
-        !(SUBTYPES_BY_CATEGORY[gallery.category] ?? []).includes(subtype)
+        // A relic may now be placed in ANY gallery, independent of its own
+        // category — this only checks that `subtype` is a genuine subtype
+        // at all, never that it belongs to this particular gallery's
+        // category (db.js's donateExhibit still separately checks the
+        // chosen preset's own subtype matches, and the surface's own
+        // allowedRelicTypes).
+        !SUBTYPE_SET.has(subtype)
       ) {
         json(res, 400, { error: "invalid donation" }, withCookies({}, identity));
         return;

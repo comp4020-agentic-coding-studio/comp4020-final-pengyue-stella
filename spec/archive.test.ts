@@ -178,23 +178,26 @@ describe("donating a relic", () => {
     expect(second.status).toBe(409);
   });
 
-  it("rejects a donation with no title, an unknown slot, or a subtype foreign to the gallery's category", async () => {
+  it("rejects a donation with no title, an unknown slot, or a subtype that surface doesn't allow", async () => {
     const placement = await freeSlot();
-    const { galleryId } = placement;
     expect((await donate({ ...placement, title: "", originClaim: "x", donorName: "A" })).status).toBe(400);
     expect(
       (await donate({ ...placement, slotId: "not-a-real-slot", title: "x", originClaim: "x", donorName: "A" }))
         .status,
     ).toBe(400);
 
-    // A subtype that belongs to a different category's vocabulary entirely
-    // (not just an unknown string) must still be rejected — the gallery's
-    // category, not the client, decides which subtypes are valid for it.
+    // A relic may now be placed in ANY gallery (see "any-room placement"
+    // below) — a foreign-category subtype is no longer rejected for being
+    // foreign to the GALLERY's category, only for being foreign to the
+    // chosen SURFACE's own allowlist (freeSlot() picks a real named
+    // surface, whose own allowedRelicTypes is still a fixed, traced list —
+    // never every subtype, unlike the freeform region).
     const { galleries } = await (await fetch(url("/api/world"))).json();
-    const thisGallery = galleries.find((g: { id: string }) => g.id === galleryId);
+    const thisGallery = galleries.find((g: { id: string }) => g.id === placement.galleryId);
+    const thisSurface = thisGallery.placementSurfaces.find((s: { id: string }) => s.id === placement.surfaceId);
     const foreignSubtype = galleries
       .flatMap((g: { subtypes: string[] }) => g.subtypes)
-      .find((s: string) => !thisGallery.subtypes.includes(s));
+      .find((s: string) => !thisSurface.allowedRelicTypes.includes(s));
     expect(
       (await donate({ ...placement, subtype: foreignSubtype, title: "x", originClaim: "x", donorName: "A" }))
         .status,
