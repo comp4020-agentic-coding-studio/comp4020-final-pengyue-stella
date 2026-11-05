@@ -281,6 +281,19 @@
            are never shown at all. -->
       <div id="placement-banner" class="placement-banner" hidden role="status">
         <p>Drag <strong id="placement-title"></strong> onto a glowing surface, then confirm.</p>
+        <!-- Scale/rotation adjustment: discrete stepper buttons, not a
+             range input — reuses the same "step function + keyboard
+             shortcut" shape as world/camera.js's panLeft/panRight/zoomIn/
+             zoomOut (see app.js's global keydown handler), rather than
+             introducing this app's first slider. -->
+        <div class="placement-adjust" role="group" aria-label="Adjust size and rotation">
+          <button type="button" id="placement-scale-down" aria-label="Decrease size">&minus;</button>
+          <span id="placement-scale-value" aria-live="polite">100%</span>
+          <button type="button" id="placement-scale-up" aria-label="Increase size">+</button>
+          <button type="button" id="placement-rotate-ccw" aria-label="Rotate left 15 degrees">&#8634;</button>
+          <span id="placement-rotation-value" aria-live="polite">0&deg;</span>
+          <button type="button" id="placement-rotate-cw" aria-label="Rotate right 15 degrees">&#8635;</button>
+        </div>
         <div class="gate-actions">
           <button type="button" id="placement-cancel" class="secondary">Esc &middot; Cancel</button>
           <button type="button" id="placement-confirm-btn" disabled>Confirm Placement</button>

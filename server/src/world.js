@@ -259,7 +259,7 @@ export function legacySlotPlacement(gallery, slot, subtype) {
   const offset = Math.max(0, index) % 3;
   const jitter = [-0.12, 0, 0.12][offset];
   const { u, v } = surfaceUvFromPoint(surface, centroid.x, centroid.y);
-  return { surfaceId: surface.id, u: Math.min(0.9, Math.max(0.1, u + jitter)), v, scale: 1 };
+  return { surfaceId: surface.id, u: Math.min(0.9, Math.max(0.1, u + jitter)), v, scale: 1, rotation: 0 };
 }
 
 // An anchor arrangement for a gallery's display slots: an original 8-point

@@ -307,3 +307,86 @@ describe("the curated donated-relic visual catalog", () => {
     }
   });
 });
+
+describe("donor-controlled scale and rotation", () => {
+  it("persists a non-default scale and rotation and echoes both back on read", async () => {
+    const { presets } = await (await fetch(url("/api/relic-presets"))).json();
+    const preset = presets.find((p: { id: string }) => p.id === "tarnished-silver-spoon");
+
+    let res: Response | undefined;
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { gallery, slot, surface, u, v } = await freeSpotFor("memento", "tabletop");
+      res = await donate({
+        galleryId: gallery.id,
+        slotId: slot.id,
+        surfaceId: surface.id,
+        u,
+        v,
+        scale: 0.8,
+        rotation: 45,
+        subtype: preset.subtype,
+        title: `rotation test ${Date.now()}-${attempt}`,
+        originClaim: "x",
+        donorName: "Spec Visitor",
+        visualId: preset.id,
+      });
+      lastStatus = res.status;
+      if (res.status !== 409) break;
+    }
+    expect(lastStatus).toBe(201);
+    const { exhibit } = await res!.json();
+    expect(exhibit.placement.scale).toBeCloseTo(0.8);
+    expect(exhibit.placement.rotation).toBe(45);
+
+    const { exhibit: fetched } = await (await fetch(url(`/api/exhibits/${exhibit.id}`))).json();
+    expect(fetched.placement.rotation).toBe(45);
+  });
+
+  it("defaults rotation to 0 when omitted", async () => {
+    const { presets } = await (await fetch(url("/api/relic-presets"))).json();
+    const preset = presets.find((p: { category: string }) => p.category === "specimen");
+    const { gallery, slot, surface, u, v } = await freeSpotFor("specimen", "plinth");
+    const res = await donate({
+      galleryId: gallery.id,
+      slotId: slot.id,
+      surfaceId: surface.id,
+      u,
+      v,
+      subtype: preset.subtype,
+      title: `no rotation ${Date.now()}`,
+      originClaim: "x",
+      donorName: "Spec Visitor",
+      visualId: preset.id,
+    });
+    expect(res.status).toBe(201);
+    const { exhibit } = await res.json();
+    expect(exhibit.placement.rotation).toBe(0);
+  });
+
+  // A non-numeric rotation is silently treated as "omitted" (same
+  // leniency `scale` already has at the server.js parsing layer — only a
+  // genuine out-of-range NUMBER reaches db.js's own rejection), so only
+  // actual numeric out-of-range values are expected to 400 here.
+  it("rejects an out-of-range numeric rotation", async () => {
+    const { presets } = await (await fetch(url("/api/relic-presets"))).json();
+    const preset = presets.find((p: { category: string }) => p.category === "toy");
+    for (const rotation of [360, -1]) {
+      const { gallery, slot, surface, u, v } = await freeSpotFor("childhood", "tabletop");
+      const res = await donate({
+        galleryId: gallery.id,
+        slotId: slot.id,
+        surfaceId: surface.id,
+        u,
+        v,
+        rotation,
+        subtype: preset.subtype,
+        title: `bad rotation ${rotation}`,
+        originClaim: "x",
+        donorName: "Spec Visitor",
+        visualId: preset.id,
+      });
+      expect(res.status, `rotation ${rotation} should be rejected`).toBe(400);
+    }
+  });
+});

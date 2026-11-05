@@ -317,10 +317,13 @@ function startPlacement(exhibitForm) {
     slotId: slot.id,
     surfaceId: null,
     point: null, // { x, y } in the scene's own viewBox pixel units, once a surface is chosen
+    scale: 1,
+    rotation: 0, // degrees, 0-359
   };
   el("placement-title").textContent = exhibitForm.title;
   el("placement-banner").hidden = false;
   el("placement-confirm-btn").disabled = true;
+  updatePlacementAdjustLabels();
   const targetScene = `${exhibitForm.galleryId}-main`;
   if (illustrator.currentScene().id === targetScene) {
     refreshInteractiveObjects();
@@ -331,22 +334,66 @@ function startPlacement(exhibitForm) {
 
 function cancelPlacement() {
   placement = null;
+  placementPreviewNode = null;
   el("placement-banner").hidden = true;
   refreshInteractiveObjects();
   viewport.focus();
 }
 el("placement-cancel").addEventListener("click", cancelPlacement);
 
+// Scale/rotation stepper controls, shown in the placement banner. Discrete
+// steps (not a drag/slider) so the keyboard shortcuts below are exact
+// repeats of a click, and so there's no first `<input type="range">` to
+// theme/accessibility-wire in an app that otherwise has none.
+const SCALE_STEP = 0.05;
+const ROTATION_STEP = 15;
+
+function currentPlacementSurface() {
+  if (!placement?.surfaceId) return null;
+  const gallery = world.galleries.find((g) => g.id === placement.exhibitForm.galleryId);
+  return gallery?.placementSurfaces.find((s) => s.id === placement.surfaceId) ?? null;
+}
+
+function updatePlacementAdjustLabels() {
+  if (!placement) return;
+  el("placement-scale-value").textContent = `${Math.round(placement.scale * 100)}%`;
+  el("placement-rotation-value").textContent = `${placement.rotation}°`;
+}
+
+function adjustPlacementScale(delta) {
+  if (!placement) return;
+  const surface = currentPlacementSurface();
+  const min = surface?.minScale ?? 0.5;
+  const max = surface?.maxScale ?? 1.5;
+  placement.scale = Math.min(max, Math.max(min, Math.round((placement.scale + delta) * 100) / 100));
+  updatePlacementAdjustLabels();
+  updatePlacementPreviewLayout();
+}
+
+function adjustPlacementRotation(delta) {
+  if (!placement) return;
+  // Wraps (a dial, not a clamped slider) — 359 + 15 lands back at 14, not
+  // stuck at a ceiling.
+  placement.rotation = ((placement.rotation + delta) % 360 + 360) % 360;
+  updatePlacementAdjustLabels();
+  updatePlacementPreviewLayout();
+}
+
+el("placement-scale-up").addEventListener("click", () => adjustPlacementScale(SCALE_STEP));
+el("placement-scale-down").addEventListener("click", () => adjustPlacementScale(-SCALE_STEP));
+el("placement-rotate-cw").addEventListener("click", () => adjustPlacementRotation(ROTATION_STEP));
+el("placement-rotate-ccw").addEventListener("click", () => adjustPlacementRotation(-ROTATION_STEP));
+
 el("placement-confirm-btn").addEventListener("click", async () => {
   if (!placement?.surfaceId || !placement.point) return;
-  const { exhibitForm, slotId, surfaceId, point } = placement;
+  const { exhibitForm, slotId, surfaceId, point, scale, rotation } = placement;
   const gallery = world.galleries.find((g) => g.id === exhibitForm.galleryId);
   const surface = gallery.placementSurfaces.find((s) => s.id === surfaceId);
   const { u, v } = surfaceUvFromPoint(surface, point.x, point.y);
   const res = await fetch("/api/exhibits", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...exhibitForm, slotId, surfaceId, u, v }),
+    body: JSON.stringify({ ...exhibitForm, slotId, surfaceId, u, v, scale, rotation }),
   });
   const data = await res.json();
   if (!res.ok) {
@@ -360,6 +407,7 @@ el("placement-confirm-btn").addEventListener("click", async () => {
   // drag preview in the same stroke, leaving only the real, persisted relic
   // (rendered by the normal exhibit path) integrated into the scene.
   placement = null;
+  placementPreviewNode = null;
   el("placement-banner").hidden = true;
   refreshInteractiveObjects();
   openReceipt(data.exhibit);
@@ -382,6 +430,7 @@ function openReceipt(exhibit) {
     accent: gallery?.accent ?? "#88653d",
     exhibitId: exhibit.id,
   });
+  applyPlacementRotation(el("receipt-preview"), exhibit.placement?.rotation ?? 0);
 
   el("donate-receipt").hidden = false;
 
@@ -613,6 +662,7 @@ function renderDossier(exhibit) {
         accent: gallery?.accent ?? "#88653d",
         exhibitId: exhibit.id,
       });
+      applyPlacementRotation(el("dossier-preview"), exhibit.placement?.rotation ?? 0);
     }
   }
 
@@ -2107,6 +2157,20 @@ function presetById(visualId) {
 // either the curated image (object-fit: contain, so the asset's own aspect
 // ratio is always preserved and it is never stretched to fill a square
 // footprint) or, lacking a visualId, the legacy procedural canvas.
+// Rotation is applied as a CSS transform on the actual rendered visual
+// element (the <img>/<canvas> `renderRelicVisual` just appended), never on
+// `container` itself — for the receipt/dossier call sites `container` is a
+// styled box with its own background/border, and rotating THAT box rotates
+// its padding and bleeds into neighbouring controls rather than just the
+// relic artwork. Called right after every `renderRelicVisual` call so a
+// donor's chosen rotation shows up everywhere the relic itself does.
+function applyPlacementRotation(container, rotationDegrees) {
+  const visual = container.querySelector(".relic-visual-img, canvas");
+  if (!visual) return;
+  visual.style.transform = rotationDegrees ? `rotate(${rotationDegrees}deg)` : "";
+  visual.style.transformOrigin = "center center";
+}
+
 function renderRelicVisual(container, { visualId, category, subtype, accent, exhibitId }) {
   container.innerHTML = "";
   const preset = visualId ? presetById(visualId) : null;
@@ -2389,6 +2453,7 @@ function buildExhibitObject(exhibit, gallery, scene) {
     accent: gallery.accent,
     exhibitId: exhibit.id,
   });
+  applyPlacementRotation(container, exhibit.placement.rotation ?? 0);
 
   const labelShape = { type: "ellipse", cx: point.x, cy: point.y, rx: half, ry: half };
   g.appendChild(svgLabelFor(labelShape, exhibit.title));
@@ -2470,7 +2535,7 @@ function renderPlacementSurfaces(objectLayer, scene) {
   // confirmed position can never disagree.
   const preset = placement.exhibitForm.visualId ? presetById(placement.exhibitForm.visualId) : null;
   const aspect = preset ? preset.naturalWidth / preset.naturalHeight : 1;
-  const layout = relicLayoutFree(point, aspect, 1);
+  const layout = relicLayoutFree(point, aspect, placement.scale ?? 1);
 
   const fo = document.createElementNS(SVG_NS, "foreignObject");
   fo.setAttribute("id", "placement-preview");
@@ -2491,6 +2556,7 @@ function renderPlacementSurfaces(objectLayer, scene) {
     accent: gallery.accent,
     exhibitId: `placement-preview:${subtype}`,
   });
+  applyPlacementRotation(container, placement.rotation ?? 0);
 
   wirePlacementDrag(objectLayer, fo, gallery, freeSurface);
 }
@@ -2511,30 +2577,45 @@ function svgPointFromEvent(svg, event) {
 }
 
 let placementDragState = null;
+// The live preview's own foreignObject node, kept around so the scale/
+// rotation stepper buttons (outside the drag gesture entirely) can
+// re-layout it in place without re-running renderPlacementSurfaces (which
+// would tear down and rebuild the whole preview + hit region).
+let placementPreviewNode = null;
+
+// Re-lays-out the preview foreignObject at `placement.point`, using
+// `placement.scale` — the exact same `relicLayoutFree` sizing/anchor math
+// `buildExhibitObject` uses for the final exhibit, so the preview never
+// visibly jumps once confirmed. Shared by pointer drag and the scale/
+// rotation steppers so both stay in sync with the same layout.
+function updatePlacementPreviewLayout() {
+  if (!placement?.point || !placementPreviewNode) return;
+  const preset = placement.exhibitForm.visualId ? presetById(placement.exhibitForm.visualId) : null;
+  const aspect = preset ? preset.naturalWidth / preset.naturalHeight : 1;
+  const layout = relicLayoutFree(placement.point, aspect, placement.scale ?? 1);
+  placementPreviewNode.setAttribute("x", String(layout.x));
+  placementPreviewNode.setAttribute("y", String(layout.y));
+  placementPreviewNode.setAttribute("width", String(layout.width));
+  placementPreviewNode.setAttribute("height", String(layout.height));
+  const container = placementPreviewNode.firstChild;
+  if (container) applyPlacementRotation(container, placement.rotation ?? 0);
+}
+
 function wirePlacementDrag(objectLayer, previewNode, gallery, freeSurface) {
   if (placementDragState?.cleanup) placementDragState.cleanup();
+  placementPreviewNode = previewNode;
   const svg = objectLayer;
 
   // Clicking or dragging ANYWHERE in the free-placement region moves the
   // preview there — gently snapped inside the region's own bounds
-  // (snapIntoShape) rather than clamped to a fixed grid. Uses the exact
-  // same `relicLayoutFree` sizing/anchor math `renderPlacementSurfaces` used
-  // to draw the preview and `buildExhibitObject` uses for the final exhibit
-  // — never a square-forced footprint, never a different anchor, so the
-  // preview never visibly jumps once confirmed.
+  // (snapIntoShape) rather than clamped to a fixed grid.
   function onPointerMove(e) {
     if (!placement) return;
     const p = svgPointFromEvent(svg, e);
     const snapped = snapIntoShape(freeSurface.shape, p.x, p.y);
     placement.surfaceId = freeSurface.id;
     placement.point = snapped;
-    const preset = placement.exhibitForm.visualId ? presetById(placement.exhibitForm.visualId) : null;
-    const aspect = preset ? preset.naturalWidth / preset.naturalHeight : 1;
-    const layout = relicLayoutFree(snapped, aspect, 1);
-    previewNode.setAttribute("x", String(layout.x));
-    previewNode.setAttribute("y", String(layout.y));
-    previewNode.setAttribute("width", String(layout.width));
-    previewNode.setAttribute("height", String(layout.height));
+    updatePlacementPreviewLayout();
     el("placement-confirm-btn").disabled = false;
   }
 
@@ -2747,6 +2828,27 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (isTypingTarget(document.activeElement) || anyOverlayOpen() || illustrator.isTransitioning) return;
+  // Scale/rotation during placement get their own keys, distinct from
+  // ArrowLeft/Right/+/- (camera pan/zoom, which still makes sense while
+  // placing a relic, so those keep their existing meaning): `[`/`]` rotate,
+  // `,`/`.` resize — unclaimed elsewhere, loosely mnemonic (brackets
+  // "rotate" what's between them; `,`/`.` sit where `<`/`>` would mean
+  // shrink/grow).
+  if (placement?.surfaceId) {
+    if (e.code === "BracketLeft") {
+      adjustPlacementRotation(-ROTATION_STEP);
+      return;
+    } else if (e.code === "BracketRight") {
+      adjustPlacementRotation(ROTATION_STEP);
+      return;
+    } else if (e.code === "Comma") {
+      adjustPlacementScale(-SCALE_STEP);
+      return;
+    } else if (e.code === "Period") {
+      adjustPlacementScale(SCALE_STEP);
+      return;
+    }
+  }
   if (e.code === "ArrowLeft") {
     illustrator.camera.panLeft();
   } else if (e.code === "ArrowRight") {

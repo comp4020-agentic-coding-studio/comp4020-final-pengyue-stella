@@ -376,6 +376,7 @@ const server = createServer(async (req, res) => {
       const u = typeof payload.u === "number" && Number.isFinite(payload.u) ? payload.u : NaN;
       const v = typeof payload.v === "number" && Number.isFinite(payload.v) ? payload.v : NaN;
       const scale = typeof payload.scale === "number" && Number.isFinite(payload.scale) ? payload.scale : undefined;
+      const rotation = typeof payload.rotation === "number" && Number.isFinite(payload.rotation) ? payload.rotation : undefined;
       const gallery = galleryById(galleryId);
 
       if (
@@ -404,6 +405,7 @@ const server = createServer(async (req, res) => {
         u,
         v,
         scale,
+        rotation,
         title,
         subtype,
         originClaim,
@@ -440,6 +442,11 @@ const server = createServer(async (req, res) => {
       if (result.error === "invalid_scale") {
         logAction(identity, "donate", { gallery: galleryId, surface: surfaceId }, "rejected:invalid_scale");
         json(res, 400, { error: "that scale is outside the surface's allowed range" }, withCookies({}, identity));
+        return;
+      }
+      if (result.error === "invalid_rotation") {
+        logAction(identity, "donate", { gallery: galleryId, surface: surfaceId }, "rejected:invalid_rotation");
+        json(res, 400, { error: "that rotation isn't a valid angle" }, withCookies({}, identity));
         return;
       }
       if (result.error === "slot_taken") {

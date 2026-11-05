@@ -37,6 +37,17 @@ describe("legacy visual backfill", () => {
     expect(founding.visualIdBackfilled).toBe(true);
   });
 
+  // A seeded Founding Collection row predates `placement_rotation` the same
+  // way it predates `visual_id` — it has no value for that column at all,
+  // so `placementFor`'s own `?? 0` default must apply here too, never a
+  // crash or an undefined field.
+  it("a pre-existing exhibit with no placement_rotation column value reads back as rotation 0", async () => {
+    const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
+    const founding = exhibits.find((e: { id: string }) => e.id.startsWith("exhibit_founding_"));
+    expect(founding).toBeTruthy();
+    expect(founding.placement?.rotation).toBe(0);
+  });
+
   it("a builtin museum object never gets a backfilled visual — it renders via its own world-object shape", async () => {
     const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
     const builtin = exhibits.find((e: { origin: string }) => e.origin === "builtin");

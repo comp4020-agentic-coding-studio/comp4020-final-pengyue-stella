@@ -201,6 +201,45 @@ if (!exhibitColumnsAfterDonorVisitor.some((c) => c.name === "deleted_at")) {
   db.exec("ALTER TABLE exhibits ADD COLUMN deleted_at TEXT");
 }
 
+// Additive migration: `placement_rotation` — a donor-chosen display
+// rotation in degrees (0-359), set alongside `placement_scale` during
+// placement. NULL on every row donated before this shipped; `placementFor`
+// below defaults a missing value to 0 (no rotation) at read time, the same
+// "never migrate, only derive" discipline every column above follows.
+const exhibitColumnsAfterDeletedAt = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumnsAfterDeletedAt.some((c) => c.name === "placement_rotation")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN placement_rotation REAL");
+}
+
+// Additive migration: `tint_color` — an optional recolor, one of a fixed
+// small swatch vocabulary (constants.js's RELIC_TINT_HEXES), applied via
+// the same alpha-masked mix-blend-mode:color technique the visitor cameo
+// system already uses (styles.css's .apparition-tint) — never
+// hue-rotate, which would wreck the preset's own shading. NULL = no tint.
+const exhibitColumnsAfterRotation = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumnsAfterRotation.some((c) => c.name === "tint_color")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN tint_color TEXT");
+}
+
+// Additive migration: `accessory_ids` — a JSON array of accessory ids
+// (relic-presets.js's RELIC_ACCESSORIES), offered only for a preset marked
+// `figural: true`. NULL/'[]' = no accessories, every pre-existing row.
+const exhibitColumnsAfterTint = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumnsAfterTint.some((c) => c.name === "accessory_ids")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN accessory_ids TEXT");
+}
+
+// Additive migration: `paint_layer` — a donor's freehand brush drawing,
+// captured client-side as a flattened transparent PNG and stored as a data
+// URL, capped at PAINT_LAYER_MAX_BYTES (constants.js) on the decoded byte
+// length. Kept as a column rather than a file on disk: this app has
+// exactly one persistence mechanism and no file-serving surface beyond
+// public/, and the cap keeps a single row small. NULL = no painting.
+const exhibitColumnsAfterAccessories = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumnsAfterAccessories.some((c) => c.name === "paint_layer")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN paint_layer TEXT");
+}
+
 // Seed galleries + slots from the static world layout, idempotently — this
 // is config, never written to via the public API, so re-seeding on every
 // boot (INSERT OR IGNORE) just confirms the schema matches the current
@@ -294,6 +333,7 @@ export function donateExhibit({
   u,
   v,
   scale,
+  rotation,
   title,
   subtype,
   originClaim,
@@ -320,6 +360,18 @@ export function donateExhibit({
 
   const appliedScale = typeof scale === "number" && Number.isFinite(scale) ? scale : 1;
   if (appliedScale < surface.minScale || appliedScale > surface.maxScale) return { error: "invalid_scale" };
+
+  // Rotation: an integer degree 0-359 (compass-dial semantics, not a
+  // signed angle) a donor chose while placing — wraps rather than clamps
+  // client-side, so the server only needs to reject what's genuinely out
+  // of range, never guess an intended wrap-around itself.
+  const appliedRotation =
+    rotation === undefined
+      ? 0
+      : Number.isFinite(rotation) && rotation >= 0 && rotation < 360
+        ? Math.round(rotation)
+        : null;
+  if (appliedRotation === null) return { error: "invalid_rotation" };
 
   // visualId is now REQUIRED for a NEW donation (the "Classic" procedural-
   // fallback path is retired as a visitor-facing choice — see
@@ -371,8 +423,8 @@ export function donateExhibit({
     }
 
     db.prepare(
-      "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype, surface_id, placement_u, placement_v, placement_scale, visual_id, donor_visitor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(exhibitId, galleryId, slotId, galleryRow.category, title, donorName, now, subtype, surfaceId, u, v, appliedScale, appliedVisualId, visitorId ?? null);
+      "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype, surface_id, placement_u, placement_v, placement_scale, placement_rotation, visual_id, donor_visitor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(exhibitId, galleryId, slotId, galleryRow.category, title, donorName, now, subtype, surfaceId, u, v, appliedScale, appliedRotation, appliedVisualId, visitorId ?? null);
 
     db.prepare("UPDATE display_slots SET occupied_exhibit_id = ? WHERE id = ?").run(
       exhibitId,
@@ -406,7 +458,13 @@ export function donateExhibit({
 // row's slot_id is untouched, this is purely a read-time fallback.
 export function placementFor(exhibitRow) {
   if (exhibitRow.surface_id) {
-    return { surfaceId: exhibitRow.surface_id, u: exhibitRow.placement_u, v: exhibitRow.placement_v, scale: exhibitRow.placement_scale ?? 1 };
+    return {
+      surfaceId: exhibitRow.surface_id,
+      u: exhibitRow.placement_u,
+      v: exhibitRow.placement_v,
+      scale: exhibitRow.placement_scale ?? 1,
+      rotation: exhibitRow.placement_rotation ?? 0,
+    };
   }
   const gallery = GALLERIES.find((g) => g.id === exhibitRow.gallery_id);
   const slot = gallery?.slots.find((s) => s.id === exhibitRow.slot_id);

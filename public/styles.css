@@ -1093,6 +1093,43 @@ a {
   border-color: rgba(198, 161, 107, 0.6);
 }
 
+/* Scale/rotation stepper toolbar — discrete +/- and rotate buttons rather
+   than a slider, matching world/camera.js's panLeft/panRight/zoomIn/zoomOut
+   step-function pattern. */
+.placement-adjust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.placement-adjust button {
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid #8ad1aa;
+  background: #8ad1aa;
+  color: #0f1a13;
+  cursor: pointer;
+}
+
+.placement-adjust button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.placement-adjust span {
+  min-width: 3.2rem;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- Archive: a forbidden-museum catalogue, not a settings menu --------- */
 /* Deliberately its own dark panel (not the cream `.gate-card` every other
    overlay uses) — the Archive is a bound ledger of the whole collection,
