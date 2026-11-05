@@ -1581,6 +1581,360 @@ a {
   }
 }
 
+/* Recolor swatch grid — small round color buttons, same accessible
+   radiogroup/aria-checked pattern as .visual-preset-tile but a distinct,
+   compact visual treatment appropriate for a plain color choice rather
+   than an image thumbnail. Reused as-is for the paint brush color picker
+   (app.js's buildPaintColorGrid). */
+.tint-swatch-grid,
+.paint-toolbar #paint-color-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.2rem 0 0.3rem;
+}
+
+/* `.gate-card button { background: var(--rose); color: #fff; }` (above)
+   applies to every <button> nested in the donation form, including each
+   swatch — overridden here at higher specificity (class + ancestor class)
+   the same way `.gate-card .visual-preset-tile` overrides it for preset
+   tiles, so a swatch actually shows its own --swatch-color instead of a
+   uniform rose fill. */
+.gate-card .tint-swatch {
+  position: relative;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: 2px solid var(--brass);
+  background: var(--swatch-color, transparent);
+  cursor: pointer;
+  padding: 0;
+}
+
+/* The "Natural"/no-tint swatch has no --swatch-color (transparent) — give
+   it a visible diagonal slash so it never looks like a blank broken swatch. */
+.gate-card .tint-swatch[data-hex="null"] {
+  background: var(--parchment);
+  background-image: linear-gradient(135deg, transparent 46%, var(--rose) 48%, var(--rose) 52%, transparent 54%);
+}
+
+.tint-swatch:hover {
+  border-color: color-mix(in srgb, var(--brass) 55%, white 45%);
+}
+
+.tint-swatch[aria-checked="true"] {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(198, 161, 107, 0.35), 0 0 10px rgba(198, 161, 107, 0.25);
+}
+
+.tint-swatch:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* The freehand paint canvas — a bounded square, the selected preset shown
+   behind it so a donor paints "onto" something real rather than a blank
+   square. The canvas sits exactly over the preview image via absolute
+   positioning inside a relatively-positioned wrapper of a fixed aspect
+   ratio. */
+/* Explicit height (not just aspect-ratio) — this wrapper's children are all
+   absolutely positioned, so inside the donate form's column flex layout it
+   has no intrinsic content height for `aspect-ratio` to resolve against,
+   and collapses to just its own border. A fixed height sidesteps that
+   entirely; `width: 100%` still lets it shrink to fit a narrow viewport
+   (flex-shrink:0 keeps it from being squashed vertically when it does). */
+.paint-canvas-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  height: 320px;
+  flex-shrink: 0;
+  margin: 0.2rem 0 0.4rem;
+  border: 2px solid var(--brass);
+  border-radius: 8px;
+  background: var(--obsidian);
+  overflow: hidden;
+}
+
+@media (max-width: 480px) {
+  .paint-canvas-wrap {
+    height: min(320px, calc(100vw - 4rem));
+  }
+}
+
+.paint-canvas-wrap img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.paint-canvas-wrap canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.paint-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.3rem;
+}
+
+.paint-toolbar button {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--brass);
+  background: var(--obsidian);
+  color: var(--parchment);
+  cursor: pointer;
+}
+
+.paint-toolbar button[aria-pressed="true"] {
+  border-color: var(--gold);
+  background: var(--mahogany);
+}
+
+.paint-toolbar button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* --- relic customiser --------------------------------------------------- */
+/* The "Customise Relic…" entry point on the donate form — a plain secondary
+   button (not a .visual-preset-tile — there's nothing to pick among here,
+   just one action), with a small live summary line underneath reporting
+   how many stickers are currently placed. */
+.customiser-open-btn {
+  align-self: flex-start;
+}
+
+.customiser-summary {
+  margin: -0.2rem 0 0.2rem;
+  font-size: 0.76rem;
+  color: rgba(43, 36, 28, 0.65);
+  min-height: 1em;
+}
+
+/* The customiser panel stacks on TOP of the donate form (both are
+   .overlay-gate instances at the same z-index, so whichever was shown last
+   — the customiser opens without closing the donate gate underneath —
+   paints over it, exactly like the existing placement-banner-over-donate-
+   form relationship elsewhere in this flow). */
+.customiser-card {
+  width: min(480px, 100%);
+}
+
+.customiser-hint {
+  margin: 0 0 0.2rem;
+  font-size: 0.8rem;
+  color: rgba(43, 36, 28, 0.75);
+}
+
+/* The live preview stage: the same renderRelicVisual composite every other
+   render path uses, sized to a fixed square so x/y normalization (0-1
+   against this box) stays meaningful regardless of the base preset's own
+   aspect ratio — object-fit: contain inside .relic-visual-img already
+   guarantees the artwork itself never stretches. */
+.customiser-stage {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  height: 340px;
+  margin: 0 auto 0.4rem;
+  border: 2px solid var(--brass);
+  border-radius: 8px;
+  background: var(--obsidian);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.customiser-preview {
+  position: absolute;
+  inset: 0;
+}
+
+/* A placed overlay item, as rendered live INSIDE the customiser stage while
+   editing — distinct from the inert, non-interactive
+   .relic-visual-overlay-item used by every read-only render path (receipt,
+   dossier, in-scene exhibit), since only here does an item need its own
+   drag handle and a visible selected state. Position/size/rotation are set
+   inline by app.js from the same x/y/scale/rotation fields, so a sticker
+   never visibly jumps between editing and the final composite. */
+.overlay-item-handle {
+  position: absolute;
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%) rotate(var(--overlay-rotation, 0deg));
+  cursor: grab;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  touch-action: none;
+}
+
+.overlay-item-handle:active {
+  cursor: grabbing;
+}
+
+.overlay-item-handle img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.overlay-item-handle.selected {
+  outline: 2px dashed var(--gold);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+/* The two small corner controls on a SELECTED overlay item: a resize handle
+   (bottom-right) and a rotate handle (top-right) — each its own tiny round
+   grip, counter-rotated against the item's own --overlay-rotation so the
+   grip itself always reads upright regardless of how far the sticker has
+   been turned. */
+.overlay-item-resize,
+.overlay-item-rotate {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gold);
+  border: 2px solid var(--obsidian);
+  transform: rotate(calc(-1 * var(--overlay-rotation, 0deg)));
+  cursor: pointer;
+}
+
+.overlay-item-resize {
+  right: -9px;
+  bottom: -9px;
+  cursor: nwse-resize;
+}
+
+.overlay-item-rotate {
+  right: -9px;
+  top: -9px;
+  cursor: alias;
+}
+
+/* The sticker palette — plain draggable/clickable source tiles, same visual
+   card language as .visual-preset-tile but without the radio/checked
+   semantics (a palette tile is a "stamp," not a persistent selection: it
+   can be used any number of times). */
+.overlay-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  gap: 0.5rem;
+  margin: 0.2rem 0 0.4rem;
+}
+
+.gate-card .overlay-palette-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem;
+  border: 2px solid var(--brass);
+  border-radius: 8px;
+  background: var(--obsidian);
+  color: var(--parchment);
+  cursor: grab;
+  font: inherit;
+}
+
+.overlay-palette-tile:hover {
+  border-color: color-mix(in srgb, var(--brass) 55%, white 45%);
+}
+
+.overlay-palette-tile:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.overlay-palette-tile img {
+  width: 100%;
+  max-height: 36px;
+  object-fit: contain;
+}
+
+.overlay-palette-tile span {
+  font-size: 0.68rem;
+  text-align: center;
+  line-height: 1.15;
+}
+
+.customiser-item-actions {
+  margin-top: -0.1rem;
+}
+
+/* --- personalized relic rendering ------------------------------------- */
+/* The layered stack renderRelicVisual builds for a personalized donation:
+   base image -> optional tint -> optional paint -> customiser overlay
+   stickers. Every full-box layer shares the base image's own box exactly
+   (object-fit: contain, inset: 0) so they composite in perfect registration
+   regardless of the preset's own aspect ratio. */
+.relic-visual-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.relic-visual-wrap .relic-visual-img {
+  position: relative;
+}
+
+.relic-visual-paint {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* A placed customiser overlay sticker — unlike the full-box tint/paint
+   layers above, each sticker is independently positioned/sized/rotated per
+   its own stored x/y/scale/rotation (set inline by renderRelicVisual), so it
+   is NOT `inset: 0` — it's a small element anchored at its own normalized
+   point within the wrap, matching exactly how the customiser stage itself
+   positions the same element while being dragged (see .overlay-item-handle). */
+.relic-visual-overlay-item {
+  position: absolute;
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%) rotate(var(--overlay-rotation, 0deg));
+  pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+/* The recolor layer — a flat colour masked by the SAME preset image's own
+   alpha channel, composited with mix-blend-mode: color (never hue-rotate,
+   which would wreck the preset's own shading) — identical technique to the
+   visitor-cameo .apparition-tint system (see its own doc comment above). */
+.relic-visual-tint {
+  position: absolute;
+  inset: 0;
+  background-color: var(--relic-tint-color);
+  mask-image: var(--relic-tint-mask);
+  mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  -webkit-mask-image: var(--relic-tint-mask);
+  -webkit-mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mix-blend-mode: color;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
 /* The name-gate's ghost-form picker: native radio inputs (not custom
    role="radio" buttons — a plain <label><input type="radio">...</label>
    group is already a real, Tab/Space-operable control with no extra

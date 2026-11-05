@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <radialGradient id="seal-grad" cx="38%" cy="32%" r="75%">
+      <stop offset="0%" stop-color="#9c3b3b" />
+      <stop offset="55%" stop-color="#7a1f2b" />
+      <stop offset="100%" stop-color="#4f1319" />
+    </radialGradient>
+  </defs>
+  <path d="M100 18
+    c10 2 16 14 14 22
+    c14-6 26 4 26 16
+    c10 6 12 20 2 28
+    c8 10 2 24-10 26
+    c0 12-10 22-22 20
+    c-6 10-22 10-28 0
+    c-12 2-22-8-22-20
+    c-12-2-18-16-10-26
+    c-10-8-8-22 2-28
+    c0-12 12-22 26-16
+    c-2-8 4-20 14-22
+    c3-0.6 5.4-0.6 8 0z"
+    fill="url(#seal-grad)" stroke="#3a0d12" stroke-width="2"/>
+  <circle cx="100" cy="102" r="46" fill="#5c1821" stroke="#3a0d12" stroke-width="1.5"/>
+  <path d="M100 76 l9 18 20 3-14 14 3 20-18-10-18 10 3-20-14-14 20-3z"
+    fill="#c6a16b" opacity="0.85"/>
+  <path d="M60 60 q40-24 80 0" fill="none" stroke="#2f0a0e" stroke-width="2" opacity="0.4"/>
+</svg>

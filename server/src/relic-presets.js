@@ -194,3 +194,28 @@ export function isValidVisualChoice(visualId, category, subtype, surfaceType) {
   if (!preset) return false;
   return preset.category === category && preset.subtype === subtype && preset.compatibleSurfaceTypes.includes(surfaceType);
 }
+
+// Personalization: the relic customiser's overlay/sticker palette — a
+// small, fixed catalog of local, hand-authored transparent SVGs
+// (public/assets/overlays/) a donor may freely place, scale, and rotate on
+// top of ANY chosen preset (no `figural`-only gate: a wax seal or a crack
+// reads fine on a spoon or a diary, unlike a worn accessory). This
+// deliberately replaces an earlier AI-image-generation attempt at
+// photographic glasses/hat/ring overlays (tools/generate-relic-assets.py,
+// Pollinations) — across three separate regeneration rounds every output
+// was unusable as a transparent cutout (a whole face wearing the item, a
+// decorative non-subject, or a keying failure from a non-flat backdrop),
+// the same failure pattern already documented for the abandoned eyepatch
+// attempt. A human-drawn flat vector set sidesteps that failure mode
+// entirely and composites cleanly at any size/rotation by construction.
+export const RELIC_OVERLAYS = [
+  { id: "wax-seal", name: "Wax Seal", assetPath: "/assets/overlays/wax-seal.svg" },
+  { id: "antique-label", name: "Antique Label", assetPath: "/assets/overlays/antique-label.svg" },
+  { id: "ribbon", name: "Ribbon", assetPath: "/assets/overlays/ribbon.svg" },
+  { id: "tiny-lock", name: "Tiny Lock", assetPath: "/assets/overlays/tiny-lock.svg" },
+  { id: "cobweb", name: "Cobweb", assetPath: "/assets/overlays/cobweb.svg" },
+  { id: "crack", name: "Crack", assetPath: "/assets/overlays/crack.svg" },
+  { id: "glowing-rune", name: "Glowing Rune", assetPath: "/assets/overlays/glowing-rune.svg" },
+  { id: "eye-symbol", name: "Eye Symbol", assetPath: "/assets/overlays/eye-symbol.svg" },
+];
+export const RELIC_OVERLAYS_BY_ID = new Map(RELIC_OVERLAYS.map((o) => [o.id, o]));

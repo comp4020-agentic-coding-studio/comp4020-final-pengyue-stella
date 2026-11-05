@@ -19,6 +19,9 @@ let myIdentity = null;
 let myPublicKey = null;
 let world = null;
 let relicPresets = []; // the curated donated-relic visual catalog — see server/src/relic-presets.js
+let relicTints = []; // the fixed recolor swatch vocabulary — see server/src/constants.js's RELIC_TINTS
+let relicOverlays = []; // the relic customiser's fixed overlay/sticker catalog — see server/src/relic-presets.js's RELIC_OVERLAYS
+let relicOverlaysById = new Map();
 let reactions = []; // the Séance panel's fixed reaction vocabulary — see server/src/constants.js's REACTIONS
 let exhibitsById = new Map(); // exhibitId -> exhibit (with accounts)
 let illustrator = null;
@@ -92,6 +95,19 @@ async function loadRelicPresets() {
   relicPresets = presets;
 }
 
+async function loadRelicTints() {
+  const res = await fetch("/api/relic-tints");
+  const { tints } = await res.json();
+  relicTints = tints;
+}
+
+async function loadRelicOverlays() {
+  const res = await fetch("/api/relic-overlays");
+  const { overlays } = await res.json();
+  relicOverlays = overlays;
+  relicOverlaysById = new Map(overlays.map((o) => [o.id, o]));
+}
+
 async function loadReactions() {
   const res = await fetch("/api/reactions");
   const { reactions: list } = await res.json();
@@ -144,10 +160,26 @@ async function resyncExhibits() {
 // this").
 let selectedVisualId = null;
 let selectedSubtype = null;
+// Personalization selections — all optional, reset on every gate open
+// (populateDonateForm) the same way selectedVisualId/selectedSubtype are.
+let selectedTintColor = null; // a RELIC_TINTS hex, or null for "Natural"
+// Placed customiser overlay stickers for the relic currently being donated:
+// [{ assetId, x, y, scale, rotation, zIndex }], x/y normalized 0-1 against
+// the base preset image's own box. Reset whenever the chosen preset changes
+// (a placement is meaningless against a different base image) and whenever
+// the donate gate re-opens, same discipline as every other personalization
+// field here.
+let customiserItems = [];
+
+function updateCustomiserSummary() {
+  const summary = el("customiser-summary");
+  summary.textContent = customiserItems.length > 0 ? `${customiserItems.length} sticker(s) placed.` : "";
+}
 
 function populateDonateForm() {
   const gallerySelect = el("donate-gallery");
   const visualGrid = el("donate-visual-grid");
+  const tintGrid = el("donate-tint-grid");
   gallerySelect.innerHTML = "";
   for (const g of world.galleries) {
     const opt = document.createElement("option");
@@ -168,8 +200,43 @@ function populateDonateForm() {
     for (const tile of visualGrid.querySelectorAll(".visual-preset-tile")) {
       tile.setAttribute("aria-checked", tile.dataset.visualId === String(visualId) ? "true" : "false");
     }
+    const preset = visualId ? presetById(visualId) : null;
+    // A placed overlay's x/y is meaningful only against the base image it
+    // was positioned on — switching the appearance clears any customisation
+    // rather than silently carrying stale placements onto a different image.
+    customiserItems = [];
+    updateCustomiserSummary();
+    el("paint-base-preview").src = preset?.assetPath ?? "";
+    clearPaintCanvas();
     el("donate-error").textContent = "";
   }
+
+  // Recolor swatch grid — a fixed small vocabulary (server/src/constants.js's
+  // RELIC_TINTS), same accessible radiogroup/aria-checked tile pattern as
+  // the visual grid, built once per gate-open (tints never change per
+  // gallery/preset the way accessories do).
+  function selectTint(hex) {
+    selectedTintColor = hex;
+    for (const swatch of tintGrid.querySelectorAll(".tint-swatch")) {
+      swatch.setAttribute("aria-checked", swatch.dataset.hex === String(hex) ? "true" : "false");
+    }
+  }
+  function buildTintGrid() {
+    tintGrid.innerHTML = "";
+    for (const tint of relicTints) {
+      const swatch = document.createElement("button");
+      swatch.type = "button";
+      swatch.className = "tint-swatch";
+      swatch.setAttribute("role", "radio");
+      swatch.setAttribute("aria-label", tint.label);
+      swatch.dataset.hex = tint.hex ?? "null";
+      swatch.style.setProperty("--swatch-color", tint.hex ?? "transparent");
+      swatch.addEventListener("click", () => selectTint(tint.hex));
+      tintGrid.appendChild(swatch);
+    }
+    selectTint(null);
+  }
+  buildTintGrid();
 
   // Gallery-first workflow: a donor picks the room before the appearance,
   // and a preset click never changes the already-chosen gallery (this
@@ -213,6 +280,369 @@ function populateDonateForm() {
 
   buildVisualGrid();
 }
+
+// ---------------------------------------------------------------------------
+// Personalization: freehand paint canvas. A bounded canvas the donor draws
+// on with a pointer; captured as its own flattened transparent PNG on
+// submit (canvas.toDataURL), never baked into the base preset image — see
+// renderRelicVisual's layering. Brush color reuses the SAME fixed swatch
+// vocabulary as the tint picker (no second color system), plus a black/
+// white pair for outline-style strokes. Two discrete brush sizes via
+// toggle buttons, matching the placement scale/rotation stepper's "no
+// range input" decision. Undo is an in-memory stack of ImageData snapshots
+// taken on pointerup — session-only, never persisted as stroke history,
+// only the final flattened image is.
+const PAINT_BRUSH_COLORS = [
+  { id: "ink", label: "Ink", hex: "#1a1410" },
+  { id: "bone", label: "Bone White", hex: "#e9ddc5" },
+  { id: "crimson", label: "Crimson", hex: "#7a1f2b" },
+  { id: "verdigris", label: "Verdigris", hex: "#3d6b5c" },
+  { id: "gilt", label: "Gilt", hex: "#a8812f" },
+];
+let paintColor = PAINT_BRUSH_COLORS[0].hex;
+let paintBrushRadius = 3; // "Thin"
+let paintUndoStack = [];
+let paintCtx = null;
+let paintHasContent = false;
+// A generous client-side ceiling, comfortably under the server's own
+// PAINT_LAYER_MAX_BYTES (150KB decoded) once base64-inflated (~4/3x) — a
+// friendly pre-check only, never the actual authority.
+const PAINT_LAYER_MAX_DATA_URL_LENGTH = 200 * 1024;
+
+function clearPaintCanvas() {
+  const canvas = el("paint-canvas");
+  if (!paintCtx) paintCtx = canvas.getContext("2d");
+  paintCtx.clearRect(0, 0, canvas.width, canvas.height);
+  paintUndoStack = [];
+  paintHasContent = false;
+}
+
+// A donor who never touches the canvas submits paintLayer: null, never a
+// blank transparent PNG — distinguishing "chose not to paint" from "painted
+// something" matters for fullExhibit's own hasPaintLayer-style read.
+function capturePaintLayer() {
+  if (!paintHasContent) return null;
+  return el("paint-canvas").toDataURL("image/png");
+}
+
+function buildPaintColorGrid() {
+  const grid = el("paint-color-grid");
+  grid.innerHTML = "";
+  for (const color of PAINT_BRUSH_COLORS) {
+    const swatch = document.createElement("button");
+    swatch.type = "button";
+    swatch.className = "tint-swatch";
+    swatch.setAttribute("role", "radio");
+    swatch.setAttribute("aria-checked", color.hex === paintColor ? "true" : "false");
+    swatch.setAttribute("aria-label", color.label);
+    swatch.style.setProperty("--swatch-color", color.hex);
+    swatch.addEventListener("click", () => {
+      paintColor = color.hex;
+      for (const s of grid.querySelectorAll(".tint-swatch")) {
+        s.setAttribute("aria-checked", s === swatch ? "true" : "false");
+      }
+    });
+    grid.appendChild(swatch);
+  }
+}
+buildPaintColorGrid();
+
+el("paint-brush-small").addEventListener("click", () => {
+  paintBrushRadius = 3;
+  el("paint-brush-small").setAttribute("aria-pressed", "true");
+  el("paint-brush-large").setAttribute("aria-pressed", "false");
+});
+el("paint-brush-large").addEventListener("click", () => {
+  paintBrushRadius = 9;
+  el("paint-brush-large").setAttribute("aria-pressed", "true");
+  el("paint-brush-small").setAttribute("aria-pressed", "false");
+});
+el("paint-clear").addEventListener("click", clearPaintCanvas);
+el("paint-undo").addEventListener("click", () => {
+  const canvas = el("paint-canvas");
+  if (!paintCtx) paintCtx = canvas.getContext("2d");
+  const previous = paintUndoStack.pop();
+  if (previous) {
+    paintCtx.putImageData(previous, 0, 0);
+    paintHasContent = paintUndoStack.length > 0;
+  } else {
+    paintCtx.clearRect(0, 0, canvas.width, canvas.height);
+    paintHasContent = false;
+  }
+});
+
+(function wirePaintCanvas() {
+  const canvas = el("paint-canvas");
+  paintCtx = canvas.getContext("2d");
+  let drawing = false;
+
+  function pointFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((e.clientY - rect.top) / rect.height) * canvas.height,
+    };
+  }
+
+  function strokeDot(x, y) {
+    paintCtx.fillStyle = paintColor;
+    paintCtx.beginPath();
+    paintCtx.arc(x, y, paintBrushRadius, 0, Math.PI * 2);
+    paintCtx.fill();
+    paintHasContent = true;
+  }
+
+  canvas.addEventListener("pointerdown", (e) => {
+    drawing = true;
+    paintUndoStack.push(paintCtx.getImageData(0, 0, canvas.width, canvas.height));
+    const p = pointFromEvent(e);
+    strokeDot(p.x, p.y);
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drawing) return;
+    const p = pointFromEvent(e);
+    strokeDot(p.x, p.y);
+  });
+  window.addEventListener("pointerup", () => {
+    drawing = false;
+  });
+})();
+
+// ---------------------------------------------------------------------------
+// Relic customiser: a second overlay panel (opened on top of the donate
+// form, never replacing it) where a donor places, drags, scales, rotates
+// and deletes sticker overlays on their chosen relic appearance. Reuses the
+// SAME renderRelicVisual the rest of the app already uses for its own
+// read-only base/tint/paint preview, then additionally renders each
+// `customiserItems` entry as its own interactive, draggable handle on top —
+// the live preview stays visually identical to every other render path,
+// only this one adds interaction chrome.
+//
+// Data model: `customiserItems` (declared above, alongside selectedTintColor)
+// is the single source of truth — `{ assetId, x, y, scale, rotation, zIndex }`
+// per placed sticker, x/y normalized 0-1 against the base image's own box.
+// This is exactly the shape serialized into the donation POST body
+// (`overlayItems`) and round-tripped back by the server (db.js's
+// validateOverlayItems) — no separate client-only representation to keep in
+// sync.
+const OVERLAY_DEFAULT_SCALE = 1;
+let selectedOverlayIndex = null; // index into customiserItems, or null
+
+function closeCustomiserGate() {
+  el("customiser-gate").hidden = true;
+  selectedOverlayIndex = null;
+  el("donate-title").ownerDocument.getElementById("open-customiser")?.focus();
+}
+
+function renderCustomiserStage() {
+  const stage = el("customiser-stage");
+  const preview = el("customiser-preview");
+  const preset = selectedVisualId ? presetById(selectedVisualId) : null;
+
+  renderRelicVisual(preview, {
+    visualId: selectedVisualId,
+    category: preset?.category,
+    subtype: selectedSubtype,
+    tintColor: selectedTintColor,
+    overlayItems: [], // the base/tint/paint preview only — placed stickers render as their own interactive handles below, not as the inert renderRelicVisual layer
+    paintLayer: capturePaintLayer(),
+  });
+
+  // Remove any previously-rendered handles (renderRelicVisual above only
+  // ever touches #customiser-preview, so old handles — appended directly to
+  // the stage, a sibling of the preview — must be cleared separately).
+  for (const handle of stage.querySelectorAll(".overlay-item-handle")) handle.remove();
+
+  customiserItems.forEach((item, index) => {
+    const overlay = relicOverlaysById.get(item.assetId);
+    if (!overlay) return;
+    const handle = document.createElement("div");
+    handle.className = "overlay-item-handle";
+    handle.tabIndex = 0;
+    handle.setAttribute("role", "button");
+    handle.setAttribute("aria-label", `${overlay.name} sticker, placed`);
+    if (index === selectedOverlayIndex) handle.classList.add("selected");
+    const sizePct = OVERLAY_BASE_FRACTION * (Number.isFinite(item.scale) ? item.scale : 1) * 100;
+    handle.style.width = `${sizePct}%`;
+    handle.style.left = `${item.x * 100}%`;
+    handle.style.top = `${item.y * 100}%`;
+    handle.style.setProperty("--overlay-rotation", `${item.rotation ?? 0}deg`);
+    handle.style.zIndex = String(10 + (item.zIndex ?? index));
+
+    const img = document.createElement("img");
+    img.src = overlay.assetPath;
+    img.alt = "";
+    handle.appendChild(img);
+
+    handle.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      selectOverlay(index);
+      beginOverlayDrag(e, index);
+    });
+    handle.addEventListener("click", (e) => e.stopPropagation());
+    handle.addEventListener("keydown", (e) => {
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        deleteOverlay(index);
+      }
+    });
+
+    if (index === selectedOverlayIndex) {
+      const resizeHandle = document.createElement("div");
+      resizeHandle.className = "overlay-item-resize";
+      resizeHandle.setAttribute("aria-hidden", "true");
+      resizeHandle.addEventListener("pointerdown", (e) => {
+        e.stopPropagation();
+        beginOverlayResize(e, index);
+      });
+      handle.appendChild(resizeHandle);
+
+      const rotateHandle = document.createElement("div");
+      rotateHandle.className = "overlay-item-rotate";
+      rotateHandle.setAttribute("aria-hidden", "true");
+      rotateHandle.addEventListener("pointerdown", (e) => {
+        e.stopPropagation();
+        beginOverlayRotate(e, index);
+      });
+      handle.appendChild(rotateHandle);
+    }
+
+    stage.appendChild(handle);
+  });
+
+  el("customiser-delete-selected").disabled = selectedOverlayIndex === null;
+}
+
+function selectOverlay(index) {
+  selectedOverlayIndex = index;
+  renderCustomiserStage();
+}
+
+function deleteOverlay(index) {
+  customiserItems.splice(index, 1);
+  selectedOverlayIndex = null;
+  updateCustomiserSummary();
+  renderCustomiserStage();
+}
+
+function addOverlay(assetId) {
+  const nextZIndex = customiserItems.length > 0 ? Math.max(...customiserItems.map((i) => i.zIndex ?? 0)) + 1 : 0;
+  customiserItems.push({ assetId, x: 0.5, y: 0.5, scale: OVERLAY_DEFAULT_SCALE, rotation: 0, zIndex: nextZIndex });
+  selectedOverlayIndex = customiserItems.length - 1;
+  updateCustomiserSummary();
+  renderCustomiserStage();
+}
+
+function buildOverlayPalette() {
+  const palette = el("customiser-palette");
+  palette.innerHTML = "";
+  for (const overlay of relicOverlays) {
+    const tile = document.createElement("button");
+    tile.type = "button";
+    tile.className = "visual-preset-tile overlay-palette-tile";
+    const img = document.createElement("img");
+    img.src = overlay.assetPath;
+    img.alt = "";
+    tile.appendChild(img);
+    const name = document.createElement("span");
+    name.textContent = overlay.name;
+    tile.appendChild(name);
+    tile.addEventListener("click", () => addOverlay(overlay.id));
+    palette.appendChild(tile);
+  }
+}
+
+// Dragging a placed overlay: pointer movement is read in the stage's own
+// pixel box and converted straight to a 0-1 fraction, clamped generously
+// (OVERLAY_COORD_MIN/MAX server-side already allow slight overhang) so a
+// sticker can sit near an edge without vanishing off the stage entirely.
+function beginOverlayDrag(downEvent, index) {
+  const stage = el("customiser-stage");
+  function onMove(e) {
+    const rect = stage.getBoundingClientRect();
+    const x = Math.min(1.2, Math.max(-0.2, (e.clientX - rect.left) / rect.width));
+    const y = Math.min(1.2, Math.max(-0.2, (e.clientY - rect.top) / rect.height));
+    customiserItems[index].x = x;
+    customiserItems[index].y = y;
+    renderCustomiserStage();
+  }
+  function onUp() {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  }
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+}
+
+function beginOverlayResize(downEvent, index) {
+  const stage = el("customiser-stage");
+  const startScale = customiserItems[index].scale ?? OVERLAY_DEFAULT_SCALE;
+  const startX = downEvent.clientX;
+  function onMove(e) {
+    const rect = stage.getBoundingClientRect();
+    const delta = (e.clientX - startX) / rect.width;
+    const next = Math.min(4, Math.max(0.2, startScale + delta * 3));
+    customiserItems[index].scale = next;
+    renderCustomiserStage();
+  }
+  function onUp() {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  }
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+}
+
+function beginOverlayRotate(downEvent, index) {
+  const stage = el("customiser-stage");
+  function angleFor(e) {
+    const rect = stage.getBoundingClientRect();
+    const item = customiserItems[index];
+    const centerX = rect.left + item.x * rect.width;
+    const centerY = rect.top + item.y * rect.height;
+    return (Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180) / Math.PI;
+  }
+  const startAngle = angleFor(downEvent);
+  const startRotation = customiserItems[index].rotation ?? 0;
+  function onMove(e) {
+    const delta = angleFor(e) - startAngle;
+    customiserItems[index].rotation = (((startRotation + delta) % 360) + 360) % 360;
+    renderCustomiserStage();
+  }
+  function onUp() {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  }
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+}
+
+el("customiser-stage").addEventListener("pointerdown", () => {
+  if (selectedOverlayIndex !== null) {
+    selectedOverlayIndex = null;
+    renderCustomiserStage();
+  }
+});
+el("customiser-delete-selected").addEventListener("click", () => {
+  if (selectedOverlayIndex !== null) deleteOverlay(selectedOverlayIndex);
+});
+el("customiser-reset").addEventListener("click", () => {
+  customiserItems = [];
+  selectedOverlayIndex = null;
+  updateCustomiserSummary();
+  renderCustomiserStage();
+});
+el("customiser-cancel").addEventListener("click", closeCustomiserGate);
+el("open-customiser").addEventListener("click", () => {
+  if (!selectedVisualId) {
+    el("donate-error").textContent = "Choose a relic appearance above before customising it.";
+    return;
+  }
+  buildOverlayPalette();
+  selectedOverlayIndex = null;
+  renderCustomiserStage();
+  el("customiser-gate").hidden = false;
+});
 
 function openDonateGate() {
   populateDonateForm();
@@ -262,6 +692,15 @@ el("donate-form").addEventListener("submit", (e) => {
     errEl.textContent = "No free display spot in this gallery right now — try another gallery.";
     return;
   }
+  // A client-side size pre-check before even attempting submit — a
+  // friendly, immediate message, never the actual authority (the server
+  // independently re-validates the decoded byte length in donateExhibit).
+  const paintLayer = capturePaintLayer();
+  if (paintLayer && paintLayer.length > PAINT_LAYER_MAX_DATA_URL_LENGTH) {
+    errEl.textContent = "Your painted layer is too large — try a simpler drawing or clear it.";
+    return;
+  }
+
   errEl.textContent = "";
   const exhibitForm = {
     galleryId,
@@ -270,6 +709,9 @@ el("donate-form").addEventListener("submit", (e) => {
     originClaim: form.originClaim.value.trim(),
     donorName: form.donorName.value.trim() || myIdentity?.name,
     visualId: selectedVisualId,
+    tintColor: selectedTintColor,
+    overlayItems: customiserItems,
+    paintLayer,
   };
   closeDonateGate();
   startPlacement(exhibitForm);
@@ -422,6 +864,9 @@ function openReceipt(exhibit) {
     subtype: exhibit.subtype,
     accent: gallery?.accent ?? "#88653d",
     exhibitId: exhibit.id,
+    tintColor: exhibit.tintColor,
+    overlayItems: exhibit.overlayItems,
+    paintLayer: exhibit.paintLayer,
   });
   applyPlacementRotation(el("receipt-preview"), exhibit.placement?.rotation ?? 0);
 
@@ -654,6 +1099,9 @@ function renderDossier(exhibit) {
         subtype: exhibit.subtype,
         accent: gallery?.accent ?? "#88653d",
         exhibitId: exhibit.id,
+        tintColor: exhibit.tintColor,
+        overlayItems: exhibit.overlayItems,
+        paintLayer: exhibit.paintLayer,
       });
       applyPlacementRotation(el("dossier-preview"), exhibit.placement?.rotation ?? 0);
     }
@@ -1949,6 +2397,7 @@ function anyOverlayOpen() {
   return (
     !el("dossier").hidden ||
     !el("donate-gate").hidden ||
+    !el("customiser-gate").hidden ||
     !el("donate-receipt").hidden ||
     !el("archive-gate").hidden ||
     !el("name-gate").hidden ||
@@ -2151,28 +2600,83 @@ function presetById(visualId) {
 // ratio is always preserved and it is never stretched to fill a square
 // footprint) or, lacking a visualId, the legacy procedural canvas.
 // Rotation is applied as a CSS transform on the actual rendered visual
-// element (the <img>/<canvas> `renderRelicVisual` just appended), never on
-// `container` itself — for the receipt/dossier call sites `container` is a
-// styled box with its own background/border, and rotating THAT box rotates
-// its padding and bleeds into neighbouring controls rather than just the
-// relic artwork. Called right after every `renderRelicVisual` call so a
-// donor's chosen rotation shows up everywhere the relic itself does.
+// element (the `.relic-visual-wrap`/`canvas` `renderRelicVisual` just
+// appended), never on `container` itself — for the receipt/dossier call
+// sites `container` is a styled box with its own background/border, and
+// rotating THAT box rotates its padding and bleeds into neighbouring
+// controls rather than just the relic artwork. Called right after every
+// `renderRelicVisual` call so a donor's chosen rotation shows up everywhere
+// the relic itself does. Rotating the WRAP (not just the base image) keeps
+// every personalization layer — tint/paint/overlay stickers — turning
+// together.
 function applyPlacementRotation(container, rotationDegrees) {
-  const visual = container.querySelector(".relic-visual-img, canvas");
+  const visual = container.querySelector(".relic-visual-wrap, canvas");
   if (!visual) return;
   visual.style.transform = rotationDegrees ? `rotate(${rotationDegrees}deg)` : "";
   visual.style.transformOrigin = "center center";
 }
 
-function renderRelicVisual(container, { visualId, category, subtype, accent, exhibitId }) {
+// A placed overlay sticker's base footprint, as a fraction of the base
+// relic image's own box — multiplied by the item's own `scale`. Deliberately
+// small: a sticker (wax seal, label, rune...) reads as an addition to the
+// relic, never as large as the relic itself at scale 1.
+const OVERLAY_BASE_FRACTION = 0.22;
+
+// Renders a donated relic's full visual: the curated preset image, plus
+// whichever personalization layers this exhibit/form actually has — an
+// optional recolor tint, an optional freehand paint layer, and any number
+// of customiser overlay stickers. Every render path (final exhibit,
+// placement preview, dossier, receipt) converges on this one function, so
+// each only ever needs to pass its own exhibit/form data — never duplicate
+// the layering logic at the call site. Order, bottom to top: base image ->
+// tint -> paint -> overlay stickers (sorted by their own zIndex, so a donor's
+// stacking choice in the customiser survives into every render context).
+function renderRelicVisual(container, { visualId, category, subtype, accent, exhibitId, tintColor, overlayItems, paintLayer }) {
   container.innerHTML = "";
   const preset = visualId ? presetById(visualId) : null;
   if (preset) {
+    const wrap = document.createElement("div");
+    wrap.className = "relic-visual-wrap";
+
     const img = document.createElement("img");
     img.src = preset.assetPath;
     img.alt = "";
     img.className = `relic-visual-img relic-visual-${preset.anchor}`;
-    container.appendChild(img);
+    wrap.appendChild(img);
+
+    if (tintColor) {
+      const tint = document.createElement("div");
+      tint.className = "relic-visual-tint";
+      tint.style.setProperty("--relic-tint-color", tintColor);
+      tint.style.setProperty("--relic-tint-mask", `url(${preset.assetPath})`);
+      wrap.appendChild(tint);
+    }
+
+    if (paintLayer) {
+      const paint = document.createElement("img");
+      paint.src = paintLayer;
+      paint.alt = "";
+      paint.className = "relic-visual-paint";
+      wrap.appendChild(paint);
+    }
+
+    const sortedOverlays = [...(overlayItems ?? [])].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+    for (const item of sortedOverlays) {
+      const overlay = relicOverlaysById.get(item.assetId);
+      if (!overlay) continue;
+      const overlayImg = document.createElement("img");
+      overlayImg.src = overlay.assetPath;
+      overlayImg.alt = "";
+      overlayImg.className = "relic-visual-overlay-item";
+      const sizePct = OVERLAY_BASE_FRACTION * (Number.isFinite(item.scale) ? item.scale : 1) * 100;
+      overlayImg.style.width = `${sizePct}%`;
+      overlayImg.style.left = `${(item.x ?? 0.5) * 100}%`;
+      overlayImg.style.top = `${(item.y ?? 0.5) * 100}%`;
+      overlayImg.style.setProperty("--overlay-rotation", `${item.rotation ?? 0}deg`);
+      wrap.appendChild(overlayImg);
+    }
+
+    container.appendChild(wrap);
     return;
   }
   const canvas = document.createElement("canvas");
@@ -2445,6 +2949,9 @@ function buildExhibitObject(exhibit, gallery, scene) {
     subtype: exhibit.subtype,
     accent: gallery.accent,
     exhibitId: exhibit.id,
+    tintColor: exhibit.tintColor,
+    overlayItems: exhibit.overlayItems,
+    paintLayer: exhibit.paintLayer,
   });
   applyPlacementRotation(container, exhibit.placement.rotation ?? 0);
 
@@ -2548,6 +3055,9 @@ function renderPlacementSurfaces(objectLayer, scene) {
     subtype,
     accent: gallery.accent,
     exhibitId: `placement-preview:${subtype}`,
+    tintColor: placement.exhibitForm.tintColor,
+    overlayItems: placement.exhibitForm.overlayItems,
+    paintLayer: placement.exhibitForm.paintLayer,
   });
   applyPlacementRotation(container, placement.rotation ?? 0);
 
@@ -2811,6 +3321,7 @@ window.addEventListener("keydown", (e) => {
     if (placement) cancelPlacement();
     else if (!el("seance-panel").hidden) closeSeancePanel();
     else if (!el("dossier").hidden) closeDossier();
+    else if (!el("customiser-gate").hidden) closeCustomiserGate();
     else if (!el("donate-gate").hidden) closeDonateGate();
     else if (!el("donate-receipt").hidden) closeReceipt();
     else if (!el("archive-gate").hidden) closeArchive();
@@ -2862,6 +3373,8 @@ async function boot() {
 
   await loadWorld();
   await loadRelicPresets();
+  await loadRelicTints();
+  await loadRelicOverlays();
   await loadReactions();
   await loadExhibits();
 

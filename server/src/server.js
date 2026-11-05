@@ -5,7 +5,7 @@ import * as db from "./db.js";
 import * as sse from "./sse.js";
 import { serveStatic } from "./static.js";
 import { renderReadmePage } from "./readme-page.js";
-import { RELIC_PRESETS } from "./relic-presets.js";
+import { RELIC_PRESETS, RELIC_OVERLAYS } from "./relic-presets.js";
 import {
   ACCOUNT_KIND_SET,
   VERDICT_SET,
@@ -24,6 +24,7 @@ import {
   MAX_INTERACTION_MESSAGE_LENGTH,
   INTERACTION_REACTION_COOLDOWN_MS,
   INTERACTION_MESSAGE_COOLDOWN_MS,
+  RELIC_TINTS,
 } from "./constants.js";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -126,6 +127,17 @@ const server = createServer(async (req, res) => {
     // galleries/subtypes, never something a client assembles itself.
     if (req.method === "GET" && pathname === "/api/relic-presets") {
       json(res, 200, { presets: RELIC_PRESETS });
+      return;
+    }
+
+    // Personalization catalogs — same "server is the one source of truth"
+    // pattern as /api/relic-presets above.
+    if (req.method === "GET" && pathname === "/api/relic-tints") {
+      json(res, 200, { tints: RELIC_TINTS });
+      return;
+    }
+    if (req.method === "GET" && pathname === "/api/relic-overlays") {
+      json(res, 200, { overlays: RELIC_OVERLAYS });
       return;
     }
 
@@ -362,7 +374,11 @@ const server = createServer(async (req, res) => {
 
       let payload;
       try {
-        payload = await readJsonBody(req);
+        // Raised from the default 8192 bytes to comfortably fit a capped
+        // ~150KB freehand paint layer (base64-inflated to ~200KB) alongside
+        // the rest of the donation form — still a real, enforced ceiling,
+        // just one sized for this route's own largest legitimate payload.
+        payload = await readJsonBody(req, 220 * 1024);
       } catch {
         json(res, 400, { error: "bad request body" }, withCookies({}, identity));
         return;
@@ -377,6 +393,9 @@ const server = createServer(async (req, res) => {
       const v = typeof payload.v === "number" && Number.isFinite(payload.v) ? payload.v : NaN;
       const scale = typeof payload.scale === "number" && Number.isFinite(payload.scale) ? payload.scale : undefined;
       const rotation = typeof payload.rotation === "number" && Number.isFinite(payload.rotation) ? payload.rotation : undefined;
+      const tintColor = typeof payload.tintColor === "string" ? payload.tintColor : payload.tintColor === null ? null : undefined;
+      const overlayItems = Array.isArray(payload.overlayItems) ? payload.overlayItems : undefined;
+      const paintLayer = typeof payload.paintLayer === "string" ? payload.paintLayer : undefined;
       const gallery = galleryById(galleryId);
 
       if (
@@ -418,6 +437,9 @@ const server = createServer(async (req, res) => {
         donorName,
         visitorId: identity.id,
         visualId,
+        tintColor,
+        overlayItems,
+        paintLayer,
       });
 
       if (result.error === "visual_required") {
@@ -453,6 +475,26 @@ const server = createServer(async (req, res) => {
       if (result.error === "invalid_rotation") {
         logAction(identity, "donate", { gallery: galleryId, surface: surfaceId }, "rejected:invalid_rotation");
         json(res, 400, { error: "that rotation isn't a valid angle" }, withCookies({}, identity));
+        return;
+      }
+      if (result.error === "invalid_tint") {
+        logAction(identity, "donate", { gallery: galleryId }, "rejected:invalid_tint");
+        json(res, 400, { error: "that recolor isn't one of the available swatches" }, withCookies({}, identity));
+        return;
+      }
+      if (result.error === "invalid_overlay_items") {
+        logAction(identity, "donate", { gallery: galleryId, visual: String(visualId) }, "rejected:invalid_overlay_items");
+        json(res, 400, { error: "that customisation couldn't be saved — try adjusting your overlays" }, withCookies({}, identity));
+        return;
+      }
+      if (result.error === "invalid_paint_layer") {
+        logAction(identity, "donate", { gallery: galleryId }, "rejected:invalid_paint_layer");
+        json(res, 400, { error: "that painted layer isn't a valid image" }, withCookies({}, identity));
+        return;
+      }
+      if (result.error === "paint_layer_too_large") {
+        logAction(identity, "donate", { gallery: galleryId }, "rejected:paint_layer_too_large");
+        json(res, 400, { error: "that painted layer is too large" }, withCookies({}, identity));
         return;
       }
       if (result.error === "slot_taken") {

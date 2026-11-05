@@ -17,8 +17,39 @@ import {
   builtinObjectCropInfo,
 } from "./world.js";
 import { pointInShape, shapeBounds } from "./geometry.js";
-import { VERDICTS } from "./constants.js";
-import { RELIC_PRESETS_BY_ID, RELIC_PRESETS } from "./relic-presets.js";
+import { VERDICTS, RELIC_TINT_HEXES, PAINT_LAYER_MAX_BYTES } from "./constants.js";
+import { RELIC_PRESETS_BY_ID, RELIC_PRESETS, RELIC_OVERLAYS_BY_ID } from "./relic-presets.js";
+
+// A placed overlay's x/y/scale/rotation must be finite numbers in a sane
+// bounded range — generous enough for a donor to place a sticker slightly
+// outside the base image's own box (e.g. a seal overlapping an edge) but
+// tight enough to reject garbage. Normalized 0-1 for x/y (matching the same
+// normalized-point discipline u/v placement already uses), not pixels — so
+// the stored layout is resolution-independent at render time.
+const OVERLAY_COORD_MIN = -0.5;
+const OVERLAY_COORD_MAX = 1.5;
+const OVERLAY_SCALE_MIN = 0.1;
+const OVERLAY_SCALE_MAX = 4;
+const MAX_OVERLAY_ITEMS = 12;
+
+function validateOverlayItems(overlayItems) {
+  if (!Array.isArray(overlayItems)) return null;
+  if (overlayItems.length > MAX_OVERLAY_ITEMS) return null;
+  const cleaned = [];
+  for (const item of overlayItems) {
+    if (!item || typeof item !== "object") return null;
+    const { assetId, x, y, scale, rotation, zIndex } = item;
+    if (!RELIC_OVERLAYS_BY_ID.has(assetId)) return null;
+    if (!Number.isFinite(x) || x < OVERLAY_COORD_MIN || x > OVERLAY_COORD_MAX) return null;
+    if (!Number.isFinite(y) || y < OVERLAY_COORD_MIN || y > OVERLAY_COORD_MAX) return null;
+    const appliedScale = Number.isFinite(scale) ? scale : 1;
+    if (appliedScale < OVERLAY_SCALE_MIN || appliedScale > OVERLAY_SCALE_MAX) return null;
+    const appliedRotation = Number.isFinite(rotation) ? ((Math.round(rotation) % 360) + 360) % 360 : 0;
+    const appliedZIndex = Number.isInteger(zIndex) ? zIndex : cleaned.length;
+    cleaned.push({ assetId, x, y, scale: appliedScale, rotation: appliedRotation, zIndex: appliedZIndex });
+  }
+  return cleaned;
+}
 
 const DB_FILE = process.env.MUSEUM_DB_FILE ?? "/data/museum.db";
 
@@ -221,12 +252,15 @@ if (!exhibitColumnsAfterRotation.some((c) => c.name === "tint_color")) {
   db.exec("ALTER TABLE exhibits ADD COLUMN tint_color TEXT");
 }
 
-// Additive migration: `accessory_ids` — a JSON array of accessory ids
-// (relic-presets.js's RELIC_ACCESSORIES), offered only for a preset marked
-// `figural: true`. NULL/'[]' = no accessories, every pre-existing row.
+// Additive migration: `overlay_items` — a JSON array of the relic
+// customiser's placed overlay stickers (relic-presets.js's RELIC_OVERLAYS),
+// each `{ assetId, x, y, scale, rotation, zIndex }` with x/y normalized
+// 0-1 against the base preset image's own box. Offered on ANY preset (no
+// figural-only gate — a wax seal or a crack reads fine on a spoon, unlike a
+// worn accessory). NULL/'[]' = no overlays, every pre-existing row.
 const exhibitColumnsAfterTint = db.prepare("PRAGMA table_info(exhibits)").all();
-if (!exhibitColumnsAfterTint.some((c) => c.name === "accessory_ids")) {
-  db.exec("ALTER TABLE exhibits ADD COLUMN accessory_ids TEXT");
+if (!exhibitColumnsAfterTint.some((c) => c.name === "overlay_items")) {
+  db.exec("ALTER TABLE exhibits ADD COLUMN overlay_items TEXT");
 }
 
 // Additive migration: `paint_layer` — a donor's freehand brush drawing,
@@ -235,8 +269,8 @@ if (!exhibitColumnsAfterTint.some((c) => c.name === "accessory_ids")) {
 // length. Kept as a column rather than a file on disk: this app has
 // exactly one persistence mechanism and no file-serving surface beyond
 // public/, and the cap keeps a single row small. NULL = no painting.
-const exhibitColumnsAfterAccessories = db.prepare("PRAGMA table_info(exhibits)").all();
-if (!exhibitColumnsAfterAccessories.some((c) => c.name === "paint_layer")) {
+const exhibitColumnsAfterOverlays = db.prepare("PRAGMA table_info(exhibits)").all();
+if (!exhibitColumnsAfterOverlays.some((c) => c.name === "paint_layer")) {
   db.exec("ALTER TABLE exhibits ADD COLUMN paint_layer TEXT");
 }
 
@@ -340,6 +374,9 @@ export function donateExhibit({
   donorName,
   visitorId,
   visualId,
+  tintColor,
+  overlayItems,
+  paintLayer,
 }) {
   const slotRow = db
     .prepare("SELECT * FROM display_slots WHERE id = ? AND gallery_id = ?")
@@ -400,6 +437,44 @@ export function donateExhibit({
   if (!validVisual) return { error: "invalid_visual" };
   const appliedVisualId = visualId;
 
+  // Personalization: tint — one of a fixed small swatch vocabulary
+  // (constants.js's RELIC_TINTS), same "never free-form" discipline as
+  // every other fixed vocabulary in this app. null/undefined = no tint.
+  const appliedTint =
+    tintColor === undefined || tintColor === null
+      ? null
+      : RELIC_TINT_HEXES.has(tintColor)
+        ? tintColor
+        : undefined;
+  if (appliedTint === undefined) return { error: "invalid_tint" };
+
+  // Personalization: the relic customiser's placed overlay stickers — a
+  // fixed catalog of local SVGs (relic-presets.js's RELIC_OVERLAYS), freely
+  // combinable on ANY preset (no figural-only gate: a wax seal or crack
+  // reads fine on a spoon, unlike a worn accessory). Each item's own
+  // x/y/scale/rotation is independently range-checked by
+  // validateOverlayItems; a malformed or out-of-range item rejects the
+  // whole donation rather than silently dropping just that one item.
+  const cleanedOverlayItems = validateOverlayItems(overlayItems === undefined ? [] : overlayItems);
+  if (cleanedOverlayItems === null) return { error: "invalid_overlay_items" };
+  const appliedOverlayItems = JSON.stringify(cleanedOverlayItems);
+
+  // Personalization: a donor's freehand brush layer, captured client-side
+  // as a flattened transparent PNG data URL. Only a cheap byte-size gate
+  // on the decoded length — this app has no image-processing dependency to
+  // inspect pixel content, and a size cap is sufficient defense against
+  // abuse at this app's scale (no moderation queue beyond validation,
+  // same as everywhere else here).
+  let appliedPaintLayer = null;
+  if (typeof paintLayer === "string" && paintLayer) {
+    const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
+    if (!paintLayer.startsWith(PNG_DATA_URL_PREFIX)) return { error: "invalid_paint_layer" };
+    const b64 = paintLayer.slice(PNG_DATA_URL_PREFIX.length);
+    const byteLength = Math.ceil((b64.length * 3) / 4);
+    if (byteLength > PAINT_LAYER_MAX_BYTES) return { error: "paint_layer_too_large" };
+    appliedPaintLayer = paintLayer;
+  }
+
   const exhibitId = `exhibit_${randomUUID()}`;
   const accountId = `account_${randomUUID()}`;
   const now = new Date().toISOString();
@@ -429,8 +504,27 @@ export function donateExhibit({
     // kind of object this is" for the dossier kicker and the legacy-visual
     // backfill's own category-matched lookup.
     db.prepare(
-      "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype, surface_id, placement_u, placement_v, placement_scale, placement_rotation, visual_id, donor_visitor_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(exhibitId, galleryId, slotId, preset.category, title, donorName, now, subtype, surfaceId, u, v, appliedScale, appliedRotation, appliedVisualId, visitorId ?? null);
+      "INSERT INTO exhibits (id, gallery_id, slot_id, category, title, donor_name, created_at, subtype, surface_id, placement_u, placement_v, placement_scale, placement_rotation, visual_id, donor_visitor_id, tint_color, overlay_items, paint_layer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      exhibitId,
+      galleryId,
+      slotId,
+      preset.category,
+      title,
+      donorName,
+      now,
+      subtype,
+      surfaceId,
+      u,
+      v,
+      appliedScale,
+      appliedRotation,
+      appliedVisualId,
+      visitorId ?? null,
+      appliedTint,
+      appliedOverlayItems,
+      appliedPaintLayer,
+    );
 
     db.prepare("UPDATE display_slots SET occupied_exhibit_id = ? WHERE id = ?").run(
       exhibitId,
@@ -714,6 +808,9 @@ function fullExhibit(exhibitId, visitorId) {
     origin: row.origin,
     visualIdBackfilled: !!row.visual_id_backfilled,
     closeupSceneId: row.closeup_scene_id ?? null,
+    tintColor: row.tint_color ?? null,
+    overlayItems: row.overlay_items ? JSON.parse(row.overlay_items) : [],
+    paintLayer: row.paint_layer ?? null,
     // Per-requester only (never broadcast globally — see server.js's
     // donate/edit/delete handlers, which strip this before an `sse.broadcast`
     // so no OTHER visitor's client ever receives a stale/wrong value for a

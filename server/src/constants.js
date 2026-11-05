@@ -83,6 +83,28 @@ export const REACTION_ID_SET = new Set(REACTIONS.map((r) => r.id));
 
 export const MAX_INTERACTION_MESSAGE_LENGTH = 160;
 
+// A donated relic's optional recolor — a fixed small swatch vocabulary
+// (same "never free-form" discipline as VERDICTS/REACTIONS above), applied
+// client-side via the same alpha-masked mix-blend-mode:color technique the
+// visitor cameo system already uses (styles.css's .apparition-tint), never
+// a hue-rotate filter (which would wreck the preset's own shading). `hex`
+// is the literal CSS color value rendered; `null` means no tint at all.
+export const RELIC_TINTS = [
+  { id: "none", label: "Natural", hex: null },
+  { id: "crimson", label: "Crimson", hex: "#7a1f2b" },
+  { id: "verdigris", label: "Verdigris", hex: "#3d6b5c" },
+  { id: "gilt", label: "Gilt", hex: "#a8812f" },
+  { id: "ashen", label: "Ashen Violet", hex: "#4a3f5c" },
+];
+export const RELIC_TINT_HEXES = new Set(RELIC_TINTS.filter((t) => t.hex).map((t) => t.hex));
+
+// A donor's freehand brush layer is capped on its DECODED byte size (not
+// the inflated base64 string) — this app has no image-processing
+// dependency to inspect pixel dimensions server-side, so a byte cap is the
+// cheap, sufficient defense against abuse at this app's scale (no
+// moderation queue beyond validation, same as everywhere else here).
+export const PAINT_LAYER_MAX_BYTES = 150 * 1024;
+
 // Ephemeral, per-sender Séance cooldowns (never persisted — see sse.js's
 // broadcastToRoom doc comment). A reaction/reach-out is a single click
 // with no typing involved, so it gets a short floor purely against an

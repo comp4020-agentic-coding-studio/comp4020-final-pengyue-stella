@@ -239,19 +239,57 @@
           <label for="donate-gallery">Gallery</label>
           <select id="donate-gallery" name="galleryId" required></select>
 
-          <!-- Visual preset picker: all four curated relic-appearance
-               thumbnails (see server/src/relic-presets.js), always shown
-               together regardless of the selected gallery — picking one
-               drives the gallery/subtype choice (preset-first), rather than
-               being filtered down to a single match. A preset is now the
-               ONLY way to say what a donated relic is: there is no
+          <!-- Visual preset picker: every curated relic-appearance
+               thumbnail (see server/src/relic-presets.js), shown regardless
+               of the selected gallery — a relic may be placed in any room,
+               so picking a preset never changes the gallery already
+               chosen above (see app.js's populateDonateForm). A preset is
+               the ONLY way to say what a donated relic is: there is no
                "Classic"/no-image fallback tile, and no separate subtype
-               select — choosing a preset IS choosing the subtype (see
-               app.js's populateDonateForm). Submitting without a preset
-               chosen is blocked client-side (and rejected server-side) with
-               a message pointing back at this grid. -->
+               select — choosing a preset IS choosing the subtype.
+               Submitting without a preset chosen is blocked client-side
+               (and rejected server-side) with a message pointing back at
+               this grid. -->
           <span class="donate-field-label" id="donate-visual-label">Relic appearance (required)</span>
           <div id="donate-visual-grid" class="visual-preset-grid" role="radiogroup" aria-labelledby="donate-visual-label"></div>
+
+          <!-- Personalization: recolor — a fixed small swatch vocabulary
+               (server/src/constants.js's RELIC_TINTS), same accessible
+               radiogroup/aria-checked pattern as the visual grid above. -->
+          <span class="donate-field-label" id="donate-tint-label">Recolor (optional)</span>
+          <div id="donate-tint-grid" class="tint-swatch-grid" role="radiogroup" aria-labelledby="donate-tint-label"></div>
+
+          <!-- Personalization: the relic customiser — opens a separate
+               overlay panel (#customiser-gate below) where a donor can
+               place, drag, scale, rotate and delete sticker overlays
+               (server/src/relic-presets.js's RELIC_OVERLAYS) on top of
+               their chosen relic appearance. The button's own label reports
+               how many overlays are currently placed, so the donor isn't
+               left wondering whether a prior customisation session "stuck." -->
+          <span class="donate-field-label">Customise (optional)</span>
+          <button type="button" id="open-customiser" class="secondary customiser-open-btn">Customise Relic&hellip;</button>
+          <p id="customiser-summary" class="customiser-summary"></p>
+
+          <!-- Personalization: freehand paint — a bounded canvas the donor
+               can draw on with a brush, composited as its own transparent
+               layer over the chosen preset (never baked into the base
+               image) when the exhibit renders. Captured via canvas.toDataURL
+               on submit; entirely optional, and every control around the
+               canvas itself (color, brush size, undo, clear) is a real
+               keyboard-operable button — only the freehand stroke gesture
+               itself is inherently pointer-only, same as any paint tool. -->
+          <span class="donate-field-label" id="donate-paint-label">Paint on your relic (optional)</span>
+          <div class="paint-canvas-wrap">
+            <img id="paint-base-preview" alt="" />
+            <canvas id="paint-canvas" width="320" height="320" aria-label="Freehand paint canvas"></canvas>
+          </div>
+          <div class="paint-toolbar" role="group" aria-label="Paint tools">
+            <div id="paint-color-grid" role="radiogroup" aria-label="Brush color"></div>
+            <button type="button" id="paint-brush-small" aria-pressed="true">Thin</button>
+            <button type="button" id="paint-brush-large" aria-pressed="false">Thick</button>
+            <button type="button" id="paint-undo">Undo Stroke</button>
+            <button type="button" id="paint-clear">Clear</button>
+          </div>
 
           <label for="donate-title">Title</label>
           <input id="donate-title" name="title" maxlength="80" required placeholder="The Spoon That Remembers" />
@@ -269,6 +307,41 @@
           </div>
           <p class="gate-error" id="donate-error" role="alert"></p>
         </form>
+      </div>
+
+      <!-- Relic customiser: a second overlay panel on top of the donation
+           form (never replacing it — "Esc · Done" here returns to the
+           donate form with the customisation already applied to its own
+           in-memory state, same "gate stack" pattern the placement banner
+           uses relative to the donate form). The preview area is the SAME
+           renderRelicVisual composite (base -> tint -> paint -> overlays)
+           every other render path uses, with each placed overlay also
+           individually draggable/rotatable/scalable via its own handle
+           while this panel is open. -->
+      <div id="customiser-gate" class="overlay-gate" hidden>
+        <div class="gate-card dossier-card customiser-card">
+          <h2>Customise Your Relic</h2>
+          <p class="customiser-hint">
+            Drag a sticker onto your relic from the palette below. Drag a placed sticker to move it; use its own
+            handles to resize and rotate. Select a sticker and press Delete, or use the button below, to remove it.
+          </p>
+
+          <div id="customiser-stage" class="customiser-stage">
+            <div id="customiser-preview" class="customiser-preview"></div>
+          </div>
+
+          <span class="donate-field-label" id="customiser-palette-label">Stickers</span>
+          <div id="customiser-palette" class="overlay-palette-grid" role="group" aria-labelledby="customiser-palette-label"></div>
+
+          <div class="gate-actions customiser-item-actions">
+            <button type="button" id="customiser-delete-selected" disabled>Delete Selected</button>
+            <button type="button" id="customiser-reset" class="secondary">Reset All</button>
+          </div>
+
+          <div class="gate-actions">
+            <button type="button" id="customiser-cancel" class="secondary">Esc &middot; Done</button>
+          </div>
+        </div>
       </div>
 
       <!-- Placement-mode banner: shown instead of the normal bottom hint

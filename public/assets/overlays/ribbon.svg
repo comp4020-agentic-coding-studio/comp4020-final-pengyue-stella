@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160">
+  <defs>
+    <linearGradient id="ribbon-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#5c1821" />
+      <stop offset="50%" stop-color="#8a2c38" />
+      <stop offset="100%" stop-color="#5c1821" />
+    </linearGradient>
+  </defs>
+  <path d="M60 10 L80 10 L96 70 L80 150 L60 150 L76 70 Z" fill="url(#ribbon-grad)" stroke="#3a0d12" stroke-width="1.5"/>
+  <path d="M120 10 L140 10 L124 70 L140 150 L120 150 L104 70 Z" fill="url(#ribbon-grad)" stroke="#3a0d12" stroke-width="1.5"/>
+  <path d="M55 6 q45-18 90 0 l-6 22 q-39-15-78 0 z" fill="#9c3b3b" stroke="#3a0d12" stroke-width="1.5"/>
+  <circle cx="100" cy="18" r="10" fill="#c6a16b" stroke="#3a0d12" stroke-width="1"/>
+</svg>
