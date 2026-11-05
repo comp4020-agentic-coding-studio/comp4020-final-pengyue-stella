@@ -270,27 +270,6 @@
           <button type="button" id="open-customiser" class="secondary customiser-open-btn">Customise Relic&hellip;</button>
           <p id="customiser-summary" class="customiser-summary"></p>
 
-          <!-- Personalization: freehand paint — a bounded canvas the donor
-               can draw on with a brush, composited as its own transparent
-               layer over the chosen preset (never baked into the base
-               image) when the exhibit renders. Captured via canvas.toDataURL
-               on submit; entirely optional, and every control around the
-               canvas itself (color, brush size, undo, clear) is a real
-               keyboard-operable button — only the freehand stroke gesture
-               itself is inherently pointer-only, same as any paint tool. -->
-          <span class="donate-field-label" id="donate-paint-label">Paint on your relic (optional)</span>
-          <div class="paint-canvas-wrap">
-            <img id="paint-base-preview" alt="" />
-            <canvas id="paint-canvas" width="320" height="320" aria-label="Freehand paint canvas"></canvas>
-          </div>
-          <div class="paint-toolbar" role="group" aria-label="Paint tools">
-            <div id="paint-color-grid" role="radiogroup" aria-label="Brush color"></div>
-            <button type="button" id="paint-brush-small" aria-pressed="true">Thin</button>
-            <button type="button" id="paint-brush-large" aria-pressed="false">Thick</button>
-            <button type="button" id="paint-undo">Undo Stroke</button>
-            <button type="button" id="paint-clear">Clear</button>
-          </div>
-
           <label for="donate-title">Title</label>
           <input id="donate-title" name="title" maxlength="80" required placeholder="The Spoon That Remembers" />
 
@@ -314,28 +293,89 @@
            donate form with the customisation already applied to its own
            in-memory state, same "gate stack" pattern the placement banner
            uses relative to the donate form). The preview area is the SAME
-           renderRelicVisual composite (base -> tint -> paint -> overlays)
-           every other render path uses, with each placed overlay also
-           individually draggable/rotatable/scalable via its own handle
-           while this panel is open. -->
+           renderRelicVisual composite (base -> tint -> overlays -> drawing)
+           every other render path uses, with each placed sticker also
+           individually draggable/rotatable/scalable via its own handle in
+           Stickers mode, and a freehand brush/eraser layer drawable directly
+           on top of everything in Draw mode (see #customiser-draw-canvas
+           below) — the two modes share this one stage and swap only their
+           own palette/toolbar underneath it. -->
       <div id="customiser-gate" class="overlay-gate" hidden>
         <div class="gate-card dossier-card customiser-card">
           <h2>Customise Your Relic</h2>
-          <p class="customiser-hint">
+
+          <!-- Mode switch: Stickers (placing/dragging/resizing/rotating
+               RELIC_OVERLAYS, unchanged from before) vs. Draw (a freehand
+               brush/eraser layer, see the drawing canvas below) — same
+               role="tablist" pattern as the Museum Guide's own section tabs
+               (#museum-guide's .guide-tabs), so switching feels like an
+               established site convention rather than a one-off control.
+               Both modes share the one live preview stage underneath;
+               only the palette/toolbar and the stage's own interactive
+               layer (sticker handles vs. drawing canvas) swap. -->
+          <nav class="customiser-mode-tabs" role="tablist" aria-label="Customisation mode">
+            <button type="button" class="customiser-mode-tab" data-mode="stickers" role="tab" aria-selected="true">Stickers</button>
+            <button type="button" class="customiser-mode-tab" data-mode="draw" role="tab" aria-selected="false">Draw</button>
+          </nav>
+
+          <p class="customiser-hint" id="customiser-hint-stickers">
             Drag a sticker onto your relic from the palette below. Drag a placed sticker to move it; use its own
             handles to resize and rotate. Select a sticker and press Delete, or use the button below, to remove it.
           </p>
+          <p class="customiser-hint" id="customiser-hint-draw" hidden>
+            Draw directly on your relic with the brush or eraser below. Drawing sits above your stickers; pick a
+            colour and size, then drag across the relic to paint a stroke.
+          </p>
 
+          <!-- One shared stage: the live renderRelicVisual composite is the
+               same regardless of mode. #customiser-draw-canvas is an
+               absolutely-positioned canvas sitting on top of it, pointer-
+               events enabled only while Draw mode is active (see app.js) so
+               Stickers-mode dragging is never intercepted by an inert
+               drawing surface. -->
           <div id="customiser-stage" class="customiser-stage">
             <div id="customiser-preview" class="customiser-preview"></div>
+            <canvas id="customiser-draw-canvas" class="customiser-draw-canvas" width="340" height="340" aria-label="Freehand drawing canvas"></canvas>
           </div>
 
-          <span class="donate-field-label" id="customiser-palette-label">Stickers</span>
-          <div id="customiser-palette" class="overlay-palette-grid" role="group" aria-labelledby="customiser-palette-label"></div>
+          <div id="customiser-panel-stickers" class="customiser-mode-panel">
+            <span class="donate-field-label" id="customiser-palette-label">Stickers</span>
+            <div id="customiser-palette" class="overlay-palette-grid" role="group" aria-labelledby="customiser-palette-label"></div>
 
-          <div class="gate-actions customiser-item-actions">
-            <button type="button" id="customiser-delete-selected" disabled>Delete Selected</button>
-            <button type="button" id="customiser-reset" class="secondary">Reset All</button>
+            <div class="gate-actions customiser-item-actions">
+              <button type="button" id="customiser-delete-selected" disabled>Delete Selected</button>
+              <button type="button" id="customiser-reset" class="secondary">Reset All</button>
+            </div>
+          </div>
+
+          <!-- Draw mode toolbar: brush/eraser tool choice, the SAME fixed
+               colour vocabulary the recolor swatches already use (no second
+               colour system), two discrete sizes (matching the site's
+               established "stepper buttons, never a range input" rule), plus
+               undo/clear. Every control here is a real keyboard-operable
+               button — only the stroke gesture itself is inherently
+               pointer-only, the same acknowledged tradeoff the previous
+               paint canvas already had. -->
+          <div id="customiser-panel-draw" class="customiser-mode-panel" hidden>
+            <span class="donate-field-label" id="customiser-draw-tool-label">Tool</span>
+            <div class="draw-tool-grid" role="radiogroup" aria-labelledby="customiser-draw-tool-label">
+              <button type="button" id="draw-tool-brush" role="radio" aria-checked="true">Brush</button>
+              <button type="button" id="draw-tool-eraser" role="radio" aria-checked="false">Eraser</button>
+            </div>
+
+            <span class="donate-field-label" id="customiser-draw-color-label">Colour</span>
+            <div id="draw-color-grid" class="tint-swatch-grid" role="radiogroup" aria-labelledby="customiser-draw-color-label"></div>
+
+            <span class="donate-field-label" id="customiser-draw-size-label">Brush size</span>
+            <div class="draw-size-grid" role="radiogroup" aria-labelledby="customiser-draw-size-label">
+              <button type="button" id="draw-size-small" role="radio" aria-checked="true">Thin</button>
+              <button type="button" id="draw-size-large" role="radio" aria-checked="false">Thick</button>
+            </div>
+
+            <div class="gate-actions customiser-item-actions">
+              <button type="button" id="draw-undo">Undo Stroke</button>
+              <button type="button" id="draw-clear" class="secondary">Clear Drawing</button>
+            </div>
           </div>
 
           <div class="gate-actions">

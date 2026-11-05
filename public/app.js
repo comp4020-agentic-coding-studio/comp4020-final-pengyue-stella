@@ -200,14 +200,16 @@ function populateDonateForm() {
     for (const tile of visualGrid.querySelectorAll(".visual-preset-tile")) {
       tile.setAttribute("aria-checked", tile.dataset.visualId === String(visualId) ? "true" : "false");
     }
-    const preset = visualId ? presetById(visualId) : null;
-    // A placed overlay's x/y is meaningful only against the base image it
-    // was positioned on — switching the appearance clears any customisation
-    // rather than silently carrying stale placements onto a different image.
+    // A placed overlay sticker or a drawn stroke is meaningful only against
+    // the base image it was positioned/drawn on — switching the appearance
+    // clears both personalization layers rather than silently carrying
+    // stale state onto a different image. Kept as two separate resets
+    // (not one shared "customisation" reset) since the two layers are
+    // independent data, per the customiser's own data-model discipline.
     customiserItems = [];
     updateCustomiserSummary();
-    el("paint-base-preview").src = preset?.assetPath ?? "";
-    clearPaintCanvas();
+    drawStrokes = [];
+    redrawDrawCanvas();
     el("donate-error").textContent = "";
   }
 
@@ -282,62 +284,117 @@ function populateDonateForm() {
 }
 
 // ---------------------------------------------------------------------------
-// Personalization: freehand paint canvas. A bounded canvas the donor draws
-// on with a pointer; captured as its own flattened transparent PNG on
-// submit (canvas.toDataURL), never baked into the base preset image — see
-// renderRelicVisual's layering. Brush color reuses the SAME fixed swatch
-// vocabulary as the tint picker (no second color system), plus a black/
-// white pair for outline-style strokes. Two discrete brush sizes via
-// toggle buttons, matching the placement scale/rotation stepper's "no
-// range input" decision. Undo is an in-memory stack of ImageData snapshots
-// taken on pointerup — session-only, never persisted as stroke history,
-// only the final flattened image is.
-const PAINT_BRUSH_COLORS = [
+// Personalization: the relic customiser's Draw mode. A bounded canvas
+// layered on top of the customiser's live preview stage (base image -> tint
+// -> stickers -> drawing — see renderRelicVisual) the donor draws on
+// directly with a brush or eraser.
+//
+// Data model: `drawStrokes` is the structured stroke history —
+// `[{ tool, color, size, points: [{x, y}, ...] }, ...]`, x/y normalized 0-1
+// against the stage's own box (same normalized-coordinate discipline as
+// `customiserItems`'s sticker x/y) — kept as its own array, deliberately
+// separate from `customiserItems`: stickers are discrete placed objects,
+// strokes are an ordered paint history, and nothing here reads or writes
+// the other. Every stroke is replayed from this array onto the canvas
+// (`redrawDrawCanvas`) rather than the canvas's own pixels being the source
+// of truth, so undo is "drop the last stroke and replay," never a pixel
+// snapshot stack.
+//
+// Persistence: a full `drawStrokes` round-trip to the server would need its
+// own migration/column and validation (a bounded array of bounded point
+// lists), which is a reasonable next step but more than this pass's own
+// scope — see CLAUDE.md's "additive migration" discipline. For THIS pass,
+// the documented fallback the brief allows is used instead: strokes are
+// flattened to a single transparent PNG (`canvas.toDataURL`) and submitted
+// as the existing, already-persisted `paintLayer` field (server/src/db.js's
+// `paint_layer` column, already validated/capped there) — the same
+// mechanism the previous standalone paint canvas used. `drawStrokes` itself
+// stays client-side/session-only (lost on reload), exactly like the
+// previous paint canvas's own in-memory undo stack was.
+const DRAW_COLORS = [
   { id: "ink", label: "Ink", hex: "#1a1410" },
   { id: "bone", label: "Bone White", hex: "#e9ddc5" },
   { id: "crimson", label: "Crimson", hex: "#7a1f2b" },
   { id: "verdigris", label: "Verdigris", hex: "#3d6b5c" },
   { id: "gilt", label: "Gilt", hex: "#a8812f" },
 ];
-let paintColor = PAINT_BRUSH_COLORS[0].hex;
-let paintBrushRadius = 3; // "Thin"
-let paintUndoStack = [];
-let paintCtx = null;
-let paintHasContent = false;
+const DRAW_SIZES = { small: 3, large: 9 };
+let drawStrokes = []; // [{ tool: "brush"|"eraser", color, size, points: [{x,y}] }]
+let drawTool = "brush";
+let drawColor = DRAW_COLORS[0].hex;
+let drawSize = DRAW_SIZES.small;
+let drawCtx = null;
 // A generous client-side ceiling, comfortably under the server's own
 // PAINT_LAYER_MAX_BYTES (150KB decoded) once base64-inflated (~4/3x) — a
 // friendly pre-check only, never the actual authority.
 const PAINT_LAYER_MAX_DATA_URL_LENGTH = 200 * 1024;
 
-function clearPaintCanvas() {
-  const canvas = el("paint-canvas");
-  if (!paintCtx) paintCtx = canvas.getContext("2d");
-  paintCtx.clearRect(0, 0, canvas.width, canvas.height);
-  paintUndoStack = [];
-  paintHasContent = false;
+function drawCanvasCtx() {
+  if (!drawCtx) drawCtx = el("customiser-draw-canvas").getContext("2d");
+  return drawCtx;
 }
 
-// A donor who never touches the canvas submits paintLayer: null, never a
-// blank transparent PNG — distinguishing "chose not to paint" from "painted
+// Replays the full `drawStrokes` history onto the canvas from scratch —
+// the canvas's own pixels are never the source of truth, so undo/redraw is
+// always "clear, then replay every remaining stroke in order."
+function redrawDrawCanvas() {
+  const canvas = el("customiser-draw-canvas");
+  const ctx = drawCanvasCtx();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const stroke of drawStrokes) {
+    ctx.globalCompositeOperation = stroke.tool === "eraser" ? "destination-out" : "source-over";
+    ctx.fillStyle = stroke.color;
+    ctx.strokeStyle = stroke.color;
+    ctx.lineWidth = stroke.size * 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    if (stroke.points.length === 1) {
+      // A tap with no drag has nothing for a line to connect — draw a single dab.
+      const point = stroke.points[0];
+      ctx.beginPath();
+      ctx.arc(point.x * canvas.width, point.y * canvas.height, stroke.size, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+    // Stroke a connected path rather than a dab per recorded point — pointer
+    // move events can fire sparsely (especially a fast real stroke or a
+    // throttled one), so dabs-only leaves visible gaps between samples.
+    ctx.beginPath();
+    ctx.moveTo(stroke.points[0].x * canvas.width, stroke.points[0].y * canvas.height);
+    for (const point of stroke.points.slice(1)) {
+      ctx.lineTo(point.x * canvas.width, point.y * canvas.height);
+    }
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = "source-over";
+}
+
+function clearDrawCanvas() {
+  drawStrokes = [];
+  redrawDrawCanvas();
+}
+
+// A donor who never draws anything submits paintLayer: null, never a blank
+// transparent PNG — distinguishing "chose not to draw" from "drew
 // something" matters for fullExhibit's own hasPaintLayer-style read.
 function capturePaintLayer() {
-  if (!paintHasContent) return null;
-  return el("paint-canvas").toDataURL("image/png");
+  if (drawStrokes.length === 0) return null;
+  return el("customiser-draw-canvas").toDataURL("image/png");
 }
 
-function buildPaintColorGrid() {
-  const grid = el("paint-color-grid");
+function buildDrawColorGrid() {
+  const grid = el("draw-color-grid");
   grid.innerHTML = "";
-  for (const color of PAINT_BRUSH_COLORS) {
+  for (const color of DRAW_COLORS) {
     const swatch = document.createElement("button");
     swatch.type = "button";
     swatch.className = "tint-swatch";
     swatch.setAttribute("role", "radio");
-    swatch.setAttribute("aria-checked", color.hex === paintColor ? "true" : "false");
+    swatch.setAttribute("aria-checked", color.hex === drawColor ? "true" : "false");
     swatch.setAttribute("aria-label", color.label);
     swatch.style.setProperty("--swatch-color", color.hex);
     swatch.addEventListener("click", () => {
-      paintColor = color.hex;
+      drawColor = color.hex;
       for (const s of grid.querySelectorAll(".tint-swatch")) {
         s.setAttribute("aria-checked", s === swatch ? "true" : "false");
       }
@@ -345,66 +402,59 @@ function buildPaintColorGrid() {
     grid.appendChild(swatch);
   }
 }
-buildPaintColorGrid();
+buildDrawColorGrid();
 
-el("paint-brush-small").addEventListener("click", () => {
-  paintBrushRadius = 3;
-  el("paint-brush-small").setAttribute("aria-pressed", "true");
-  el("paint-brush-large").setAttribute("aria-pressed", "false");
+el("draw-tool-brush").addEventListener("click", () => {
+  drawTool = "brush";
+  el("draw-tool-brush").setAttribute("aria-checked", "true");
+  el("draw-tool-eraser").setAttribute("aria-checked", "false");
 });
-el("paint-brush-large").addEventListener("click", () => {
-  paintBrushRadius = 9;
-  el("paint-brush-large").setAttribute("aria-pressed", "true");
-  el("paint-brush-small").setAttribute("aria-pressed", "false");
+el("draw-tool-eraser").addEventListener("click", () => {
+  drawTool = "eraser";
+  el("draw-tool-eraser").setAttribute("aria-checked", "true");
+  el("draw-tool-brush").setAttribute("aria-checked", "false");
 });
-el("paint-clear").addEventListener("click", clearPaintCanvas);
-el("paint-undo").addEventListener("click", () => {
-  const canvas = el("paint-canvas");
-  if (!paintCtx) paintCtx = canvas.getContext("2d");
-  const previous = paintUndoStack.pop();
-  if (previous) {
-    paintCtx.putImageData(previous, 0, 0);
-    paintHasContent = paintUndoStack.length > 0;
-  } else {
-    paintCtx.clearRect(0, 0, canvas.width, canvas.height);
-    paintHasContent = false;
-  }
+el("draw-size-small").addEventListener("click", () => {
+  drawSize = DRAW_SIZES.small;
+  el("draw-size-small").setAttribute("aria-checked", "true");
+  el("draw-size-large").setAttribute("aria-checked", "false");
+});
+el("draw-size-large").addEventListener("click", () => {
+  drawSize = DRAW_SIZES.large;
+  el("draw-size-large").setAttribute("aria-checked", "true");
+  el("draw-size-small").setAttribute("aria-checked", "false");
+});
+el("draw-clear").addEventListener("click", clearDrawCanvas);
+el("draw-undo").addEventListener("click", () => {
+  drawStrokes.pop();
+  redrawDrawCanvas();
 });
 
-(function wirePaintCanvas() {
-  const canvas = el("paint-canvas");
-  paintCtx = canvas.getContext("2d");
-  let drawing = false;
+(function wireDrawCanvas() {
+  const canvas = el("customiser-draw-canvas");
+  let activeStroke = null;
 
   function pointFromEvent(e) {
     const rect = canvas.getBoundingClientRect();
     return {
-      x: ((e.clientX - rect.left) / rect.width) * canvas.width,
-      y: ((e.clientY - rect.top) / rect.height) * canvas.height,
+      x: (e.clientX - rect.left) / rect.width,
+      y: (e.clientY - rect.top) / rect.height,
     };
   }
 
-  function strokeDot(x, y) {
-    paintCtx.fillStyle = paintColor;
-    paintCtx.beginPath();
-    paintCtx.arc(x, y, paintBrushRadius, 0, Math.PI * 2);
-    paintCtx.fill();
-    paintHasContent = true;
-  }
-
   canvas.addEventListener("pointerdown", (e) => {
-    drawing = true;
-    paintUndoStack.push(paintCtx.getImageData(0, 0, canvas.width, canvas.height));
-    const p = pointFromEvent(e);
-    strokeDot(p.x, p.y);
+    activeStroke = { tool: drawTool, color: drawColor, size: drawSize, points: [] };
+    drawStrokes.push(activeStroke);
+    activeStroke.points.push(pointFromEvent(e));
+    redrawDrawCanvas();
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (!drawing) return;
-    const p = pointFromEvent(e);
-    strokeDot(p.x, p.y);
+    if (!activeStroke) return;
+    activeStroke.points.push(pointFromEvent(e));
+    redrawDrawCanvas();
   });
   window.addEventListener("pointerup", () => {
-    drawing = false;
+    activeStroke = null;
   });
 })();
 
@@ -444,8 +494,15 @@ function renderCustomiserStage() {
     category: preset?.category,
     subtype: selectedSubtype,
     tintColor: selectedTintColor,
-    overlayItems: [], // the base/tint/paint preview only — placed stickers render as their own interactive handles below, not as the inert renderRelicVisual layer
-    paintLayer: capturePaintLayer(),
+    // The base/tint preview only — placed stickers render as their own
+    // interactive handles below (not the inert renderRelicVisual layer),
+    // and the live drawing is the actual #customiser-draw-canvas element
+    // sitting on top of this stage (see index.html), never a captured
+    // paintLayer image re-drawn into the preview — that would double-
+    // render whatever's currently drawn. capturePaintLayer() is only ever
+    // used at submit time, for every OTHER (read-only) render path.
+    overlayItems: [],
+    paintLayer: null,
   });
 
   // Remove any previously-rendered handles (renderRelicVisual above only
@@ -617,7 +674,13 @@ function beginOverlayRotate(downEvent, index) {
   window.addEventListener("pointerup", onUp);
 }
 
-el("customiser-stage").addEventListener("pointerdown", () => {
+el("customiser-stage").addEventListener("pointerdown", (e) => {
+  // Only deselect a sticker in response to a click that actually lands on
+  // the stage's own background (the base relic) — in Draw mode the stage's
+  // click target is the drawing canvas itself, which already has its own
+  // pointerdown handler (wireDrawCanvas) and must never also trigger a
+  // sticker-deselect re-render mid-stroke.
+  if (customiserMode !== "stickers") return;
   if (selectedOverlayIndex !== null) {
     selectedOverlayIndex = null;
     renderCustomiserStage();
@@ -640,9 +703,47 @@ el("open-customiser").addEventListener("click", () => {
   }
   buildOverlayPalette();
   selectedOverlayIndex = null;
+  setCustomiserMode("stickers");
   renderCustomiserStage();
   el("customiser-gate").hidden = false;
 });
+
+// ---------------------------------------------------------------------------
+// Customiser mode switch: Stickers vs. Draw (the brief's own required UX —
+// "the user should be able to switch between Stickers / Draw"). Same
+// role="tablist"/aria-selected pattern as the Museum Guide's own section
+// tabs (#museum-guide's .guide-tabs/app.js's section-switching below), so
+// this reads as an established site convention rather than a one-off
+// control. Both modes share the one #customiser-stage/#customiser-preview;
+// only the palette/toolbar panel underneath and the stage's own pointer-
+// events target (sticker handles vs. the drawing canvas) swap.
+let customiserMode = "stickers";
+
+function setCustomiserMode(mode) {
+  customiserMode = mode;
+  for (const tab of el("customiser-gate").querySelectorAll(".customiser-mode-tab")) {
+    tab.setAttribute("aria-selected", String(tab.dataset.mode === mode));
+  }
+  el("customiser-panel-stickers").hidden = mode !== "stickers";
+  el("customiser-panel-draw").hidden = mode !== "draw";
+  el("customiser-hint-stickers").hidden = mode !== "stickers";
+  el("customiser-hint-draw").hidden = mode !== "draw";
+  // The drawing canvas only ever captures pointer events in Draw mode —
+  // in Stickers mode it must stay click-through so dragging/selecting a
+  // sticker underneath it keeps working exactly as before.
+  el("customiser-draw-canvas").style.pointerEvents = mode === "draw" ? "auto" : "none";
+  // Deselecting a sticker when leaving Stickers mode avoids a confusing
+  // state where resize/rotate handles stay visible while the donor is
+  // actually drawing on top of them.
+  if (mode !== "stickers" && selectedOverlayIndex !== null) {
+    selectedOverlayIndex = null;
+    renderCustomiserStage();
+  }
+}
+
+for (const tab of document.querySelectorAll(".customiser-mode-tab")) {
+  tab.addEventListener("click", () => setCustomiserMode(tab.dataset.mode));
+}
 
 function openDonateGate() {
   populateDonateForm();
@@ -2624,13 +2725,16 @@ const OVERLAY_BASE_FRACTION = 0.22;
 
 // Renders a donated relic's full visual: the curated preset image, plus
 // whichever personalization layers this exhibit/form actually has — an
-// optional recolor tint, an optional freehand paint layer, and any number
-// of customiser overlay stickers. Every render path (final exhibit,
+// optional recolor tint, any number of customiser overlay stickers, and an
+// optional freehand drawing layer. Every render path (final exhibit,
 // placement preview, dossier, receipt) converges on this one function, so
 // each only ever needs to pass its own exhibit/form data — never duplicate
 // the layering logic at the call site. Order, bottom to top: base image ->
-// tint -> paint -> overlay stickers (sorted by their own zIndex, so a donor's
-// stacking choice in the customiser survives into every render context).
+// tint -> overlay stickers (sorted by their own zIndex, so a donor's
+// stacking choice in the customiser survives into every render context) ->
+// drawing. Drawing sits ON TOP of stickers deliberately — per the
+// customiser's own brief, a donor draws "on top of the selected relic and
+// overlay assets," e.g. a scribbled connecting line or a circled sticker.
 function renderRelicVisual(container, { visualId, category, subtype, accent, exhibitId, tintColor, overlayItems, paintLayer }) {
   container.innerHTML = "";
   const preset = visualId ? presetById(visualId) : null;
@@ -2652,14 +2756,6 @@ function renderRelicVisual(container, { visualId, category, subtype, accent, exh
       wrap.appendChild(tint);
     }
 
-    if (paintLayer) {
-      const paint = document.createElement("img");
-      paint.src = paintLayer;
-      paint.alt = "";
-      paint.className = "relic-visual-paint";
-      wrap.appendChild(paint);
-    }
-
     const sortedOverlays = [...(overlayItems ?? [])].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
     for (const item of sortedOverlays) {
       const overlay = relicOverlaysById.get(item.assetId);
@@ -2674,6 +2770,14 @@ function renderRelicVisual(container, { visualId, category, subtype, accent, exh
       overlayImg.style.top = `${(item.y ?? 0.5) * 100}%`;
       overlayImg.style.setProperty("--overlay-rotation", `${item.rotation ?? 0}deg`);
       wrap.appendChild(overlayImg);
+    }
+
+    if (paintLayer) {
+      const paint = document.createElement("img");
+      paint.src = paintLayer;
+      paint.alt = "";
+      paint.className = "relic-visual-paint";
+      wrap.appendChild(paint);
     }
 
     container.appendChild(wrap);
