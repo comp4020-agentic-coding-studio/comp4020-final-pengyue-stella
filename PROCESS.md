@@ -69,6 +69,24 @@ validated point on a traced wall, shelf, cabinet, table, or plinth. Normalized
 surface coordinates survive different viewport sizes; the server checks
 containment, subtype compatibility, scale, and collision before commit.
 
+The one deliberate exception to zero runtime dependencies is a dev-only tool,
+not the museum: `public/tools/hotspot-editor.html` traces hotspot geometry by
+hand against the real gallery images, exported as `polygon()`/`ellipse()`
+calls to paste into `world.js`. An earlier colour-threshold "auto-trace" mode
+was tried and dropped — these source images are painterly with no flat
+background region to subtract, so it fractured a drawn box into dozens of
+useless fragments rather than one outline. It was replaced with SlimSAM (a
+distilled Segment Anything model), run client-side via transformers.js and
+onnxruntime-web, vendored under `public/tools/vendor-sam/` (~25MB: weights,
+runtime, and its one wasm backend) rather than fetched from a CDN at use
+time, so the tool works offline and doesn't depend on a third party's
+uptime. This is a real new dependency, used exactly where `CLAUDE.md`'s own
+rule says one may land: never linked from museum navigation, never imported
+by any `server/` or `public/` app code, and the museum's deployed dependency
+graph is unchanged by its presence. The only production-code touch it
+required was `server/src/static.js` gaining `.wasm`/`.onnx` MIME types so
+the vendored files can be served at all.
+
 ## What testing changed
 
 Automated coverage grew with the product and now checks world reachability,

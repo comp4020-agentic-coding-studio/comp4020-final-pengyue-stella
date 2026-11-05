@@ -50,6 +50,17 @@ donation presentation; it never touches the server's own dependency graph
 and is fetched by the browser, not installed by npm). If a future crit genuinely needs a new dependency, add it
 deliberately and say why in `PROCESS.md`; don't reach for one by habit.
 
+This rule governs the museum app itself, not a dev-only tool nobody but the
+team ever opens: `public/tools/hotspot-editor.html` vendors a real-image
+segmentation model (SlimSAM) and its JS/wasm runtime under
+`public/tools/vendor-sam/` (~25MB) for AI-assisted hotspot tracing, per this
+rule's own stated exception path — see `PROCESS.md` for why. It is never
+linked from museum navigation, never imported by any `server/` or `public/`
+app code, and the museum's own dependency graph is unaffected by its
+presence. `server/src/static.js` gaining `.wasm`/`.onnx` MIME types to serve
+it is the one touch to production code this required, and it's inert unless
+something under `vendor-sam/` is actually requested.
+
 - Persistence is SQLite at `/data/museum.db` (the Fly volume in production,
   a scratch dir locally), `journal_mode = WAL`. Every exhibit, account and
   vote write is a transaction, committed before its event is broadcast —
