@@ -1,6 +1,6 @@
 // Our own checks for donation personalization: recolor (a fixed swatch
 // vocabulary), the relic customiser's placed overlay stickers (a fixed
-// local-SVG catalog, freely combinable on any preset), and a freehand paint
+// local-PNG catalog, freely combinable on any preset), and a freehand paint
 // layer (size-capped). Against the running app.
 import { inject, it, expect, describe } from "vitest";
 
@@ -127,16 +127,30 @@ describe("recolor (tint)", () => {
 });
 
 describe("relic customiser overlays", () => {
-  it("serves a small, fixed overlay catalog of local SVG stickers", async () => {
+  it("serves the Gothic overlay catalog as local transparent PNG stickers", async () => {
     const res = await fetch(url("/api/relic-overlays"));
     expect(res.status).toBe(200);
     const { overlays } = await res.json();
     expect(Array.isArray(overlays)).toBe(true);
-    expect(overlays.length).toBeGreaterThan(0);
+    expect(overlays.map((overlay: { id: string }) => overlay.id)).toEqual(
+      expect.arrayContaining([
+        "wax-seal",
+        "number-tag",
+        "antique-label",
+        "ribbon",
+        "crack",
+        "cobweb",
+        "glowing-rune",
+        "eye-symbol",
+        "dried-flower",
+        "tiny-key",
+        "dust-scratches",
+      ]),
+    );
     for (const overlay of overlays) {
       expect(typeof overlay.id).toBe("string");
       expect(typeof overlay.name).toBe("string");
-      expect(overlay.assetPath).toMatch(/^\/assets\/overlays\/.+\.svg$/);
+      expect(overlay.assetPath).toMatch(/^\/assets\/overlays\/.+\.png$/);
       const assetRes = await fetch(url(overlay.assetPath));
       expect(assetRes.status, `${overlay.assetPath} should be served`).toBe(200);
     }

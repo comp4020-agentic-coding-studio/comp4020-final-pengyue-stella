@@ -175,6 +175,54 @@ export const RELIC_PRESETS = [
     anchor: "resting",
     defaultScale: 1,
   },
+  {
+    id: "veiled-daguerreotype",
+    name: "The Veiled Daguerreotype",
+    category: "portrait",
+    subtype: "painting",
+    compatibleSurfaceTypes: ["wall"],
+    assetPath: "/assets/donated-relics/veiled-daguerreotype.png",
+    naturalWidth: 600,
+    naturalHeight: 900,
+    anchor: "wall",
+    defaultScale: 1,
+  },
+  {
+    id: "thorn-reliquary",
+    name: "The Thorn Reliquary",
+    category: "memento",
+    subtype: "curiosity",
+    compatibleSurfaceTypes: ["shelf", "tabletop", "cabinet"],
+    assetPath: "/assets/donated-relics/thorn-reliquary.png",
+    naturalWidth: 900,
+    naturalHeight: 822,
+    anchor: "resting",
+    defaultScale: 1,
+  },
+  {
+    id: "deaths-head-moth-bell-jar",
+    name: "The Death's-Head Moth Bell Jar",
+    category: "specimen",
+    subtype: "biological",
+    compatibleSurfaceTypes: ["cabinet", "shelf", "plinth"],
+    assetPath: "/assets/donated-relics/deaths-head-moth-bell-jar.png",
+    naturalWidth: 648,
+    naturalHeight: 900,
+    anchor: "resting",
+    defaultScale: 1,
+  },
+  {
+    id: "cracked-marionette",
+    name: "The Cracked Marionette",
+    category: "toy",
+    subtype: "toy",
+    compatibleSurfaceTypes: ["shelf", "tabletop", "plinth"],
+    assetPath: "/assets/donated-relics/cracked-marionette.png",
+    naturalWidth: 675,
+    naturalHeight: 900,
+    anchor: "resting",
+    defaultScale: 1,
+  },
 ];
 
 export const RELIC_PRESETS_BY_ID = new Map(RELIC_PRESETS.map((p) => [p.id, p]));
@@ -196,26 +244,26 @@ export function isValidVisualChoice(visualId, category, subtype, surfaceType) {
 }
 
 // Personalization: the relic customiser's overlay/sticker palette — a
-// small, fixed catalog of local, hand-authored transparent SVGs
+// small, fixed catalog of local transparent PNG cutouts
 // (public/assets/overlays/) a donor may freely place, scale, and rotate on
 // top of ANY chosen preset (no `figural`-only gate: a wax seal or a crack
-// reads fine on a spoon or a diary, unlike a worn accessory). This
-// deliberately replaces an earlier AI-image-generation attempt at
-// photographic glasses/hat/ring overlays (tools/generate-relic-assets.py,
-// Pollinations) — across three separate regeneration rounds every output
-// was unusable as a transparent cutout (a whole face wearing the item, a
-// decorative non-subject, or a keying failure from a non-flat backdrop),
-// the same failure pattern already documented for the abandoned eyepatch
-// attempt. A human-drawn flat vector set sidesteps that failure mode
-// entirely and composites cleanly at any size/rotation by construction.
+// reads fine on a spoon or a diary, unlike a worn accessory). Existing ids
+// remain stable so stickers already stored in donated exhibits keep
+// round-tripping even though their artwork has been replaced. The current
+// set uses purpose-generated transparent Gothic cutouts, visually matched
+// to the museum's relic presets rather than flat programmatic SVG shapes.
 export const RELIC_OVERLAYS = [
-  { id: "wax-seal", name: "Wax Seal", assetPath: "/assets/overlays/wax-seal.svg" },
-  { id: "antique-label", name: "Antique Label", assetPath: "/assets/overlays/antique-label.svg" },
-  { id: "ribbon", name: "Ribbon", assetPath: "/assets/overlays/ribbon.svg" },
-  { id: "tiny-lock", name: "Tiny Lock", assetPath: "/assets/overlays/tiny-lock.svg" },
-  { id: "cobweb", name: "Cobweb", assetPath: "/assets/overlays/cobweb.svg" },
-  { id: "crack", name: "Crack", assetPath: "/assets/overlays/crack.svg" },
-  { id: "glowing-rune", name: "Glowing Rune", assetPath: "/assets/overlays/glowing-rune.svg" },
-  { id: "eye-symbol", name: "Eye Symbol", assetPath: "/assets/overlays/eye-symbol.svg" },
+  { id: "wax-seal", name: "Wax Seal", assetPath: "/assets/overlays/wax-seal.png" },
+  { id: "number-tag", name: "Number Tag", assetPath: "/assets/overlays/number-tag.png" },
+  { id: "antique-label", name: "Old Label", assetPath: "/assets/overlays/old-label.png" },
+  { id: "ribbon", name: "Mourning Ribbon", assetPath: "/assets/overlays/ribbon.png" },
+  { id: "crack", name: "Crack", assetPath: "/assets/overlays/crack.png" },
+  { id: "cobweb", name: "Cobweb", assetPath: "/assets/overlays/cobweb.png" },
+  { id: "glowing-rune", name: "Faint Glow", assetPath: "/assets/overlays/faint-glow.png" },
+  { id: "eye-symbol", name: "Occult Symbol", assetPath: "/assets/overlays/occult-symbol.png" },
+  { id: "dried-flower", name: "Dried Flower", assetPath: "/assets/overlays/dried-flower.png" },
+  { id: "tiny-key", name: "Tiny Key", assetPath: "/assets/overlays/tiny-key.png" },
+  { id: "dust-scratches", name: "Dust & Scratches", assetPath: "/assets/overlays/dust-scratches.png" },
+  { id: "tiny-lock", name: "Tiny Lock", assetPath: "/assets/overlays/tiny-lock.png" },
 ];
 export const RELIC_OVERLAYS_BY_ID = new Map(RELIC_OVERLAYS.map((o) => [o.id, o]));

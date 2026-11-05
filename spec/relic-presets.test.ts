@@ -251,11 +251,22 @@ describe("the curated donated-relic visual catalog", () => {
   // surface types some of the newer subtypes — e.g. "sketch", "biological",
   // "book" — were never traced for) and spreads each retry attempt's u/v by
   // a comfortable margin, since this now exercises every one of a
-  // category's presets (up to 5, for memento) against that one gallery's
+  // category's presets (up to 6, for memento) against that one gallery's
   // small fixed slot pool, concurrently with every other spec file's own
   // donations into the same shared database.
   it("accepts a donation using each curated preset's own declared category/subtype/surface combo", async () => {
     const { presets } = await (await fetch(url("/api/relic-presets"))).json();
+    const candidateOffsets: [number, number][] = [
+      [0, 0],
+      [-300, -180],
+      [300, -180],
+      [-300, 180],
+      [300, 180],
+      [-600, 0],
+      [600, 0],
+      [0, -300],
+      [0, 300],
+    ];
     for (const preset of presets) {
       const { galleries } = await (await fetch(url("/api/world"))).json();
       const gallery = galleries.find((g: { category: string }) => g.category === preset.category);
@@ -263,7 +274,7 @@ describe("the curated donated-relic visual catalog", () => {
 
       let res: Response | undefined;
       let lastStatus = 0;
-      for (let attempt = 0; attempt < 5; attempt++) {
+      for (let attempt = 0; attempt < candidateOffsets.length; attempt++) {
         const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
         const occupied = new Set(exhibits.map((e: { slotId: string }) => e.slotId));
         const slot = gallery.slots.find((s: { id: string }) => !occupied.has(s.id));
@@ -274,7 +285,8 @@ describe("the curated donated-relic visual catalog", () => {
         // (110px, server/src/db.js) and of other spec files' own concurrent
         // donations into this same freeform region.
         const centroid = centroidOf(freeform.shape);
-        const { u, v } = uvFromPoint(freeform.shape, centroid.x + attempt * 150, centroid.y + attempt * 90);
+        const [dx, dy] = candidateOffsets[attempt];
+        const { u, v } = uvFromPoint(freeform.shape, centroid.x + dx, centroid.y + dy);
         res = await donate({
           galleryId: gallery.id,
           slotId: slot.id,
@@ -291,6 +303,8 @@ describe("the curated donated-relic visual catalog", () => {
         if (res.status !== 409) break;
       }
       expect(lastStatus, `preset ${preset.id} should donate successfully`).toBe(201);
+      const ownerCookie = res!.headers.get("set-cookie")?.split(";")[0];
+      expect(ownerCookie, `preset ${preset.id} donation should mint an owner cookie`).toBeTruthy();
       const { exhibit } = await res!.json();
       expect(exhibit.visualId).toBe(preset.id);
 
@@ -304,6 +318,16 @@ describe("the curated donated-relic visual catalog", () => {
       const fetchedFromList = fetchedAll.find((e: { id: string }) => e.id === exhibit.id);
       expect(fetchedFromList, `donated exhibit ${exhibit.id} should appear in a full /api/exhibits reload`).toBeTruthy();
       expect(fetchedFromList.visualId).toBe(preset.id);
+
+      // This catalog-wide test runs beside every other spec file against
+      // one shared live database. Withdraw each verified exhibit before
+      // moving to the next preset so expanding the catalog does not consume
+      // the gallery's finite slot/placement pool and starve unrelated tests.
+      const withdrawn = await fetch(url(`/api/exhibits/${exhibit.id}`), {
+        method: "DELETE",
+        headers: { Cookie: ownerCookie! },
+      });
+      expect(withdrawn.status).toBe(200);
     }
   });
 });

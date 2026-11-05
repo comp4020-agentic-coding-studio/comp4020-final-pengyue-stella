@@ -296,8 +296,13 @@ describe("realtime: exhibit.updated / exhibit.deleted are scoped correctly over 
     }
 
     const newTitle = `${exhibit.title} (via SSE)`;
+    // Matches on this test's own new title, not just the event name — this
+    // channel is shared with every other spec file running concurrently,
+    // and another file's own exhibit.updated broadcast (a different
+    // exhibit) could otherwise satisfy a name-only match first and cut the
+    // read off before this test's own event ever arrives.
     const [eventText] = await Promise.all([
-      readUntil((t) => t.includes("event: exhibit.updated"), 6000),
+      readUntil((t) => t.includes("event: exhibit.updated") && t.includes(newTitle), 6000),
       (async () => {
         await new Promise((resolve) => setTimeout(resolve, 300));
         const res = await fetch(url(`/api/exhibits/${exhibit.id}`), {
@@ -342,8 +347,14 @@ describe("realtime: exhibit.updated / exhibit.deleted are scoped correctly over 
       return buffered;
     }
 
+    // Matches on this test's own exhibit id, not just the event name — the
+    // SSE channel is shared with every other spec file running
+    // concurrently, and another file's own exhibit.deleted broadcast (e.g.
+    // relic-presets.test.ts withdrawing an exhibit it donated) could
+    // otherwise satisfy a name-only match first and cut the read off before
+    // this test's own event ever arrives.
     const [eventText] = await Promise.all([
-      readUntil((t) => t.includes("event: exhibit.deleted"), 6000),
+      readUntil((t) => t.includes("event: exhibit.deleted") && t.includes(exhibit.id), 6000),
       (async () => {
         await new Promise((resolve) => setTimeout(resolve, 300));
         const res = await fetch(url(`/api/exhibits/${exhibit.id}`), { method: "DELETE", headers: { Cookie: ownerCookie } });

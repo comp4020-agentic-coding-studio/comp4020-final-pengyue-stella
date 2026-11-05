@@ -22,9 +22,10 @@ the relationship between the dossier and the item the visitor selected.
 
 ## Donated-relic illustrations
 
-`public/assets/donated-relics/` contains twelve transparent PNG presets
-created for the project — one per subtype in `SUBTYPES_BY_CATEGORY`
-(`server/src/constants.js`):
+`public/assets/donated-relics/` contains sixteen transparent PNG presets
+created for the project. The original twelve cover every subtype in
+`SUBTYPES_BY_CATEGORY` (`server/src/constants.js`); four additional presets
+add a second, visually distinct choice to each gallery family:
 
 - `cursed-gilt-portrait.png`
 - `lunar-music-box.png`
@@ -38,6 +39,10 @@ created for the project — one per subtype in `SUBTYPES_BY_CATEGORY`
 - `articulated-raven-skeleton.png`
 - `clockwork-tin-soldier.png`
 - `locked-nursery-diary.png`
+- `veiled-daguerreotype.png`
+- `thorn-reliquary.png`
+- `deaths-head-moth-bell-jar.png`
+- `cracked-marionette.png`
 
 The catalog in `server/src/relic-presets.js` records each image's natural
 dimensions, gallery category, subtype, compatible physical surfaces, anchor,
@@ -69,6 +74,46 @@ being copied into `public/assets/donated-relics/`.
 Known limitation: `locked-nursery-diary.png` has a faint dark shadow-halo
 artifact at two corners, inherited from the source photo's own lighting
 rather than a keying defect; judged an acceptable real-photo artifact.
+
+### Provenance — Gothic refresh and four additional presets (2026-11-05)
+
+`tarnished-silver-spoon.png` was replaced with an OpenAI ImageGen edit that
+follows the project's own `design/references/04_spoon_reference.png`: the new
+version restores the eye embedded in the spoon bowl and removes the failed
+pink/green chroma-key fringe. The four additional presets listed above were
+generated with OpenAI ImageGen as isolated transparent cutouts using the
+museum's existing Victorian cabinet-of-curiosities direction: obsidian,
+mahogany, tarnished brass, parchment, dried rose, warm amber museum light,
+realistic aged materials, and no surrounding room or display surface.
+Outputs were manually reviewed, resized to a 900px maximum dimension, and
+their alpha channels retained before being added to the curated catalog.
+
+## Relic customiser stickers
+
+`public/assets/overlays/` contains transparent PNG cutouts generated with
+OpenAI ImageGen and matched to the same dark Victorian material language as
+the relic presets. The catalog includes:
+
+- `wax-seal.png`
+- `number-tag.png`
+- `old-label.png`
+- `ribbon.png`
+- `crack.png`
+- `cobweb.png`
+- `faint-glow.png`
+- `occult-symbol.png`
+- `dried-flower.png`
+- `tiny-key.png`
+- `dust-scratches.png`
+- `tiny-lock.png` (retained as an extra and to keep existing saved sticker ids valid)
+
+The previous programmatic SVGs remain only as unreferenced historical source
+files. `server/src/relic-presets.js` now serves the PNG set; stable ids such
+as `antique-label`, `glowing-rune`, and `eye-symbol` were deliberately kept
+so donations already stored in SQLite continue to render after the artwork
+replacement. Effects with fine alpha (cobweb, crack, glow, and dust) were
+kept at up to 768px; the other stickers use the same maximum for consistent
+customiser quality.
 
 ## Accessory overlays (personalization)
 
