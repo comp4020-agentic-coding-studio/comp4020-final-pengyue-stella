@@ -17,6 +17,11 @@ const CONTENT_TYPES = {
   ".webp": "image/webp",
   ".ico": "image/x-icon",
   ".glb": "model/gltf-binary",
+  // Served only from public/tools/vendor-sam/ — the hotspot-editor dev
+  // tool's local AI-trace model/runtime (see that directory's own README).
+  // Never referenced by the museum app itself.
+  ".wasm": "application/wasm",
+  ".onnx": "application/octet-stream",
 };
 
 // Returns { body, contentType } or null if nothing servable lives there.

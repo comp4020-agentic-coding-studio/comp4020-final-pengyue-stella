@@ -108,7 +108,7 @@
     color: var(--muted);
     margin-bottom: 4px;
   }
-  select, input[type="text"], textarea {
+  select, input[type="text"], input[type="range"], textarea {
     width: 100%;
     background: #121214;
     color: var(--text);
@@ -260,6 +260,10 @@
     color: var(--muted);
     line-height: 1.5;
   }
+  .help.warn-inline {
+    color: var(--danger);
+    font-weight: 600;
+  }
   .vertex-handle {
     fill: #ffdd55;
     stroke: #3a2c00;
@@ -270,8 +274,28 @@
     fill: var(--accent);
     stroke: #003344;
   }
+  .vertex-handle.multi-selected {
+    fill: #ff9f40;
+    stroke: #3a1e00;
+  }
   .vertex-handle:hover {
     fill: #fff3b0;
+  }
+  .marquee-rect {
+    fill: rgba(127, 209, 255, 0.12);
+    stroke: var(--accent);
+    stroke-width: 1;
+    stroke-dasharray: 5 3;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+  }
+  .ai-trace-rect {
+    fill: rgba(130, 255, 160, 0.12);
+    stroke: #5cff8f;
+    stroke-width: 1.5;
+    stroke-dasharray: 4 3;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
   }
   .edge-midpoint {
     fill: rgba(127, 209, 255, 0.55);
@@ -343,12 +367,25 @@
         <button id="modePolygon" class="toggle-active">Polygon</button>
         <button id="modeEllipse">Ellipse</button>
         <button id="modeSelect">Select/Edit</button>
+        <button id="modeAiTrace">AI-trace</button>
       </div>
       <div class="help" style="margin-top:8px;">
         Polygon: click/tap to add vertices, double-click or press Done to finish.<br/>
         Ellipse: press and drag from the centre outward.<br/>
-        Select/Edit: drag vertices, click an edge-dot to insert, click a vertex then Delete Selected to remove.
+        Select/Edit: drag vertices, click an edge-dot to insert, click a vertex
+        then Delete Selected (or press the Delete/Backspace key) to remove —
+        or drag a box over empty space to marquee-select several vertices at
+        once (Delete removes all of them, arrow keys nudge all of them
+        together). Finishing a polygon switches here automatically.<br/>
+        AI-trace: draw a loose box around one object; a real segmentation
+        model (not a colour-threshold guess) finds its outline. Refine the
+        result by hand afterward like any other polygon.
       </div>
+    </fieldset>
+
+    <fieldset id="aiTraceControls" style="display:none;">
+      <legend>AI-trace</legend>
+      <div class="help" id="aiTraceStatus">Model not loaded yet — draw a box to load it (~14MB, served locally, cached by the browser after the first load this session).</div>
     </fieldset>
 
     <fieldset>
@@ -361,6 +398,7 @@
         <button id="finishPolygon" class="primary">Finish polygon</button>
         <button id="deleteVertex" class="danger">Delete selected</button>
       </div>
+      <div id="deleteVertexStatus" class="help" style="min-height:1.4em;"></div>
       <div class="help">Insert a vertex by clicking the small dot shown on an edge midpoint while editing.</div>
     </fieldset>
 
@@ -383,7 +421,12 @@
       <div class="row">
         <button id="resetView">Reset view (fit)</button>
       </div>
-      <div class="help">Scroll/pinch to zoom (up to 800%), drag empty space to pan.</div>
+      <div class="help">
+        Scroll/pinch to zoom (up to 800%), drag empty space to pan.<br/>
+        Keyboard: arrow keys pan the view (Shift for a bigger step) when no
+        vertex is selected; with a vertex selected, arrow keys nudge that
+        point instead (Shift for 10px).
+      </div>
     </fieldset>
 
     <fieldset>
@@ -437,7 +480,9 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+import { env, SamModel, AutoProcessor, RawImage, Tensor } from "./vendor-sam/transformers.min.js";
+
 (function () {
   "use strict";
 
@@ -551,6 +596,7 @@
 
     resetPolygonDraft();
     clearEllipse();
+    clearMultiSelection();
     renderOverlay();
     resetView();
   }
@@ -672,6 +718,7 @@
   stage.addEventListener("pointerleave", onPointerUpSoft);
 
   let draggingVertex = null; // {type:'polygon', index} or {type:'ellipse', handle: 'center'|'rx'|'ry'}
+  let dragLastPoint = null; // image-space point from the previous move event, for group-drag deltas
   let suppressNextClick = false;
 
   // setPointerCapture can throw (e.g. a pointerId the browser never
@@ -712,8 +759,17 @@
     if (mode === "select" || mode === "polygon" || mode === "ellipse") {
       if (handleIndex !== undefined) {
         safeCapture(evt.pointerId);
-        selectedVertex = Number(handleIndex);
-        draggingVertex = { type: "polygon", index: selectedVertex };
+        const idx = Number(handleIndex);
+        // Dragging a vertex that's already part of a multi-selection moves
+        // the whole batch together; dragging any other vertex collapses
+        // back to a plain single selection (the common "oops, grab a
+        // different point" case shouldn't require an explicit deselect).
+        if (!multiSelectedVertices.has(idx)) {
+          multiSelectedVertices.clear();
+          selectedVertex = idx;
+        }
+        draggingVertex = { type: "polygon", index: idx };
+        dragLastPoint = clientToImagePoint(evt);
         renderOverlay();
         return;
       }
@@ -729,8 +785,44 @@
       }
     }
 
-    if (mode === "polygon" && !polygonFinished) {
+    if (mode === "select") {
+      // A drag that doesn't start on a vertex/ellipse/edge handle starts a
+      // marquee in Select/Edit mode, not a pan — the click target here is
+      // almost always the room image itself (it covers the whole canvas),
+      // never the bare <svg>, so this can't be gated on target===stage.
+      // Panning is still reachable via Shift+drag so repositioning the view
+      // mid-edit doesn't require switching modes.
+      if (evt.shiftKey) {
+        safeCapture(evt.pointerId);
+        panState = { startX: evt.clientX, startY: evt.clientY, startTx: viewTx, startTy: viewTy };
+        return;
+      }
+      safeCapture(evt.pointerId);
+      selectedVertex = null;
+      clearDeleteVertexStatus();
+      const p = clientToImagePoint(evt);
+      marqueeState = { startX: p.x, startY: p.y, curX: p.x, curY: p.y };
+      renderOverlay();
+      return;
+    }
+
+    if (mode === "aitrace") {
+      safeCapture(evt.pointerId);
+      const p = clientToImagePoint(evt);
+      aiTraceBoxState = { startX: p.x, startY: p.y, curX: p.x, curY: p.y };
+      renderOverlay();
+      return;
+    }
+
+    // In Polygon mode, clicking empty canvas always means "start tracing" —
+    // if a shape from before (manual or AI-trace) is still sitting there
+    // finished, a click here can only mean the user wants a new one, so
+    // clear it automatically rather than silently panning or requiring a
+    // separate trip to "Clear polygon" first.
+    if (mode === "polygon") {
+      if (polygonFinished) resetPolygonDraft();
       addPolygonPoint(clientToImagePoint(evt));
+      renderOverlay();
       return;
     }
 
@@ -775,9 +867,31 @@
       return;
     }
 
+    if (marqueeState) {
+      marqueeState.curX = p.x;
+      marqueeState.curY = p.y;
+      renderOverlay();
+      return;
+    }
+
+    if (aiTraceBoxState) {
+      aiTraceBoxState.curX = p.x;
+      aiTraceBoxState.curY = p.y;
+      renderOverlay();
+      return;
+    }
+
     if (draggingVertex) {
       if (draggingVertex.type === "polygon") {
-        polygonPoints[draggingVertex.index] = { x: p.x, y: p.y };
+        const indices = multiSelectedVertices.has(draggingVertex.index)
+          ? [...multiSelectedVertices]
+          : [draggingVertex.index];
+        if (indices.length > 1 && dragLastPoint) {
+          nudgeVertices(indices, p.x - dragLastPoint.x, p.y - dragLastPoint.y);
+        } else {
+          polygonPoints[draggingVertex.index] = { x: p.x, y: p.y };
+        }
+        dragLastPoint = p;
         renderOverlay();
         updateCodePreview();
       } else if (draggingVertex.type === "ellipse") {
@@ -820,7 +934,30 @@
       renderOverlay();
       updateCodePreview();
     }
+    if (marqueeState) {
+      const x0 = Math.min(marqueeState.startX, marqueeState.curX);
+      const x1 = Math.max(marqueeState.startX, marqueeState.curX);
+      const y0 = Math.min(marqueeState.startY, marqueeState.curY);
+      const y1 = Math.max(marqueeState.startY, marqueeState.curY);
+      // A near-zero-area drag is a click-to-deselect, not an attempted
+      // marquee — don't require pixel-perfect stillness from a mouse.
+      if (Math.abs(x1 - x0) > 2 || Math.abs(y1 - y0) > 2) {
+        multiSelectedVertices.clear();
+        polygonPoints.forEach((pt, i) => {
+          if (pt.x >= x0 && pt.x <= x1 && pt.y >= y0 && pt.y <= y1) multiSelectedVertices.add(i);
+        });
+      }
+      marqueeState = null;
+      renderOverlay();
+    }
+    if (aiTraceBoxState) {
+      const box = aiTraceBoxState;
+      aiTraceBoxState = null;
+      renderOverlay();
+      runAiTrace(box);
+    }
     draggingVertex = null;
+    dragLastPoint = null;
     panState = null;
     try { stage.releasePointerCapture(evt.pointerId); } catch { /* no-op */ }
   }
@@ -839,21 +976,27 @@
   });
 
   // ---- Mode state --------------------------------------------------------
-  let mode = "polygon"; // 'polygon' | 'ellipse' | 'select'
+  let mode = "polygon"; // 'polygon' | 'ellipse' | 'select' | 'aitrace'
   const modePolygonBtn = document.getElementById("modePolygon");
   const modeEllipseBtn = document.getElementById("modeEllipse");
   const modeSelectBtn = document.getElementById("modeSelect");
+  const modeAiTraceBtn = document.getElementById("modeAiTrace");
+  const aiTraceControls = document.getElementById("aiTraceControls");
 
   function setMode(next) {
     mode = next;
     modePolygonBtn.classList.toggle("toggle-active", mode === "polygon");
     modeEllipseBtn.classList.toggle("toggle-active", mode === "ellipse");
     modeSelectBtn.classList.toggle("toggle-active", mode === "select");
+    modeAiTraceBtn.classList.toggle("toggle-active", mode === "aitrace");
+    aiTraceControls.style.display = mode === "aitrace" ? "" : "none";
+    if (mode !== "select") clearMultiSelection();
     renderOverlay();
   }
   modePolygonBtn.addEventListener("click", () => setMode("polygon"));
   modeEllipseBtn.addEventListener("click", () => setMode("ellipse"));
   modeSelectBtn.addEventListener("click", () => setMode("select"));
+  modeAiTraceBtn.addEventListener("click", () => setMode("aitrace"));
 
   // ---- View toggles --------------------------------------------------
   const viewBothBtn = document.getElementById("viewBoth");
@@ -875,6 +1018,83 @@
   let polygonPoints = []; // [{x,y}, ...] in image-space
   let polygonFinished = false;
   let selectedVertex = null;
+  // Marquee (rubber-band box) multi-selection of vertices, used only in
+  // Select/Edit mode. Kept as a Set of indices separate from `selectedVertex`
+  // (the single-vertex selection used by the existing drag/arrow-key/delete
+  // code) rather than folding single-select into a size-1 set — the two
+  // concepts have different lifetimes (single selection survives a drag,
+  // multi-selection is meant to be a transient "operate on this batch, then
+  // it's gone" gesture) and conflating them risks exactly the kind of
+  // cross-concern dedupe-set bug this project has been burned by before.
+  let multiSelectedVertices = new Set();
+  let marqueeState = null; // {startX, startY, curX, curY} in image-space
+  let aiTraceBoxState = null; // {startX, startY, curX, curY} in image-space
+
+  function clearMultiSelection() {
+    if (multiSelectedVertices.size === 0) return;
+    multiSelectedVertices.clear();
+    renderOverlay();
+  }
+
+  // Indices this keyboard/button action should operate on: the marquee
+  // multi-selection when one exists, otherwise the single selected vertex
+  // (if any). The two never need to be unioned — selecting a vertex singly
+  // always clears the multi-set and starting a marquee always clears the
+  // single selection, so exactly one of them is ever non-empty.
+  function effectiveSelectedIndices() {
+    if (multiSelectedVertices.size > 0) return [...multiSelectedVertices].sort((a, b) => a - b);
+    if (selectedVertex !== null) return [selectedVertex];
+    return [];
+  }
+
+  const deleteVertexStatusEl = document.getElementById("deleteVertexStatus");
+
+  function clearDeleteVertexStatus() {
+    deleteVertexStatusEl.textContent = "";
+    deleteVertexStatusEl.classList.remove("warn-inline");
+  }
+
+  function deleteVertices(indices) {
+    if (indices.length === 0) return;
+    const remaining = polygonPoints.length - indices.length;
+
+    // Selecting (and deleting) every vertex is just "start over" — do that
+    // directly instead of rejecting it, the same outcome "Clear polygon"
+    // gives, so marquee-selecting the whole shape and pressing Delete
+    // actually clears it rather than bouncing off a minimum-points rule.
+    if (remaining === 0) {
+      clearDeleteVertexStatus();
+      resetPolygonDraft();
+      renderOverlay();
+      return;
+    }
+
+    // A 1- or 2-point "polygon" isn't a shape at all — this is a real
+    // geometric floor, not an arbitrary inconvenience, so a *partial*
+    // deletion that would leave too few points to still be a polygon is
+    // still refused (with the reason shown right by the button itself).
+    if (remaining < 3) {
+      deleteVertexStatusEl.textContent =
+        `Can't delete ${indices.length} of ${polygonPoints.length} — would leave only ${remaining} point${remaining === 1 ? "" : "s"}, not enough for a polygon. Select all of them to clear the shape instead, or deselect some.`;
+      deleteVertexStatusEl.classList.add("warn-inline");
+      return;
+    }
+    clearDeleteVertexStatus();
+    for (const idx of [...indices].sort((a, b) => b - a)) polygonPoints.splice(idx, 1);
+    selectedVertex = null;
+    multiSelectedVertices.clear();
+    renderOverlay();
+    updateCodePreview();
+  }
+
+  function nudgeVertices(indices, dx, dy) {
+    for (const idx of indices) {
+      const p = polygonPoints[idx];
+      if (!p) continue;
+      p.x += dx;
+      p.y += dy;
+    }
+  }
   // Which shape the code preview/export should reflect when both a
   // finished polygon and a finished ellipse exist at once (e.g. the user
   // traced a polygon, then switched modes and drew an ellipse without
@@ -886,6 +1106,7 @@
     polygonPoints = [];
     polygonFinished = false;
     selectedVertex = null;
+    multiSelectedVertices.clear();
     if (activeShapeKind === "polygon") activeShapeKind = null;
     updateCodePreview();
   }
@@ -900,6 +1121,12 @@
     if (polygonPoints.length < 3) return;
     polygonFinished = true;
     activeShapeKind = "polygon";
+    // Auto-advance into Select/Edit mode: marquee-select (drag a box over
+    // empty space) only activates there, not in Polygon mode, where the
+    // same drag gesture pans the canvas instead. Without this, finishing a
+    // shape and immediately trying to box-select/delete vertices silently
+    // pans the view and selects nothing.
+    setMode("select");
     renderOverlay();
     updateCodePreview();
   }
@@ -916,15 +1143,7 @@
   });
   document.getElementById("finishPolygon").addEventListener("click", finishPolygon);
   document.getElementById("deleteVertex").addEventListener("click", () => {
-    if (selectedVertex === null) return;
-    if (polygonPoints.length <= 3) {
-      // Keep a minimum of 3 points for a valid polygon.
-      return;
-    }
-    polygonPoints.splice(selectedVertex, 1);
-    selectedVertex = null;
-    renderOverlay();
-    updateCodePreview();
+    deleteVertices(effectiveSelectedIndices());
   });
 
   function insertVertexAfter(edgeIndex, point) {
@@ -933,6 +1152,336 @@
     selectedVertex = edgeIndex + 1;
     renderOverlay();
     updateCodePreview();
+  }
+
+  // ---- AI-trace (real segmentation model, not a colour-threshold guess) --
+  // A hand-rolled "subtract the background colour" approach was tried first
+  // and removed — these source images are painterly, with strong local
+  // lighting/shadow gradients and no flat background region to subtract, so
+  // that approach fractured every test box into dozens of small, useless
+  // blobs rather than one clean object outline. This uses a real image
+  // segmentation model (SlimSAM, a distilled Segment Anything variant) run
+  // entirely client-side via transformers.js/onnxruntime-web (vendored in
+  // ./vendor-sam/ — see public/vendor/README.md's sibling note there for
+  // why this one tool, not the museum app itself, carries a model/runtime
+  // dependency). The user's drawn box becomes prompt points (SAM's ONNX
+  // export takes points, not boxes, directly): the box centre as a
+  // foreground point, the four corners as background points, which keeps
+  // the model from bleeding the mask out past the box the user actually
+  // drew. The model's own best-scoring mask is then traced into a polygon
+  // with the exact same connected-component-boundary + Douglas-Peucker
+  // simplification pipeline a clean hand-authored mask would want, so the
+  // result is a normal, fully hand-editable polygon afterward, not a
+  // special "AI shape" type.
+  let samModel = null;
+  let samProcessor = null;
+  let samLoadingPromise = null;
+  let samImageEmbeddings = null; // cached per-room, cleared on room switch
+  let samImageInputs = null;
+  let samEmbeddedForRoomId = null;
+  const aiTraceStatusEl = document.getElementById("aiTraceStatus");
+
+  function setAiTraceStatus(msg) {
+    aiTraceStatusEl.textContent = msg;
+  }
+
+  async function ensureSamLoaded() {
+    if (samModel && samProcessor) return;
+    if (samLoadingPromise) return samLoadingPromise;
+    samLoadingPromise = (async () => {
+      setAiTraceStatus("Loading segmentation model (~14MB, first time only this session)…");
+      env.allowRemoteModels = false;
+      env.localModelPath = "./vendor-sam/models/";
+      env.backends.onnx.wasm.wasmPaths = "./vendor-sam/dist/";
+      // This vendored build only ships the single-threaded SIMD wasm
+      // backend (no COOP/COEP cross-origin-isolation headers are set up on
+      // this plain static file server, which the multi-threaded backend
+      // requires) — one worker thread is plenty for one box at a time.
+      env.backends.onnx.wasm.numThreads = 1;
+      const model_id = "slimsam-77-uniform";
+      samModel = await SamModel.from_pretrained(model_id, { quantized: true });
+      samProcessor = await AutoProcessor.from_pretrained(model_id);
+      setAiTraceStatus("Model ready — draw a box around one object.");
+    })();
+    try {
+      await samLoadingPromise;
+    } catch (err) {
+      samLoadingPromise = null;
+      samModel = null;
+      samProcessor = null;
+      throw err;
+    }
+  }
+
+  async function ensureSamEmbeddingForCurrentRoom() {
+    if (samEmbeddedForRoomId === currentRoom.id && samImageEmbeddings) return;
+    setAiTraceStatus("Reading this room's image into the model (once per room)…");
+    const image = await RawImage.read(`/assets/gallery-scenes/${currentRoom.file}`);
+    samImageInputs = await samProcessor(image);
+    samImageEmbeddings = await samModel.get_image_embeddings(samImageInputs);
+    samEmbeddedForRoomId = currentRoom.id;
+    setAiTraceStatus("Model ready — draw a box around one object.");
+  }
+
+  // Same connected-component boundary trace + Douglas-Peucker simplify used
+  // by a hand-authored shape would want — SAM's output is a clean binary
+  // mask (object vs. not), so this is the same "turn a mask into a small,
+  // editable polygon" problem regardless of where the mask came from.
+  function labelComponents(mask, gw, gh) {
+    const labels = new Int32Array(gw * gh).fill(-1);
+    const sizes = [];
+    let nextLabel = 0;
+    const stack = [];
+    for (let y = 0; y < gh; y++) {
+      for (let x = 0; x < gw; x++) {
+        const idx = y * gw + x;
+        if (!mask[idx] || labels[idx] !== -1) continue;
+        const label = nextLabel++;
+        let size = 0;
+        stack.push(idx);
+        labels[idx] = label;
+        while (stack.length) {
+          const cur = stack.pop();
+          size++;
+          const cx = cur % gw, cy = (cur / gw) | 0;
+          const neighbors = [[cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]];
+          for (const [nx, ny] of neighbors) {
+            if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+            const nIdx = ny * gw + nx;
+            if (mask[nIdx] && labels[nIdx] === -1) {
+              labels[nIdx] = label;
+              stack.push(nIdx);
+            }
+          }
+        }
+        sizes.push(size);
+      }
+    }
+    return { labels, sizes };
+  }
+
+  function traceComponentBoundary(labels, gw, gh, targetLabel) {
+    let start = null;
+    for (let y = 0; y < gh && !start; y++) {
+      for (let x = 0; x < gw; x++) {
+        if (labels[y * gw + x] === targetLabel) { start = { x, y }; break; }
+      }
+    }
+    if (!start) return [];
+
+    const NB = [
+      [-1, 0], [-1, -1], [0, -1], [1, -1],
+      [1, 0], [1, 1], [0, 1], [-1, 1],
+    ];
+    function isFg(x, y) {
+      if (x < 0 || y < 0 || x >= gw || y >= gh) return false;
+      return labels[y * gw + x] === targetLabel;
+    }
+
+    const boundary = [];
+    let current = start;
+    let backtrackDir = 0;
+    let first = true;
+    let guard = gw * gh * 4 + 16;
+    while (guard-- > 0) {
+      boundary.push({ x: current.x, y: current.y });
+      let found = null;
+      let foundDir = backtrackDir;
+      for (let i = 0; i < 8; i++) {
+        const dir = (backtrackDir + 1 + i) % 8;
+        const [dx, dy] = NB[dir];
+        if (isFg(current.x + dx, current.y + dy)) {
+          found = { x: current.x + dx, y: current.y + dy };
+          foundDir = dir;
+          break;
+        }
+      }
+      if (!found) break;
+      backtrackDir = (foundDir + 4) % 8;
+      current = found;
+      if (!first && current.x === start.x && current.y === start.y) break;
+      first = false;
+    }
+    return boundary;
+  }
+
+  function perpendicularDistance(p, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+    const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / (len * len);
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  }
+
+  function douglasPeucker(pts, epsilon) {
+    if (pts.length < 3) return pts;
+    const a = pts[0], b = pts[pts.length - 1];
+    let maxDist = 0, index = 0;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const d = perpendicularDistance(pts[i], a, b);
+      if (d > maxDist) { maxDist = d; index = i; }
+    }
+    if (maxDist > epsilon) {
+      const left = douglasPeucker(pts.slice(0, index + 1), epsilon);
+      const right = douglasPeucker(pts.slice(index), epsilon);
+      return left.slice(0, -1).concat(right);
+    }
+    return [a, b];
+  }
+
+  function simplifyClosedPolygon(points, epsilon) {
+    if (points.length <= 4) return points;
+    let a = 0, b = 1, maxD = -1;
+    for (let i = 0; i < points.length; i++) {
+      for (let j = i + 1; j < points.length; j++) {
+        const d = (points[i].x - points[j].x) ** 2 + (points[i].y - points[j].y) ** 2;
+        if (d > maxD) { maxD = d; a = i; b = j; }
+      }
+    }
+    const chain1 = points.slice(a, b + 1);
+    const chain2 = points.slice(b).concat(points.slice(0, a + 1));
+    const s1 = douglasPeucker(chain1, epsilon);
+    const s2 = douglasPeucker(chain2, epsilon);
+    return s1.slice(0, -1).concat(s2.slice(0, -1));
+  }
+
+  function decimateToCount(points, count) {
+    if (points.length <= count) return points;
+    const result = [];
+    for (let i = 0; i < count; i++) {
+      result.push(points[Math.floor((i * points.length) / count)]);
+    }
+    return result;
+  }
+
+  async function runAiTrace(box) {
+    const x0 = Math.max(0, Math.min(box.startX, box.curX));
+    const x1 = Math.min(currentRoom.width, Math.max(box.startX, box.curX));
+    const y0 = Math.max(0, Math.min(box.startY, box.curY));
+    const y1 = Math.min(currentRoom.height, Math.max(box.startY, box.curY));
+    const boxW = x1 - x0, boxH = y1 - y0;
+    if (boxW < 8 || boxH < 8) {
+      setAiTraceStatus("Box too small — drag a bigger box around the object.");
+      return;
+    }
+
+    try {
+      await ensureSamLoaded();
+      await ensureSamEmbeddingForCurrentRoom();
+    } catch (err) {
+      console.error(err);
+      setAiTraceStatus("Couldn't load the segmentation model — check the console. Falling back to manual tracing.");
+      return;
+    }
+
+    setAiTraceStatus("Segmenting…");
+    try {
+      const reshaped = samImageInputs.reshaped_input_sizes[0]; // [h, w] of the model's resized working image
+      const original = samImageInputs.original_sizes[0]; // [h, w] of the real source image
+      const scaleX = reshaped[1] / original[1];
+      const scaleY = reshaped[0] / original[0];
+      const toModelSpace = (px, py) => [px * scaleX, py * scaleY];
+
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      const points = [
+        toModelSpace(cx, cy),
+        toModelSpace(x0, y0),
+        toModelSpace(x1, y0),
+        toModelSpace(x0, y1),
+        toModelSpace(x1, y1),
+      ];
+      const labels = [1, 0, 0, 0, 0]; // 1 = foreground, 0 = background
+
+      const input_points = new Tensor("float32", points.flat(), [1, 1, points.length, 2]);
+      const input_labels = new Tensor("int64", labels.map(BigInt), [1, 1, labels.length]);
+
+      const outputs = await samModel({
+        ...samImageEmbeddings,
+        input_points,
+        input_labels,
+      });
+      const masks = await samProcessor.post_process_masks(
+        outputs.pred_masks,
+        samImageInputs.original_sizes,
+        samImageInputs.reshaped_input_sizes,
+      );
+      const maskTensor = masks[0];
+      const scores = outputs.iou_scores.data;
+      let bestIdx = 0;
+      for (let i = 1; i < scores.length; i++) if (scores[i] > scores[bestIdx]) bestIdx = i;
+
+      // post_process_masks's returned per-image tensor has shape
+      // [1, num_masks, h, w] (a leading batch dim of 1 alongside the
+      // num_masks dim), not a plain [num_masks, h, w] — confirmed by
+      // logging maskTensor.dims against a real inference run; index past
+      // that leading dim. Guard the 3-dim case too in case a future model
+      // swap drops the batch dim.
+      const dims = maskTensor.dims;
+      let full;
+      if (dims.length === 4) {
+        full = maskTensor[0][bestIdx];
+      } else if (dims.length === 3) {
+        full = maskTensor[bestIdx];
+      } else {
+        throw new Error(`Unexpected mask tensor shape: [${dims.join(", ")}]`);
+      }
+      const [fullH, fullW] = full.dims;
+      const fullData = full.data;
+
+      // Work only within the drawn box (plus a small margin) rather than
+      // the whole image — keeps the connected-component pass fast and
+      // automatically ignores anything the model marked foreground well
+      // outside what the user actually boxed.
+      const margin = 0.15;
+      const mx0 = Math.max(0, Math.floor(x0 - boxW * margin));
+      const my0 = Math.max(0, Math.floor(y0 - boxH * margin));
+      const mx1 = Math.min(fullW, Math.ceil(x1 + boxW * margin));
+      const my1 = Math.min(fullH, Math.ceil(y1 + boxH * margin));
+      const gw = mx1 - mx0, gh = my1 - my0;
+      const mask = new Uint8Array(gw * gh);
+      let fgCount = 0;
+      for (let y = 0; y < gh; y++) {
+        for (let x = 0; x < gw; x++) {
+          const v = fullData[(my0 + y) * fullW + (mx0 + x)] ? 1 : 0;
+          mask[y * gw + x] = v;
+          fgCount += v;
+        }
+      }
+
+      if (fgCount === 0) {
+        setAiTraceStatus("Model found nothing in that box — try a tighter box around just the object.");
+        return;
+      }
+
+      const { labels: compLabels, sizes } = labelComponents(mask, gw, gh);
+      let bestLabel = 0, bestSize = sizes[0] ?? 0;
+      for (let i = 1; i < sizes.length; i++) {
+        if (sizes[i] > bestSize) { bestSize = sizes[i]; bestLabel = i; }
+      }
+      const boundary = traceComponentBoundary(compLabels, gw, gh, bestLabel);
+      if (boundary.length < 3) {
+        setAiTraceStatus("Couldn't trace a usable outline — try a different box.");
+        return;
+      }
+
+      const epsilon = Math.max(1.2, Math.min(gw, gh) * 0.01);
+      const simplified = decimateToCount(simplifyClosedPolygon(boundary, epsilon), 40);
+
+      polygonPoints = simplified.map((p) => ({ x: mx0 + p.x, y: my0 + p.y }));
+      polygonFinished = true;
+      activeShapeKind = "polygon";
+      selectedVertex = null;
+      multiSelectedVertices.clear();
+      ellipse = null;
+      ellipseFinished = false;
+
+      setAiTraceStatus(`Traced ${polygonPoints.length} points (score ${scores[bestIdx].toFixed(2)}) — refine by dragging vertices, then name and add.`);
+      setMode("select");
+      updateCodePreview();
+    } catch (err) {
+      console.error(err);
+      setAiTraceStatus("Segmentation failed — check the console. Try a different box, or trace by hand instead.");
+    }
   }
 
   // ---- Ellipse state ----------------------------------------------------
@@ -965,11 +1514,45 @@
     if (mode === "ellipse" || ellipse) {
       renderEllipse();
     }
+    if (marqueeState) renderMarquee();
+    if (aiTraceBoxState) renderAiTraceBox();
 
-    hudVertex.textContent =
-      selectedVertex !== null && polygonPoints[selectedVertex]
-        ? `${Math.round(polygonPoints[selectedVertex].x)}, ${Math.round(polygonPoints[selectedVertex].y)}`
-        : "—";
+    const indices = effectiveSelectedIndices();
+    if (indices.length > 1) {
+      hudVertex.textContent = `${indices.length} selected`;
+    } else if (selectedVertex !== null && polygonPoints[selectedVertex]) {
+      hudVertex.textContent = `${Math.round(polygonPoints[selectedVertex].x)}, ${Math.round(polygonPoints[selectedVertex].y)}`;
+    } else {
+      hudVertex.textContent = "—";
+    }
+  }
+
+  function renderMarquee() {
+    const x = Math.min(marqueeState.startX, marqueeState.curX);
+    const y = Math.min(marqueeState.startY, marqueeState.curY);
+    const w = Math.abs(marqueeState.curX - marqueeState.startX);
+    const h = Math.abs(marqueeState.curY - marqueeState.startY);
+    const rect = document.createElementNS(SVG_NS, "rect");
+    rect.setAttribute("x", String(x));
+    rect.setAttribute("y", String(y));
+    rect.setAttribute("width", String(w));
+    rect.setAttribute("height", String(h));
+    rect.setAttribute("class", "marquee-rect");
+    overlayGroup.appendChild(rect);
+  }
+
+  function renderAiTraceBox() {
+    const x = Math.min(aiTraceBoxState.startX, aiTraceBoxState.curX);
+    const y = Math.min(aiTraceBoxState.startY, aiTraceBoxState.curY);
+    const w = Math.abs(aiTraceBoxState.curX - aiTraceBoxState.startX);
+    const h = Math.abs(aiTraceBoxState.curY - aiTraceBoxState.startY);
+    const rect = document.createElementNS(SVG_NS, "rect");
+    rect.setAttribute("x", String(x));
+    rect.setAttribute("y", String(y));
+    rect.setAttribute("width", String(w));
+    rect.setAttribute("height", String(h));
+    rect.setAttribute("class", "ai-trace-rect");
+    overlayGroup.appendChild(rect);
   }
 
   function renderPolygon() {
@@ -1010,12 +1593,18 @@
       handle.setAttribute("cx", String(p.x));
       handle.setAttribute("cy", String(p.y));
       handle.setAttribute("r", String(screenPx(8)));
-      handle.setAttribute("class", "vertex-handle" + (selectedVertex === i ? " selected" : ""));
+      const isMulti = multiSelectedVertices.has(i);
+      handle.setAttribute(
+        "class",
+        "vertex-handle" + (isMulti ? " multi-selected" : selectedVertex === i ? " selected" : "")
+      );
       handle.dataset.vertexIndex = String(i);
       handle.addEventListener("click", (evt) => {
         evt.stopPropagation();
         if (suppressNextClick) { suppressNextClick = false; return; }
+        multiSelectedVertices.clear();
         selectedVertex = i;
+        clearDeleteVertexStatus();
         renderOverlay();
       });
       overlayGroup.appendChild(handle);
@@ -1279,39 +1868,64 @@
   renderShapeList();
 
   // ---- Keyboard support ---------------------------------------------
-  // Essential interaction works with a keyboard too: arrow keys nudge the
-  // selected vertex by 1px (10px with Shift), Delete removes it, Escape
-  // deselects.
+  // Essential interaction works with a keyboard too. Arrow keys serve two
+  // jobs depending on state, never mixed: with a vertex selected, they nudge
+  // that point (1px, 10px with Shift) — editing takes priority over panning
+  // so a selected vertex is never accidentally orphaned mid-nudge. With
+  // nothing selected, the same keys pan the view instead (screen pixels, so
+  // the step feels the same at any zoom level; bigger step with Shift),
+  // which is what makes tracing against a zoomed-in image comfortable
+  // without reaching for the mouse. Delete removes the selected vertex,
+  // Escape deselects.
+  function isTypingTarget(el) {
+    return el === objectNameInput || el === objectNoteInput || el === roomSelect;
+  }
+
   window.addEventListener("keydown", (evt) => {
-    if (document.activeElement === objectNameInput) return;
+    if (isTypingTarget(document.activeElement)) return;
 
     if (evt.key === "Escape") {
       selectedVertex = null;
+      multiSelectedVertices.clear();
       renderOverlay();
       return;
     }
-    if (selectedVertex === null) return;
-    const step = evt.shiftKey ? 10 : 1;
-    const p = polygonPoints[selectedVertex];
-    if (!p) return;
-    let handled = true;
-    if (evt.key === "ArrowLeft") p.x -= step;
-    else if (evt.key === "ArrowRight") p.x += step;
-    else if (evt.key === "ArrowUp") p.y -= step;
-    else if (evt.key === "ArrowDown") p.y += step;
-    else if (evt.key === "Delete" || evt.key === "Backspace") {
-      if (polygonPoints.length > 3) {
-        polygonPoints.splice(selectedVertex, 1);
-        selectedVertex = null;
-      }
-    } else {
-      handled = false;
-    }
-    if (handled) {
+
+    const indices = effectiveSelectedIndices();
+    const isArrow =
+      evt.key === "ArrowLeft" || evt.key === "ArrowRight" ||
+      evt.key === "ArrowUp" || evt.key === "ArrowDown";
+
+    if (isArrow && indices.length === 0) {
+      const panStep = evt.shiftKey ? 120 : 40;
+      if (evt.key === "ArrowLeft") viewTx += panStep;
+      else if (evt.key === "ArrowRight") viewTx -= panStep;
+      else if (evt.key === "ArrowUp") viewTy += panStep;
+      else if (evt.key === "ArrowDown") viewTy -= panStep;
       evt.preventDefault();
-      renderOverlay();
-      updateCodePreview();
+      applyWorldTransform();
+      return;
     }
+
+    if (indices.length === 0) return;
+
+    if (evt.key === "Delete" || evt.key === "Backspace") {
+      evt.preventDefault();
+      deleteVertices(indices);
+      return;
+    }
+
+    if (!isArrow) return;
+    const step = evt.shiftKey ? 10 : 1;
+    let dx = 0, dy = 0;
+    if (evt.key === "ArrowLeft") dx = -step;
+    else if (evt.key === "ArrowRight") dx = step;
+    else if (evt.key === "ArrowUp") dy = -step;
+    else if (evt.key === "ArrowDown") dy = step;
+    evt.preventDefault();
+    nudgeVertices(indices, dx, dy);
+    renderOverlay();
+    updateCodePreview();
   });
 
   // ---- Init --------------------------------------------------------

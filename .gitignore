@@ -1,5 +1,10 @@
 node_modules/
 dist/
+# Exception to the dist/ rule above: the hotspot-editor dev tool's vendored
+# SAM runtime ships its one required wasm backend under its own dist/ dir —
+# this is a real, committed asset, not a build output.
+!public/tools/vendor-sam/dist/
+!public/tools/vendor-sam/dist/**
 *.log
 __pycache__/
 
