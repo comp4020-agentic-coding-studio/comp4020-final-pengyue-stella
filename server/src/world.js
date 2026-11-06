@@ -342,8 +342,31 @@ const HALL_VISITOR_ANCHORS = [
 // degrading — see docs/adr/0005-immersive-2.5d-camera.md's own "remaining
 // visual limitations" section for the honest ceiling this places on how
 // wide a look-around a single 16:9 illustration can sincerely support.
-const DEFAULT_MAIN_CAMERA = { initialPan: 50, minPan: 8, maxPan: 92, initialZoom: 1.3, minZoom: 1.15, maxZoom: 2.1 };
-const DEFAULT_CLOSEUP_CAMERA = { initialPan: 50, minPan: 20, maxPan: 80, initialZoom: 1.5, minZoom: 1.3, maxZoom: 2.2 };
+// minTilt/maxTilt are pan's vertical twin (same 0-100 space, 50 centred):
+// bounded enough that looking up/down reveals more ceiling/floor without
+// ever panning past the illustration's own top/bottom edge.
+const DEFAULT_MAIN_CAMERA = {
+  initialPan: 50,
+  minPan: 8,
+  maxPan: 92,
+  initialTilt: 50,
+  minTilt: 30,
+  maxTilt: 70,
+  initialZoom: 1.3,
+  minZoom: 1.15,
+  maxZoom: 2.1,
+};
+const DEFAULT_CLOSEUP_CAMERA = {
+  initialPan: 50,
+  minPan: 20,
+  maxPan: 80,
+  initialTilt: 50,
+  minTilt: 35,
+  maxTilt: 65,
+  initialZoom: 1.5,
+  minZoom: 1.3,
+  maxZoom: 2.2,
+};
 // The hall is now one genuine wide-angle room image (entrance-hall-v2.png,
 // the same full-size footing as every gallery illustration), not a small
 // low-resolution reference cropped into four narrow facings — so it uses
@@ -778,7 +801,17 @@ const GALLERY_LAYOUT = [
       zoom: true,
       caption: "Under Glass",
       lore: "Logged as botanical in 1911, biological in 1958, and 'undetermined — do not reclassify again' in 2003, in the same hand as the first entry. The jar has not been opened since.",
-      closeupCamera: { initialPan: 50, minPan: 30, maxPan: 70, initialZoom: 1.7, minZoom: 1.5, maxZoom: 2.3 },
+      closeupCamera: {
+        initialPan: 50,
+        minPan: 30,
+        maxPan: 70,
+        initialTilt: 50,
+        minTilt: 40,
+        maxTilt: 60,
+        initialZoom: 1.7,
+        minZoom: 1.5,
+        maxZoom: 2.3,
+      },
     },
     objects: [
       {
@@ -993,7 +1026,17 @@ const GALLERY_LAYOUT = [
       zoom: true,
       caption: "The Shelf That Waits",
       lore: "The shelf is dusted every week, the gap on the third row included, around whatever used to sit there — and whatever it was, the inventory card for that slot still bears the first curator's own initials, never crossed out.",
-      closeupCamera: { initialPan: 28, minPan: 10, maxPan: 50, initialZoom: 1.6, minZoom: 1.4, maxZoom: 2.2 },
+      closeupCamera: {
+        initialPan: 28,
+        minPan: 10,
+        maxPan: 50,
+        initialTilt: 50,
+        minTilt: 40,
+        maxTilt: 60,
+        initialZoom: 1.6,
+        minZoom: 1.4,
+        maxZoom: 2.2,
+      },
     },
     objects: [
       {

@@ -19,12 +19,18 @@ than inside it.
 **A bounded, per-scene 2.5D camera** (`public/world/camera-math.js` +
 `camera.js`) replaces the fixed, un-pannable illustration. Pan is an
 abstract 0–100 position along a scene-authored `[minPan, maxPan]` range;
-zoom is a multiplier within `[minZoom, maxZoom]`. Both are driven by
-pointer drag (with inertia, skipped under `prefers-reduced-motion`), wheel/
-trackpad (vertical = zoom, horizontal = pan), and keyboard (`←`/`→` pan,
-`+`/`-` zoom). The art, interactive-object glows, and visitor cameos all
-live inside one `.scene-room` plane that takes a single `scale() 
-translateX()` transform per tick, so a glow stays pixel-locked to the
+tilt is pan's vertical twin, the same 0–100 space bounded by a scene-
+authored `[minTilt, maxTilt]` range (a scene config that doesn't author it
+defaults to 50/50 — no vertical range at all — so every camera config
+written before this addendum keeps behaving exactly as it did); zoom is a
+multiplier within `[minZoom, maxZoom]`. All three are driven by pointer drag
+(both axes at once, each with its own independent inertia, skipped under
+`prefers-reduced-motion`), wheel/trackpad (vertical wheel still zooms —
+the far more common gesture for "move closer/further" — horizontal pans;
+tilt is a drag/keyboard-only axis), and keyboard (`←`/`→` pan, `↑`/`↓`
+tilt, `+`/`-` zoom). The art, interactive-object glows, and visitor cameos
+all live inside one `.scene-room` plane that takes a single `scale()
+translate()` transform per tick, so a glow stays pixel-locked to the
 painted item it represents as the camera moves; the dust layer takes a
 lighter parallax fraction of the same transform, and the vignette/frame
 sit outside it entirely (fixed — "the edge of the window"). This is
@@ -158,6 +164,42 @@ never fires a native DOM `focus` event the way Tab navigation does, and
 `handleObjectActivate`'s `closeup` branch only ever called
 `illustrator.goToScene`. Fixed by calling `setFocusedObject` explicitly
 before the scene cut.
+
+## Addendum: vertical tilt, pan's missing twin
+
+Manual review after the horizontal-only camera shipped found a visitor
+could drag/swipe left-right but a vertical drag or the `↑`/`↓` keys did
+nothing — a room with real vertical composition (a chandelier overhead, a
+carpet runner underfoot) still only let a visitor look sideways, not up or
+down, within the same bounded "look around the room" the brief asks for.
+
+**Tilt is pan's exact vertical twin**, not a new mechanism: the same
+abstract 0–100 range (50 centred), the same per-scene authored bound
+(`minTilt`/`maxTilt` alongside `minPan`/`maxPan` in `server/src/world.js`),
+the same safe-overflow derivation in `transformFor` (now `scale()
+translate(x%, y%)` instead of `scale() translateX(x%)`), the same drag-to-
+pixel conversion (`dragDeltaToTilt`, against the container's height instead
+of its width), and its own independent inertia on release. A scene that
+doesn't author `minTilt`/`maxTilt` defaults to 50/50 — no vertical range at
+all — so every existing camera config (and `spec/camera.test.ts`'s existing
+pan-only assertions) keeps behaving exactly as before; `DEFAULT_MAIN_CAMERA`
+and `DEFAULT_CLOSEUP_CAMERA`, and every gallery's own `closeupCamera`
+override, now author a real (narrower) vertical range so every scene
+actually gets a meaningful up/down look, not just a theoretical one.
+
+Wheel/trackpad input keeps a plain vertical wheel mapped to zoom (the more
+common "move closer" gesture, and the one visitors already learned from the
+horizontal-only camera) rather than repurposing it for tilt — tilt is
+reachable by drag and by the new `↑`/`↓` keys, mirroring `←`/`→` for pan
+exactly.
+
+Verified with `spec/camera.test.ts`'s extended transform test (the same
+"never exceeds the layer's own overflow" assertion, now checked on both
+axes across a pan × tilt × zoom grid) and live in headless Chrome: `↑`/`↓`
+visibly change the room plane's computed `transform` and clamp at the
+scene's authored bound, a vertical pointer drag changes the same transform's
+vertical component while an unrelated horizontal drag still changes only the
+horizontal one, and no console errors across the walkthrough.
 
 ## Addendum: procedural ambient audio
 

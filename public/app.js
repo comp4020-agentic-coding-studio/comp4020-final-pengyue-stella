@@ -3461,6 +3461,10 @@ window.addEventListener("keydown", (e) => {
     illustrator.camera.panLeft();
   } else if (e.code === "ArrowRight") {
     illustrator.camera.panRight();
+  } else if (e.code === "ArrowUp") {
+    illustrator.camera.panUp();
+  } else if (e.code === "ArrowDown") {
+    illustrator.camera.panDown();
   } else if (e.key === "+" || e.key === "=") {
     illustrator.camera.zoomIn();
   } else if (e.key === "-" || e.key === "_") {

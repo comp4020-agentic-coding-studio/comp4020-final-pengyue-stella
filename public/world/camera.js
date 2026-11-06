@@ -1,19 +1,25 @@
-// The 2.5D scene camera: drag/swipe to look left-right, wheel/pinch or
-// +/- to zoom, bounded by a per-scene {minPan, maxPan, minZoom, maxZoom}
-// config (server/src/world.js) so the artwork can never be dragged past its
-// own edges. This is an honest "wide 2.5D room view," never a claim of a
-// full 360° panorama — see docs/adr/0005-immersive-2.5d-camera.md.
+// The 2.5D scene camera: drag/swipe to look around (left-right AND up-down),
+// wheel/pinch or +/- to zoom, bounded by a per-scene {minPan, maxPan,
+// minTilt, maxTilt, minZoom, maxZoom} config (server/src/world.js) so the
+// artwork can never be dragged past its own edges. This is an honest "wide
+// 2.5D room view," never a claim of a full 360° panorama — see
+// docs/adr/0005-immersive-2.5d-camera.md.
 //
-// Pan is 0-100 along the scene's own valid look-around range; zoom is a
-// multiplier over the scene's baseline "fit" framing. Both are applied as a
-// single CSS transform on the `.scene-room` layer (art + object glows +
-// cameos all live inside it and move together — see illustration.js); the
-// pure math (clamping, drag-to-pan conversion, inertia decay) lives in
-// camera-math.js so it can be unit-tested without a DOM.
+// Pan is 0-100 along the scene's own valid horizontal look-around range;
+// tilt is its vertical twin, also 0-100 (50 centred) — a scene that doesn't
+// author minTilt/maxTilt simply has no vertical range, so most scenes stay
+// exactly as pan-only as before. Zoom is a multiplier over the scene's
+// baseline "fit" framing. All three are applied as a single CSS transform on
+// the `.scene-room` layer (art + object glows + cameos all live inside it
+// and move together — see illustration.js); the pure math (clamping,
+// drag-to-pan/tilt conversion, inertia decay) lives in camera-math.js so it
+// can be unit-tested without a DOM.
 import {
   clampPan,
+  clampTilt,
   clampZoom,
   dragDeltaToPan,
+  dragDeltaToTilt,
   decayVelocity,
   INERTIA_STOP_THRESHOLD,
   transformFor,
@@ -28,15 +34,19 @@ export function createSceneCamera({ container, layers, onTransform }) {
   // 0 = fixed (the foreground vignette/frame, which must never shift or it
   // stops reading as "the edge of the viewport").
   let pan = 50;
+  let tilt = 50;
   let zoom = 1;
   let minPan = 0, maxPan = 100, minZoom = 1, maxZoom = 1;
+  let minTilt = 50, maxTilt = 50; // no vertical range unless the scene's camera config says otherwise
   let velocity = 0; // pan-units per second, for drag inertia
+  let tiltVelocity = 0; // tilt-units per second, for drag inertia
   let dragging = false; // true only once real drag movement has been confirmed
   let pointerIsDown = false; // true from pointerdown until pointerup/cancel, regardless of drag
   let activePointerId = null;
   let downX = 0;
   let downY = 0;
   let lastDragX = 0;
+  let lastDragY = 0;
   let lastDragT = 0;
   let rafHandle = null;
   let enabled = true;
@@ -49,7 +59,7 @@ export function createSceneCamera({ container, layers, onTransform }) {
   // viewport-clamp safety net).
   function apply() {
     for (const { el, parallax } of layers) {
-      el.style.transform = transformFor(pan, zoom, parallax);
+      el.style.transform = transformFor(pan, zoom, parallax, tilt);
     }
     onTransform?.();
   }
@@ -58,12 +68,18 @@ export function createSceneCamera({ container, layers, onTransform }) {
     pan = clampPan(next, minPan, maxPan);
     apply();
   }
+  function setTilt(next) {
+    tilt = clampTilt(next, minTilt, maxTilt);
+    apply();
+  }
   function setZoom(next) {
     zoom = clampZoom(next, minZoom, maxZoom);
-    // Re-clamp pan too: a smaller zoom may shrink the valid pan range's
-    // practical effect (less overflow to pan across) — clamping again after
-    // every zoom change keeps the two bounds mutually consistent.
+    // Re-clamp pan/tilt too: a smaller zoom may shrink the valid pan/tilt
+    // range's practical effect (less overflow to move across) — clamping
+    // again after every zoom change keeps all three bounds mutually
+    // consistent.
     pan = clampPan(pan, minPan, maxPan);
+    tilt = clampTilt(tilt, minTilt, maxTilt);
     apply();
   }
 
@@ -72,9 +88,16 @@ export function createSceneCamera({ container, layers, onTransform }) {
     maxPan = camera.maxPan;
     minZoom = camera.minZoom;
     maxZoom = camera.maxZoom;
+    // minTilt/maxTilt are optional per-scene — a scene that doesn't author
+    // them simply has no vertical range (minTilt = maxTilt = 50), so every
+    // existing scene config keeps behaving exactly as before.
+    minTilt = camera.minTilt ?? 50;
+    maxTilt = camera.maxTilt ?? 50;
     pan = clampPan(camera.initialPan, minPan, maxPan);
+    tilt = clampTilt(camera.initialTilt ?? 50, minTilt, maxTilt);
     zoom = clampZoom(camera.initialZoom, minZoom, maxZoom);
     velocity = 0;
+    tiltVelocity = 0;
     apply();
   }
 
@@ -86,8 +109,10 @@ export function createSceneCamera({ container, layers, onTransform }) {
   function stepInertia(timestamp, lastTimestamp) {
     const dt = lastTimestamp ? timestamp - lastTimestamp : 16;
     velocity = decayVelocity(velocity, dt);
+    tiltVelocity = decayVelocity(tiltVelocity, dt);
     setPan(pan + velocity * (dt / 1000));
-    if (Math.abs(velocity) < INERTIA_STOP_THRESHOLD) {
+    setTilt(tilt + tiltVelocity * (dt / 1000));
+    if (Math.abs(velocity) < INERTIA_STOP_THRESHOLD && Math.abs(tiltVelocity) < INERTIA_STOP_THRESHOLD) {
       stopInertia();
       return;
     }
@@ -112,8 +137,10 @@ export function createSceneCamera({ container, layers, onTransform }) {
     downX = e.clientX;
     downY = e.clientY;
     lastDragX = e.clientX;
+    lastDragY = e.clientY;
     lastDragT = performance.now();
     velocity = 0;
+    tiltVelocity = 0;
     stopInertia();
   }
 
@@ -129,15 +156,21 @@ export function createSceneCamera({ container, layers, onTransform }) {
     }
     const now = performance.now();
     const dx = e.clientX - lastDragX;
+    const dy = e.clientY - lastDragY;
     const dt = Math.max(1, now - lastDragT);
     const deltaPan = dragDeltaToPan(-dx, container.clientWidth || 1, zoom);
+    const deltaTilt = dragDeltaToTilt(-dy, container.clientHeight || 1, zoom);
     setPan(pan + deltaPan);
-    // Instantaneous velocity estimate (pan-units/second) for inertia once
-    // released — smoothed lightly against the previous sample so one jittery
-    // frame doesn't launch an exaggerated flick.
+    setTilt(tilt + deltaTilt);
+    // Instantaneous velocity estimate (pan/tilt-units/second) for inertia
+    // once released — smoothed lightly against the previous sample so one
+    // jittery frame doesn't launch an exaggerated flick.
     const instantVelocity = (deltaPan / dt) * 1000;
     velocity = velocity * 0.6 + instantVelocity * 0.4;
+    const instantTiltVelocity = (deltaTilt / dt) * 1000;
+    tiltVelocity = tiltVelocity * 0.6 + instantTiltVelocity * 0.4;
     lastDragX = e.clientX;
+    lastDragY = e.clientY;
     lastDragT = now;
   }
 
@@ -149,7 +182,9 @@ export function createSceneCamera({ container, layers, onTransform }) {
     activePointerId = null;
     if (wasDragging) {
       container.releasePointerCapture?.(e.pointerId);
-      if (!PREFERS_REDUCED_MOTION && Math.abs(velocity) > INERTIA_STOP_THRESHOLD) {
+      const hasInertia =
+        Math.abs(velocity) > INERTIA_STOP_THRESHOLD || Math.abs(tiltVelocity) > INERTIA_STOP_THRESHOLD;
+      if (!PREFERS_REDUCED_MOTION && hasInertia) {
         rafHandle = requestAnimationFrame((t) => stepInertia(t, null));
       }
     }
@@ -182,6 +217,14 @@ export function createSceneCamera({ container, layers, onTransform }) {
   function panRight() {
     stopInertia();
     setPan(pan + PAN_KEY_STEP);
+  }
+  function panUp() {
+    stopInertia();
+    setTilt(tilt - PAN_KEY_STEP);
+  }
+  function panDown() {
+    stopInertia();
+    setTilt(tilt + PAN_KEY_STEP);
   }
   function zoomIn() {
     setZoom(zoom + ZOOM_KEY_STEP * zoom);
@@ -221,10 +264,15 @@ export function createSceneCamera({ container, layers, onTransform }) {
     panRight,
     zoomIn,
     zoomOut,
+    panUp,
+    panDown,
     setEnabled,
     destroy,
     get pan() {
       return pan;
+    },
+    get tilt() {
+      return tilt;
     },
     get zoom() {
       return zoom;

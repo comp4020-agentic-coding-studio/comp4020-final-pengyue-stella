@@ -7,8 +7,10 @@ import { it, expect, describe } from "vitest";
 import {
   clamp,
   clampPan,
+  clampTilt,
   clampZoom,
   dragDeltaToPan,
+  dragDeltaToTilt,
   decayVelocity,
   INERTIA_STOP_THRESHOLD,
   transformFor,
@@ -16,12 +18,13 @@ import {
   DRAG_THRESHOLD_PX,
 } from "../public/world/camera-math.js";
 
-function parseTransform(css: string): { scale: number; translateXPercent: number } {
+function parseTransform(css: string): { scale: number; translateXPercent: number; translateYPercent: number } {
   const scaleMatch = css.match(/scale\(([\d.]+)\)/);
-  const translateMatch = css.match(/translateX\((-?[\d.]+)%\)/);
+  const translateMatch = css.match(/translate\((-?[\d.]+)%, (-?[\d.]+)%\)/);
   return {
     scale: scaleMatch ? Number(scaleMatch[1]) : 1,
     translateXPercent: translateMatch ? Number(translateMatch[1]) : 0,
+    translateYPercent: translateMatch ? Number(translateMatch[2]) : 0,
   };
 }
 
@@ -36,6 +39,12 @@ describe("camera clamping", () => {
     expect(clampPan(5, 20, 80)).toBe(20);
     expect(clampPan(95, 20, 80)).toBe(80);
     expect(clampPan(50, 20, 80)).toBe(50);
+  });
+
+  it("never lets tilt escape a scene's authored [minTilt, maxTilt] range", () => {
+    expect(clampTilt(5, 30, 70)).toBe(30);
+    expect(clampTilt(95, 30, 70)).toBe(70);
+    expect(clampTilt(50, 30, 70)).toBe(50);
   });
 
   it("never lets zoom escape a scene's authored [minZoom, maxZoom] range", () => {
@@ -69,32 +78,60 @@ describe("drag-to-pan conversion", () => {
   });
 });
 
+describe("drag-to-tilt conversion (vertical twin of drag-to-pan)", () => {
+  it("produces zero tilt movement at baseline zoom (1x) — there is nothing to pan across", () => {
+    expect(dragDeltaToTilt(100, 1000, 1)).toBe(0);
+  });
+
+  it("produces more tilt movement per pixel at a higher zoom (more overflow to traverse, inverted)", () => {
+    const atLowZoom = Math.abs(dragDeltaToTilt(50, 1000, 1.2));
+    const atHighZoom = Math.abs(dragDeltaToTilt(50, 1000, 2.5));
+    expect(atHighZoom).toBeLessThan(atLowZoom);
+  });
+
+  it("is safe against a zero-height container", () => {
+    expect(dragDeltaToTilt(50, 0, 1.5)).toBe(0);
+  });
+});
+
 describe("camera layer transform (the art can never show bare background past its own edge)", () => {
-  it("never shifts a layer past the visual overflow its own scale provides, at any pan extreme", () => {
+  it("never shifts a layer past the visual overflow its own scale provides, at any pan/tilt extreme", () => {
     for (const zoom of [1.15, 1.3, 1.6, 2.1]) {
       for (const pan of [0, 25, 50, 75, 100]) {
-        const { scale, translateXPercent } = parseTransform(transformFor(pan, zoom, 1));
-        // translate() happens in pre-scale local space, then the outer
-        // scale() stretches it — so the *visual* shift is
-        // translateXPercent * scale, which must never exceed the layer's
-        // own overflow, (scale-1)/2 * 100, in either direction. This is
-        // exactly the bug a naive (pan-50) translateX produced: it ignored
-        // this relationship and could drag content off its own edge.
-        const visualShiftPercent = Math.abs(translateXPercent) * scale;
-        const maxSafeShiftPercent = ((scale - 1) / 2) * 100 + 1e-9;
-        expect(visualShiftPercent).toBeLessThanOrEqual(maxSafeShiftPercent);
+        for (const tilt of [0, 25, 50, 75, 100]) {
+          const { scale, translateXPercent, translateYPercent } = parseTransform(transformFor(pan, zoom, 1, tilt));
+          // translate() happens in pre-scale local space, then the outer
+          // scale() stretches it — so the *visual* shift is
+          // translatePercent * scale, which must never exceed the layer's
+          // own overflow, (scale-1)/2 * 100, in either direction, on either
+          // axis. This is exactly the bug a naive (pan-50) translateX
+          // produced: it ignored this relationship and could drag content
+          // off its own edge.
+          const maxSafeShiftPercent = ((scale - 1) / 2) * 100 + 1e-9;
+          expect(Math.abs(translateXPercent) * scale).toBeLessThanOrEqual(maxSafeShiftPercent);
+          expect(Math.abs(translateYPercent) * scale).toBeLessThanOrEqual(maxSafeShiftPercent);
+        }
       }
     }
   });
 
   it("produces no shift at all when a layer is not scaled up (zoom 1, or parallax 0)", () => {
-    expect(parseTransform(transformFor(0, 1.5, 1)).scale).toBeCloseTo(1.5);
-    expect(parseTransform(transformFor(0, 1.5, 0)).translateXPercent).toBe(0);
-    expect(parseTransform(transformFor(100, 1, 1)).translateXPercent).toBe(0);
+    expect(parseTransform(transformFor(0, 1.5, 1, 0)).scale).toBeCloseTo(1.5);
+    expect(parseTransform(transformFor(0, 1.5, 0, 0)).translateXPercent).toBe(0);
+    expect(parseTransform(transformFor(0, 1.5, 0, 0)).translateYPercent).toBe(0);
+    expect(parseTransform(transformFor(100, 1, 1, 100)).translateXPercent).toBe(0);
+    expect(parseTransform(transformFor(100, 1, 1, 100)).translateYPercent).toBe(0);
   });
 
-  it("is centred (no shift) at pan=50 regardless of zoom", () => {
-    expect(parseTransform(transformFor(50, 1.8, 1)).translateXPercent).toBeCloseTo(0);
+  it("is centred (no shift) at pan=50/tilt=50 regardless of zoom", () => {
+    expect(parseTransform(transformFor(50, 1.8, 1, 50)).translateXPercent).toBeCloseTo(0);
+    expect(parseTransform(transformFor(50, 1.8, 1, 50)).translateYPercent).toBeCloseTo(0);
+  });
+
+  it("defaults tilt to 50 (centred) so pan-only callers are unaffected", () => {
+    const withDefault = transformFor(70, 1.6, 1);
+    const withExplicit50 = transformFor(70, 1.6, 1, 50);
+    expect(withDefault).toBe(withExplicit50);
   });
 });
 

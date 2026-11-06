@@ -17,6 +17,14 @@ export function clampPan(pan, minPan, maxPan) {
   return clamp(pan, minPan, maxPan);
 }
 
+// Tilt is pan's vertical twin — the same 0-100 abstract position (50
+// centred), bounded per-scene by minTilt/maxTilt so looking up/down is
+// limited exactly like looking left/right: never past where the artwork
+// would have to show empty space beyond its own top/bottom edge.
+export function clampTilt(tilt, minTilt, maxTilt) {
+  return clamp(tilt, minTilt, maxTilt);
+}
+
 // Zoom is a multiplier (1 = the scene's baseline "fit" framing, >1 is
 // zoomed in). Bounded per-scene so a visitor can get close enough to create
 // a meaningful pan range (per the brief: "zoom the artwork enough to create
@@ -40,6 +48,16 @@ export function dragDeltaToPan(pixelDeltaX, containerWidth, zoom) {
   const overflowPx = Math.max(0, (zoom - 1) * containerWidth);
   if (overflowPx === 0) return 0;
   return -(pixelDeltaX / overflowPx) * 100;
+}
+
+// Vertical twin of dragDeltaToPan — same overflow-based conversion, against
+// the container's height instead of its width, so a vertical drag "feels"
+// exactly as consistent across zoom levels as a horizontal one.
+export function dragDeltaToTilt(pixelDeltaY, containerHeight, zoom) {
+  if (containerHeight <= 0) return 0;
+  const overflowPx = Math.max(0, (zoom - 1) * containerHeight);
+  if (overflowPx === 0) return 0;
+  return -(pixelDeltaY / overflowPx) * 100;
 }
 
 // Inertia: simple exponential decay per animation frame. Returns the next
@@ -83,12 +101,21 @@ export function exceedsDragThreshold(dx, dy, thresholdPx = DRAG_THRESHOLD_PX) {
   return Math.hypot(dx, dy) > thresholdPx;
 }
 
-export function transformFor(pan, zoom, parallaxFactor) {
+// `tilt` is pan's vertical twin (0-100, 50 centred); it defaults to 50
+// (dead centre) so every existing caller that only ever looked left/right
+// keeps producing the exact same transform it always did. The same safe-
+// overflow bound applies to translateY as to translateX: a CSS percentage
+// on translateY is relative to the element's own height, exactly as
+// translateX's is to its own width, so (scale-1)/(2*scale)*100 is the right
+// ceiling for both axes of the same uniformly-scaled element.
+export function transformFor(pan, zoom, parallaxFactor, tilt = 50) {
   const scale = 1 + (zoom - 1) * parallaxFactor;
   const maxOffsetPercent = scale > 1 ? ((scale - 1) / (2 * scale)) * 100 : 0;
-  // pan is always clamped to [0,100] upstream (clampPan), so this is always
-  // within [-1, 1] — no extra clamping needed.
+  // pan/tilt are always clamped to [0,100] upstream (clampPan/clampTilt), so
+  // these are always within [-1, 1] — no extra clamping needed.
   const normalizedPan = (pan - 50) / 50;
+  const normalizedTilt = (tilt - 50) / 50;
   const panOffsetPercent = -normalizedPan * maxOffsetPercent;
-  return `scale(${scale}) translateX(${panOffsetPercent}%)`;
+  const tiltOffsetPercent = -normalizedTilt * maxOffsetPercent;
+  return `scale(${scale}) translate(${panOffsetPercent}%, ${tiltOffsetPercent}%)`;
 }

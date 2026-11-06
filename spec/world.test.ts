@@ -55,7 +55,7 @@ describe("the museum world", () => {
       parentSceneId: string | null;
       interactiveObjects: Array<{ targetSceneId?: string; shape: Shape }>;
       nav?: { forward?: { targetSceneId: string }; back?: { targetSceneId: string } };
-      camera: { minPan: number; maxPan: number; minZoom: number; maxZoom: number };
+      camera: { minPan: number; maxPan: number; minTilt: number; maxTilt: number; minZoom: number; maxZoom: number };
     };
     const byId = new Map<string, Scene>(scenes.map((s: Scene) => [s.id, s]));
     for (const gallery of galleries) {
@@ -112,6 +112,7 @@ describe("the museum world", () => {
       // "camera can go anywhere" default.
       for (const scene of [main, closeup]) {
         expect(scene.camera.minPan).toBeLessThanOrEqual(scene.camera.maxPan);
+        expect(scene.camera.minTilt).toBeLessThanOrEqual(scene.camera.maxTilt);
         expect(scene.camera.minZoom).toBeLessThanOrEqual(scene.camera.maxZoom);
         expect(scene.camera.minZoom).toBeGreaterThan(0);
       }
