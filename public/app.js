@@ -2847,6 +2847,17 @@ const BUILTIN_PREVIEW_REFERENCE_WIDTH = 380;
 // wilting rose at a frame's foot) against the point blur became obviously
 // worse than simply showing a little more real surrounding context.
 const BUILTIN_MAX_MAGNIFICATION = 6;
+// The source scene paintings have real, baked-in regional softness —
+// shadowed cabinet interiors and recessed furniture are painted with less
+// fine detail than brightly lit foreground areas, independent of any crop
+// or magnification math above (confirmed by comparing the raw source
+// image's own pixels, not just the rendered preview). A mild unity-sum
+// unsharp convolution compensates for that without a second source asset.
+// Chosen by spot-checking it against several already-crisp objects first —
+// a stronger kernel measurably sharpens the soft regions further but starts
+// introducing visible mottling in flat dark backgrounds on crisp ones, so
+// this is the strongest kernel that left those unaffected.
+const BUILTIN_SHARPEN_KERNEL = "0 -1 0 -1 5 -1 0 -1 0";
 
 function translateShape(shape, dx, dy) {
   if (shape.type === "ellipse") return { ...shape, cx: shape.cx + dx, cy: shape.cy + dy };
@@ -2921,11 +2932,25 @@ function renderBuiltinObjectVisual(container, exhibit) {
   svg.setAttribute("class", "builtin-object-crop");
 
   const clipId = nextClipId();
+  const filterId = nextClipId();
   const defs = document.createElementNS(SVG_NS, "defs");
   const clipPath = document.createElementNS(SVG_NS, "clipPath");
   clipPath.setAttribute("id", clipId);
   clipPath.appendChild(svgShapeNode(translateShape(cropInfo.shape, -minX, -minY)));
   defs.appendChild(clipPath);
+  const filter = document.createElementNS(SVG_NS, "filter");
+  filter.setAttribute("id", filterId);
+  filter.setAttribute("x", "-20%");
+  filter.setAttribute("y", "-20%");
+  filter.setAttribute("width", "140%");
+  filter.setAttribute("height", "140%");
+  const convolve = document.createElementNS(SVG_NS, "feConvolveMatrix");
+  convolve.setAttribute("order", "3");
+  convolve.setAttribute("kernelMatrix", BUILTIN_SHARPEN_KERNEL);
+  convolve.setAttribute("divisor", "1");
+  convolve.setAttribute("preserveAlpha", "true");
+  filter.appendChild(convolve);
+  defs.appendChild(filter);
   svg.appendChild(defs);
 
   const image = document.createElementNS(SVG_NS, "image");
@@ -2936,6 +2961,7 @@ function renderBuiltinObjectVisual(container, exhibit) {
   image.setAttribute("width", String(sceneWidth));
   image.setAttribute("height", String(sceneHeight));
   image.setAttribute("clip-path", `url(#${clipId})`);
+  image.setAttribute("filter", `url(#${filterId})`);
   image.setAttribute("preserveAspectRatio", "xMidYMid slice");
   svg.appendChild(image);
 
