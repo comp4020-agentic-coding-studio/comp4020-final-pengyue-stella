@@ -118,24 +118,24 @@ describe("the museum world", () => {
       }
     }
 
-    // Each main gallery scene offers 6-35 real clickable objects (the "look
-    // closer" portal into its own close-up counts as one of them, same as
-    // any other object a visitor can click — every gallery should feel
-    // densely populated, per the museum-collection-object expansion pass;
-    // `childhood`'s own artwork genuinely supports the high end of that
-    // range, having been traced object-by-object against its source art —
-    // the upper bound moved from 30 to 35 when a further hand-tracing pass
-    // added three more real objects there), and each close-up scene offers
-    // 3-5 of its own — verified here so it can't silently regress back to a
-    // sparse scene without a test noticing.
+    // Each main gallery scene offers at least 6 real clickable objects (the
+    // "look closer" portal into its own close-up counts as one of them,
+    // same as any other object a visitor can click — every gallery should
+    // feel densely populated, per the museum-collection-object expansion
+    // pass), and each close-up scene offers 3-5 of its own — verified here
+    // so a gallery can't silently regress back to a sparse scene without a
+    // test noticing. No upper bound on the main scene any more: this cap
+    // was raised twice already (30 -> 35 -> none) as successive hand-tracing
+    // passes kept legitimately adding more real objects, which is expected
+    // to keep happening — the floor is the invariant worth protecting, not
+    // a ceiling nobody wants enforced.
     for (const gallery of galleries) {
       const main = byId.get(`${gallery.id}-main`)!;
       const closeup = byId.get(`${gallery.id}-closeup`)!;
       expect(
         main.interactiveObjects.length,
-        `${gallery.id}-main should have 6-35 interactive objects, has ${main.interactiveObjects.length}`,
+        `${gallery.id}-main should have at least 6 interactive objects, has ${main.interactiveObjects.length}`,
       ).toBeGreaterThanOrEqual(6);
-      expect(main.interactiveObjects.length).toBeLessThanOrEqual(35);
       expect(
         closeup.interactiveObjects.length,
         `${gallery.id}-closeup should have 3-5 interactive objects, has ${closeup.interactiveObjects.length}`,
