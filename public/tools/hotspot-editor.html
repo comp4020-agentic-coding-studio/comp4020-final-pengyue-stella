@@ -1199,7 +1199,13 @@ import { env, SamModel, AutoProcessor, RawImage, Tensor } from "./vendor-sam/tra
       // requires) — one worker thread is plenty for one box at a time.
       env.backends.onnx.wasm.numThreads = 1;
       const model_id = "slimsam-77-uniform";
-      samModel = await SamModel.from_pretrained(model_id, { quantized: true });
+      // Full-precision weights, not the quantized (int8) ones — mask edges
+      // on these painterly, detail-heavy source images (feathers, blades,
+      // thin carved patterns) visibly softened under quantization. Both
+      // .onnx files are vendored at full size in vendor-sam/models/ for
+      // this; the quantized pair stays alongside, unused, rather than being
+      // deleted, in case a future low-power device needs the faster path.
+      samModel = await SamModel.from_pretrained(model_id, { quantized: false });
       samProcessor = await AutoProcessor.from_pretrained(model_id);
       setAiTraceStatus("Model ready — draw a box around one object.");
     })();
@@ -1464,8 +1470,14 @@ import { env, SamModel, AutoProcessor, RawImage, Tensor } from "./vendor-sam/tra
         return;
       }
 
+      // Point cap raised from an earlier 40 to 100: the full-precision
+      // model's mask edges (see samModel load above) carry real detail
+      // worth keeping — 40 points was flattening exactly the fine-edged
+      // objects (feathers, blades, carved trim) this change was meant to
+      // help with. Still hand-editable afterward; a stray extra vertex is
+      // a quick Delete, where a point that was never captured at all isn't.
       const epsilon = Math.max(1.2, Math.min(gw, gh) * 0.01);
-      const simplified = decimateToCount(simplifyClosedPolygon(boundary, epsilon), 40);
+      const simplified = decimateToCount(simplifyClosedPolygon(boundary, epsilon), 100);
 
       polygonPoints = simplified.map((p) => ({ x: mx0 + p.x, y: my0 + p.y }));
       polygonFinished = true;
