@@ -370,21 +370,33 @@ describe("donor-controlled scale and rotation", () => {
   it("defaults rotation to 0 when omitted", async () => {
     const { presets } = await (await fetch(url("/api/relic-presets"))).json();
     const preset = presets.find((p: { category: string }) => p.category === "specimen");
-    const { gallery, slot, surface, u, v } = await freeSpotFor("specimen", "plinth");
-    const res = await donate({
-      galleryId: gallery.id,
-      slotId: slot.id,
-      surfaceId: surface.id,
-      u,
-      v,
-      subtype: preset.subtype,
-      title: `no rotation ${Date.now()}`,
-      originClaim: "x",
-      donorName: "Spec Visitor",
-      visualId: preset.id,
-    });
-    expect(res.status).toBe(201);
-    const { exhibit } = await res.json();
+
+    // Same retry-on-409 loop as the test above: freeSpotFor's own read
+    // (what's occupied) and this donation's write race against whatever
+    // else is concurrently donating into the same gallery/surface across
+    // other test files running in parallel, so a single candidate spot can
+    // already be taken by the time the POST lands.
+    let res: Response | undefined;
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { gallery, slot, surface, u, v } = await freeSpotFor("specimen", "plinth");
+      res = await donate({
+        galleryId: gallery.id,
+        slotId: slot.id,
+        surfaceId: surface.id,
+        u,
+        v,
+        subtype: preset.subtype,
+        title: `no rotation ${Date.now()}-${attempt}`,
+        originClaim: "x",
+        donorName: "Spec Visitor",
+        visualId: preset.id,
+      });
+      lastStatus = res.status;
+      if (res.status !== 409) break;
+    }
+    expect(lastStatus).toBe(201);
+    const { exhibit } = await res!.json();
     expect(exhibit.placement.rotation).toBe(0);
   });
 
