@@ -103,6 +103,15 @@ something under `vendor-sam/` is actually requested.
   "currently accepted" account is a value *derived* from votes at read
   time, never a field written directly — don't introduce a code path that
   writes it.
+  - **Narrow exception: a builtin lore object's own system-seeded account**
+    (`db.js`'s `seedBuiltinLoreExhibits`, `author_name = "Museum collection"`,
+    never a real visitor) may be re-synced from `world.js`'s current
+    `label`/`text` on every server boot, so an authored wording change in
+    source control actually takes effect instead of silently freezing at
+    whatever text first got seeded. This exists only because this one
+    account was never a visitor's testimony to begin with — a real account
+    (anything with `author_id` set to an actual visitor) is never touched by
+    this path or any other, full stop.
 - **One active vote per `(accountId, visitorId)`, enforced at the database
   layer** (a unique constraint), not just checked in application code — a
   repeat vote is an `UPDATE`, never a second row. A tie renders as

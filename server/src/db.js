@@ -924,8 +924,14 @@ export function seedFoundingCollection() {
 // Founding Collection one — same table, same accounts/votes machinery, the
 // only difference is `origin = 'builtin'` and a stable id derived from the
 // world object's own id (`exhibit_builtin_<objectId>`), so re-running this
-// on every boot is a no-op once seeded (same `existing` guard pattern as
-// `seedFoundingCollection` above).
+// on every boot is idempotent (same `existing` guard pattern as
+// `seedFoundingCollection` above) — EXCEPT that an already-seeded object's
+// own title and lore text ARE re-synced from world.js's current `label`/
+// `text` every boot (see CLAUDE.md's narrow exception to "an account is
+// never mutated"). That sync only ever touches this one system-seeded
+// account (`author_id = ""`, never a real visitor's own id) and nothing
+// else — a real visitor's testimony/challenge/revision account is never
+// touched by this function, or by any other code path.
 //
 // A built-in object has no gallery/slot/surface placement of its own — it
 // renders at its world-authored `shape`, never a second surface-anchored
@@ -942,11 +948,23 @@ export function seedBuiltinLoreExhibits() {
   );
   for (const object of allBuiltinLoreObjects()) {
     const exhibitId = `exhibit_builtin_${object.id}`;
+    const accountId = `account_builtin_${object.id}`;
     const existing = db.prepare("SELECT id FROM exhibits WHERE id = ?").get(exhibitId);
-    if (existing) continue;
+    if (existing) {
+      // Re-sync, scoped tightly: only this exhibit's title, and only the
+      // system-seeded account whose id this same function always derives
+      // (author_id = "" guards against ever touching a real visitor row
+      // even if ids somehow collided).
+      db.prepare("UPDATE exhibits SET title = ? WHERE id = ?").run(object.label, exhibitId);
+      db.prepare("UPDATE accounts SET body = ? WHERE id = ? AND exhibit_id = ? AND author_id = ''").run(
+        object.text,
+        accountId,
+        exhibitId,
+      );
+      continue;
+    }
 
     const virtualSlotId = `${object.id}_virtual_slot`;
-    const accountId = `account_builtin_${object.id}`;
     db.exec("BEGIN IMMEDIATE");
     try {
       insertVirtualSlot.run(virtualSlotId, object.galleryId);
