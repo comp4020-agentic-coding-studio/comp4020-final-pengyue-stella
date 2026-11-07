@@ -1932,12 +1932,6 @@ const GALLERY_LAYOUT = [
       },
       {
         type: "lore",
-        label: "A vase of peacock feathers",
-        text: "Replaced each season from a bird nobody on staff has ever been asked to locate. The feathers never fade, and the vase has never once needed water.",
-        shape: polygon([[1225, 405], [1245, 395], [1265, 398], [1280, 410], [1290, 440], [1292, 470], [1295, 500], [1290, 520], [1278, 535], [1260, 540], [1240, 538], [1222, 530], [1212, 515], [1208, 490], [1210, 460], [1215, 430]]),
-      },
-      {
-        type: "lore",
         label: "A cloisonné globe on the upper shelf",
         text: "No country on its surface matches a map conservation has been able to find, in any atlas from any year it could plausibly have been made.",
         shape: polygon([[1585, 150], [1600, 145], [1615, 148], [1624, 160], [1626, 175], [1622, 190], [1610, 200], [1595, 200], [1584, 192], [1580, 178], [1580, 163]]),

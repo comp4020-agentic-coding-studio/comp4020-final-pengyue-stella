@@ -174,7 +174,6 @@ const CHILDHOOD_STORIES = [
   ["The Moon-Turn Ballerina", "She turns once for each visitor. On the fifth turn, she points toward the vanished door. The music box stays silent."],
   ["The Nightfall Casket", "The crescent case is warm to the touch. Five names are etched inside its lid. Lenora's is the only one not crossed out."],
   ["The Dustless Candelabrum", "Its candles were never lit. They cast flames in the mirror anyway. The fifth flame bends toward the nursery bed."],
-  ["The Vesper Plume Vase", "The feathers never fade. Lenora used one as a pen. Its tip still writes the same warning: Do not let it learn your face."],
   ["The Child's Impossible Globe", "No country matches a real map. One island matches the black sand in the other rooms. A child labelled it Home."],
   ["The Three Duelists", "Three figures fight behind closed glass. A fourth lies painted on the floor. A fifth shadow watches from the curtain."],
   ["The Half-Curtain World", "Its curtain never fully closes. Through the gap, the painted sky changes with the hall clock. At 1:13, there are two moons."],
