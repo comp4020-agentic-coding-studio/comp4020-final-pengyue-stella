@@ -399,15 +399,47 @@ const GALLERY_LAYOUT = [
     objects: [
       {
         type: "lore",
-        label: "Look closer: The Watching Portrait",
+        label: "The Watching Portrait",
         text: "The mirror fogs from the edges inward, never from breath. Conservation notes say the fog always clears last around whoever has already looked away — the same note, in the same hand, every time it is written.",
-        closeupSceneId: "portraits-closeup",
-        shape: polygon([[670, 235], [820, 235], [820, 610], [670, 610]]),
+        shape: polygon([
+          [832, 419], [832, 421], [835, 422], [838, 422], [837, 426], [834, 428],
+          [832, 432], [833, 434], [835, 436], [834, 439], [832, 441], [834, 442],
+          [834, 446], [835, 448], [834, 452], [834, 455], [835, 524], [742, 525],
+          [742, 522], [740, 520], [737, 517], [735, 515], [732, 513], [729, 511],
+          [724, 509], [720, 508], [717, 508], [713, 508], [710, 509], [707, 510],
+          [705, 511], [701, 513], [699, 515], [696, 518], [694, 521], [693, 523],
+          [692, 525], [672, 526], [673, 407], [673, 401], [673, 399], [674, 395],
+          [673, 392], [672, 390], [672, 388], [671, 385], [672, 380], [671, 377],
+          [672, 372], [675, 370], [672, 369], [672, 366], [673, 363], [674, 360],
+          [675, 358], [676, 355], [672, 351], [673, 348], [675, 345], [674, 343],
+          [670, 343], [672, 339], [674, 337], [675, 333], [676, 331], [675, 328],
+          [672, 324], [672, 321], [674, 317], [673, 314], [671, 312], [670, 310],
+          [671, 307], [674, 304], [675, 301], [676, 273], [676, 270], [674, 267],
+          [672, 265], [672, 260], [674, 258], [673, 255], [671, 252], [671, 248],
+          [671, 244], [672, 240], [670, 237], [671, 234], [674, 236], [677, 235],
+          [680, 235], [683, 235], [685, 234], [689, 234], [692, 236], [697, 234],
+          [699, 231], [702, 232], [703, 235], [714, 235], [713, 232], [710, 231],
+          [711, 228], [714, 227], [716, 228], [720, 227], [722, 224], [725, 221],
+          [723, 217], [723, 214], [725, 213], [727, 209], [730, 207], [733, 205],
+          [738, 205], [738, 202], [739, 199], [743, 196], [747, 196], [747, 194],
+          [747, 191], [749, 189], [751, 188], [754, 187], [756, 189], [758, 191],
+          [761, 191], [763, 194], [765, 195], [767, 197], [773, 199], [776, 200],
+          [778, 203], [781, 204], [784, 206], [787, 207], [784, 210], [782, 213],
+          [783, 216], [786, 215], [789, 217], [791, 220], [794, 222], [795, 217],
+          [797, 221], [796, 226], [800, 225], [803, 226], [807, 225], [810, 223],
+          [814, 222], [817, 222], [820, 220], [826, 220], [832, 221], [835, 223],
+          [835, 233], [834, 241], [835, 245], [836, 248], [834, 251], [834, 258],
+          [835, 343], [835, 353], [835, 358], [835, 362], [836, 366], [837, 370],
+          [837, 373], [835, 376], [836, 379], [837, 381], [836, 385], [836, 389],
+          [836, 392], [835, 395], [837, 398], [839, 400], [838, 403], [837, 405],
+          [836, 408], [834, 411], [835, 415],
+        ]),
       },
       {
         type: "lore",
         label: "The left plinth bust",
         text: "The bust carries no accession record, only a small pencilled '1.' on its underside, in the same hand as the first curator's own notebooks. Staff rotate it a quarter turn at every inventory, to see if a visitor notices it now faces a different way. Someone always does.",
+        detailImage: "/assets/builtin-details/left-plinth-bust.png",
         shape: polygon([
           [659, 507.5], [634, 507.5], [633.5, 502], [639.5, 499], [638.5, 489],
           [623.5, 474], [625.5, 466], [636, 461.5], [639.5, 458], [634.5, 443],
@@ -421,6 +453,7 @@ const GALLERY_LAYOUT = [
         type: "lore",
         label: "The right plinth bust",
         text: "Its twin was catalogued in the same acquisition, but no two inventories since have agreed on which bust is the original and which the copy.",
+        detailImage: "/assets/builtin-details/right-plinth-bust.png",
         shape: polygon([
           [875, 506.5], [858, 506.5], [858.5, 488], [852.5, 483], [852, 478.5],
           [846.5, 478], [848.5, 468], [862.5, 461], [861.5, 455], [857.5, 453],
@@ -433,24 +466,55 @@ const GALLERY_LAYOUT = [
         type: "lore",
         label: "A raven that never blinks",
         text: "It has perched in the same spot since the inventory began. No one recalls uncaging it; no one has ever tried.",
-        shape: polygon([[212, 478], [208, 477], [207, 474], [200, 478], [181, 478], [180, 474], [175, 472], [164, 476], [158, 472], [158, 468], [168, 463], [167, 460], [164, 460], [164, 456], [175, 458], [180, 453], [180, 448], [176, 446], [176, 442], [205, 416], [225, 408], [234, 400], [240, 398], [247, 398], [248, 402], [260, 404], [260, 408], [252, 410], [247, 418], [240, 418], [234, 422], [240, 428], [240, 434], [231, 432], [226, 440], [220, 440], [218, 442], [218, 445], [212, 448], [212, 452], [208, 458], [199, 452], [189, 456], [184, 462], [185, 466], [189, 466], [221, 460], [222, 465], [218, 467], [218, 470], [212, 472]]),
+        shape: polygon([
+          [211, 455], [214, 454], [215, 457], [217, 459], [218, 462], [217, 465],
+          [222, 467], [228, 467], [228, 465], [227, 464], [224, 462], [222, 460],
+          [220, 457], [219, 454], [221, 451], [225, 450], [228, 448], [231, 445],
+          [236, 442], [239, 438], [243, 433], [244, 429], [246, 425], [247, 420],
+          [249, 416], [252, 412], [255, 410], [259, 410], [263, 410], [265, 409],
+          [265, 407], [264, 405], [260, 404], [256, 403], [254, 402], [251, 400],
+          [249, 399], [246, 398], [243, 397], [240, 397], [237, 399], [234, 401],
+          [231, 403], [228, 406], [226, 408], [222, 408], [219, 409], [217, 410],
+          [214, 411], [211, 413], [208, 414], [206, 416], [203, 418], [201, 420],
+          [199, 422], [197, 423], [195, 425], [192, 428], [190, 430], [187, 432],
+          [185, 435], [182, 438], [180, 439], [178, 441], [176, 444], [176, 446],
+          [173, 449], [180, 447], [179, 451], [178, 453], [175, 456], [173, 457],
+          [170, 458], [168, 462], [166, 464], [164, 465], [162, 467], [160, 469],
+          [158, 471], [158, 474], [161, 475], [164, 477], [167, 477], [170, 475],
+          [173, 473], [177, 471], [182, 466], [188, 462], [192, 458], [195, 454],
+          [198, 456], [201, 453], [204, 455], [204, 457], [206, 459], [207, 462],
+          [204, 465], [203, 467], [208, 466], [210, 466], [209, 459],
+        ]),
       },
       {
         type: "lore",
         label: "The second framed portrait",
         text: "Unsigned, undated, and — by every conservator's measurement — painted in exactly the same hand as the gallery's central portrait, though the museum has never catalogued them as a pair. A loan slip once tucked behind the canvas named a borrower; only the surname survives the damp, and it matches no curator the museum has ever listed on staff.",
+        detailImage: "/assets/builtin-details/second-framed-portrait.png",
         shape: polygon([
-          [1065, 283], [1075, 290], [1085, 298], [1090, 305], [1097, 310],
-          [1100, 320], [1100, 395], [1095, 405], [1085, 408], [1020, 408],
-          [1010, 405], [1005, 395], [1005, 320], [1010, 310], [1018, 300],
-          [1030, 292], [1045, 286], [1055, 283],
+          [1031, 327], [1080, 316], [1080, 400], [1031, 408], [1030, 332],
         ]),
       },
       {
         type: "lore",
         label: "A death's-head bust on the far pedestal",
         text: "Donated anonymously, decades before the gallery itself existed. The donation ledger lists only one line in its entry: 'it asked to come inside.'",
-        shape: polygon([[97, 655], [97, 600], [93, 565], [99, 535], [113, 512], [140, 498], [168, 498], [190, 514], [201, 545], [204, 580], [204, 655]]),
+        shape: polygon([
+          [204, 663], [210, 663], [215, 662], [220, 662], [228, 661], [233, 660],
+          [238, 660], [238, 652], [235, 650], [231, 650], [229, 647], [230, 643],
+          [232, 642], [234, 639], [234, 636], [232, 635], [231, 632], [230, 630],
+          [228, 627], [229, 536], [228, 532], [228, 528], [227, 523], [226, 519],
+          [224, 516], [222, 511], [219, 507], [215, 502], [211, 499], [208, 496],
+          [203, 493], [199, 490], [195, 488], [191, 487], [187, 486], [184, 485],
+          [180, 484], [178, 484], [177, 481], [180, 479], [179, 477], [177, 473],
+          [174, 471], [172, 473], [170, 475], [167, 478], [171, 479], [171, 482],
+          [170, 484], [166, 484], [162, 485], [158, 486], [154, 487], [151, 489],
+          [147, 490], [144, 492], [141, 493], [138, 495], [135, 497], [132, 499],
+          [129, 502], [128, 505], [125, 507], [124, 509], [121, 512], [120, 516],
+          [119, 519], [118, 521], [117, 526], [117, 530], [118, 659], [126, 659],
+          [132, 658], [143, 657], [151, 657], [162, 657], [166, 661], [166, 667],
+          [173, 666], [183, 666], [191, 665], [198, 665],
+        ]),
       },
       {
         type: "lore",
@@ -479,13 +543,24 @@ const GALLERY_LAYOUT = [
         type: "lore",
         label: "The woman walking away down the corridor",
         text: "Every restoration photograph of this painting shows her a few steps further down the hall than the one before it — always receding, never arriving.",
-        shape: polygon([[160, 148], [312, 145], [315, 385], [158, 388]]),
+        shape: polygon([
+          [168, 100], [328, 163], [322, 434], [299, 431], [299, 445], [239, 440],
+          [241, 436], [244, 432], [245, 427], [247, 424], [247, 420], [248, 417],
+          [251, 414], [253, 412], [257, 410], [260, 410], [264, 410], [267, 411],
+          [268, 409], [266, 407], [262, 405], [259, 404], [256, 403], [252, 401],
+          [251, 399], [248, 398], [244, 398], [240, 398], [235, 399], [232, 402],
+          [230, 404], [226, 407], [224, 409], [220, 410], [216, 411], [212, 413],
+          [208, 414], [205, 417], [202, 419], [199, 420], [197, 423], [194, 426],
+          [188, 431], [159, 429], [168, 107],
+        ]),
       },
       {
         type: "lore",
-        label: "A portrait of an owl mid-turn",
-        text: "The framer's invoice describes 'one owl, startled.' No one on staff will say what it was startled by, or whether the answer is still in the room.",
-        shape: polygon([[357, 228], [414, 230], [415, 378], [355, 380]]),
+        label: "Eagle",
+        text: "The framer's invoice describes 'one eagle, mid-strike.' No one on staff will say what it was striking at, or whether the answer is still in the room.",
+        shape: polygon([
+          [352, 235], [409, 254], [409, 382], [354, 372], [353, 240],
+        ]),
       },
       {
         type: "lore",
@@ -501,9 +576,33 @@ const GALLERY_LAYOUT = [
         label: "A porcelain vase beside a terrestrial globe",
         text: "The globe's continents match no accepted historical map. Cartography consultants disagree only on which century it's wrong for.",
         shape: polygon([
-          [1143, 250], [1175, 250], [1197, 272], [1210, 330], [1213, 388],
-          [1200, 428], [1192, 468], [1200, 498], [1188, 512], [1140, 512],
-          [1130, 498], [1142, 468], [1132, 428], [1103, 378], [1100, 320], [1112, 278],
+          [1167, 474], [1168, 471], [1169, 471], [1169, 468], [1171, 466], [1174, 464],
+          [1174, 461], [1172, 460], [1170, 457], [1168, 455], [1167, 453], [1164, 450],
+          [1162, 447], [1161, 443], [1160, 437], [1160, 433], [1160, 429], [1163, 426],
+          [1165, 422], [1167, 418], [1170, 416], [1172, 412], [1173, 409], [1173, 405],
+          [1172, 401], [1170, 397], [1168, 395], [1170, 392], [1170, 390], [1169, 388],
+          [1165, 386], [1160, 387], [1156, 388], [1151, 393], [1147, 395], [1145, 393],
+          [1147, 392], [1144, 391], [1146, 389], [1150, 388], [1153, 388], [1154, 384],
+          [1156, 384], [1155, 381], [1154, 379], [1155, 375], [1155, 371], [1156, 366],
+          [1155, 362], [1150, 362], [1147, 365], [1145, 362], [1141, 360], [1140, 357],
+          [1140, 355], [1137, 358], [1134, 362], [1130, 363], [1130, 359], [1134, 357],
+          [1136, 353], [1133, 350], [1132, 345], [1135, 345], [1137, 341], [1137, 338],
+          [1136, 336], [1131, 334], [1125, 334], [1122, 329], [1124, 327], [1129, 327],
+          [1132, 327], [1135, 329], [1138, 331], [1142, 334], [1144, 333], [1148, 330],
+          [1151, 333], [1151, 327], [1149, 322], [1148, 318], [1147, 314], [1144, 310],
+          [1141, 308], [1139, 305], [1139, 302], [1143, 302], [1147, 304], [1150, 307],
+          [1152, 308], [1155, 307], [1157, 305], [1161, 305], [1164, 305], [1166, 309],
+          [1167, 313], [1170, 313], [1172, 310], [1175, 310], [1177, 314], [1178, 316],
+          [1183, 318], [1186, 320], [1186, 325], [1186, 329], [1183, 333], [1185, 335],
+          [1189, 333], [1193, 334], [1197, 333], [1198, 329], [1199, 325], [1206, 322],
+          [1210, 321], [1214, 323], [1216, 325], [1216, 329], [1216, 334], [1217, 340],
+          [1217, 346], [1217, 351], [1218, 357], [1218, 362], [1217, 369], [1217, 374],
+          [1217, 379], [1213, 377], [1210, 379], [1211, 382], [1209, 385], [1206, 379],
+          [1202, 378], [1200, 382], [1199, 385], [1197, 391], [1199, 393], [1194, 394],
+          [1190, 398], [1189, 402], [1188, 406], [1189, 410], [1192, 413], [1195, 416],
+          [1200, 420], [1202, 424], [1204, 428], [1205, 434], [1205, 439], [1204, 442],
+          [1203, 444], [1201, 447], [1200, 451], [1197, 455], [1195, 459], [1194, 462],
+          [1195, 466], [1197, 468], [1199, 471], [1201, 473], [1169, 474],
         ]),
       },
       {
@@ -547,49 +646,136 @@ const GALLERY_LAYOUT = [
         label: "A gentleman in a top hat, in a deep alcove",
         text: "He is never looking at the viewer in any photograph taken of the painting, yet every visitor who stands before him describes the opposite.",
         shape: polygon([
-          [550, 392], [562, 388], [575, 392], [582, 402], [584, 425],
-          [586, 455], [587, 485], [588, 515], [540, 515], [539, 485],
-          [541, 455], [543, 425], [546, 402],
+          [545, 416], [545, 409], [547, 404], [552, 397], [559, 394], [565, 395],
+          [570, 397], [576, 401], [581, 408], [581, 412], [581, 418], [580, 500],
+          [545, 501], [546, 422],
         ]),
       },
       {
         type: "lore",
         label: "A bearded man in a small frame",
         text: "The accession card lists him as 'unidentified sitter,' though three separate donors have each, at different times, insisted he was a relative of theirs.",
-        shape: polygon([[303, 436], [362, 436], [362, 528], [303, 528]]),
+        shape: polygon([
+          [298, 432], [308, 431], [323, 435], [336, 438], [354, 441], [369, 442],
+          [368, 456], [369, 463], [368, 467], [368, 479], [368, 492], [368, 505],
+          [367, 517], [368, 540], [354, 539], [338, 538], [323, 539], [306, 538],
+          [297, 537], [299, 534], [302, 531], [303, 529], [303, 525], [302, 522],
+          [300, 519], [301, 516], [304, 513], [303, 509], [301, 507], [299, 505],
+          [298, 435],
+        ]),
       },
       {
         type: "lore",
         label: "A brass armillary sphere on its stand",
         text: "Its rings are set to a date in the sky that hasn't occurred yet. The astronomer who calibrates such things for the museum has refused to return a second time — the third such sphere in the collection, and the third left set to the same unarrived date, though no two were acquired within a decade of each other.",
         shape: polygon([
-          [1122, 592], [1155, 585], [1185, 600], [1195, 620], [1190, 645],
-          [1175, 655], [1178, 670], [1168, 685], [1172, 700], [1160, 715],
-          [1130, 715], [1118, 700], [1122, 685], [1112, 670], [1115, 650],
-          [1100, 635], [1102, 615], [1112, 600],
+          [1166, 567], [1164, 569], [1163, 571], [1164, 573], [1162, 574], [1162, 577],
+          [1159, 579], [1156, 580], [1154, 581], [1151, 582], [1149, 584], [1146, 586],
+          [1144, 587], [1141, 590], [1139, 593], [1138, 595], [1136, 598], [1134, 601],
+          [1133, 604], [1132, 608], [1132, 611], [1131, 614], [1130, 616], [1127, 616],
+          [1121, 616], [1119, 619], [1121, 620], [1125, 621], [1127, 622], [1128, 626],
+          [1129, 630], [1129, 633], [1132, 636], [1134, 639], [1135, 642], [1137, 644],
+          [1139, 646], [1140, 648], [1142, 650], [1144, 652], [1147, 654], [1150, 656],
+          [1154, 657], [1157, 657], [1159, 657], [1161, 659], [1160, 662], [1157, 663],
+          [1160, 665], [1161, 667], [1162, 670], [1162, 673], [1161, 675], [1160, 677],
+          [1157, 677], [1156, 680], [1159, 683], [1161, 686], [1161, 690], [1162, 693],
+          [1160, 696], [1159, 699], [1156, 701], [1154, 704], [1151, 706], [1149, 707],
+          [1150, 710], [1151, 713], [1153, 716], [1158, 716], [1161, 717], [1161, 718],
+          [1162, 721], [1162, 723], [1161, 726], [1159, 729], [1155, 732], [1151, 733],
+          [1151, 736], [1153, 736], [1156, 737], [1159, 737], [1162, 737], [1166, 737],
+          [1170, 736], [1174, 736], [1177, 735], [1176, 731], [1174, 729], [1171, 728],
+          [1169, 724], [1169, 722], [1168, 717], [1171, 717], [1174, 717], [1177, 714],
+          [1178, 712], [1178, 710], [1179, 706], [1177, 704], [1173, 703], [1170, 700],
+          [1169, 699], [1168, 696], [1167, 693], [1167, 689], [1168, 686], [1170, 685],
+          [1172, 683], [1173, 679], [1172, 676], [1168, 674], [1167, 672], [1166, 669],
+          [1166, 666], [1168, 663], [1169, 660], [1172, 659], [1175, 659], [1178, 658],
+          [1181, 655], [1184, 654], [1186, 652], [1189, 650], [1191, 648], [1195, 645],
+          [1197, 642], [1199, 638], [1201, 635], [1202, 632], [1200, 631], [1199, 627],
+          [1202, 626], [1205, 621], [1197, 623], [1196, 626], [1194, 628], [1189, 629],
+          [1191, 624], [1192, 621], [1195, 619], [1196, 617], [1193, 617], [1191, 614],
+          [1192, 612], [1196, 611], [1200, 609], [1198, 608], [1195, 608], [1193, 606],
+          [1192, 604], [1190, 602], [1188, 601], [1190, 598], [1189, 595], [1185, 594],
+          [1182, 596], [1179, 596], [1176, 599], [1173, 598], [1174, 596], [1177, 595],
+          [1178, 591], [1176, 590], [1175, 585], [1177, 583], [1175, 578], [1173, 578],
+          [1169, 577], [1169, 573], [1169, 570],
+        ]),
+      },
+      {
+        type: "lore",
+        label: "The Masked Woman",
+        text: "Her mask is painted on the canvas itself, in the same hand and the same layer of pigment as the rest of the face — no restorer has found a boundary where one was added over the other, nor any photograph taken before the mask existed.",
+        shape: polygon([
+          [376, 407], [417, 412], [417, 475], [414, 477], [411, 480], [409, 485],
+          [410, 490], [410, 494], [412, 499], [414, 503], [376, 500], [376, 409],
+        ]),
+      },
+      {
+        type: "lore",
+        label: "Portrait of a Young Girl",
+        text: "Her gaze is recorded as following the viewer across the room in four separate staff complaints, filed a decade apart, each describing the same detail in the same words without having read the one before it.",
+        shape: polygon([
+          [387, 53], [459, 92], [457, 233], [384, 207], [386, 56],
+        ]),
+      },
+      {
+        type: "lore",
+        label: "Exquisite Wooden Box",
+        text: "Locked, with no key ever catalogued for it — the hinge shows wear consistent with regular opening, though no inventory on record has ever listed what was found inside.",
+        shape: polygon([
+          [753, 547], [770, 546], [771, 544], [772, 542], [774, 538], [778, 538],
+          [782, 539], [785, 542], [786, 547], [808, 547], [810, 550], [806, 551],
+          [806, 576], [814, 578], [811, 582], [810, 587], [810, 590], [811, 593],
+          [810, 596], [799, 596], [748, 597], [747, 594], [747, 591], [748, 588],
+          [746, 586], [747, 583], [746, 580], [746, 577], [748, 576], [752, 576],
+          [755, 575], [754, 551],
+        ]),
+      },
+      {
+        type: "lore",
+        label: "The Lady's Back",
+        text: "Painted from behind, in a format conservation has no record of this gallery commissioning — the accession ledger lists a front-facing portrait by the same title, which no one on staff has ever located.",
+        shape: polygon([
+          [1439, 122], [1543, 69], [1548, 251], [1446, 287], [1440, 131],
+        ]),
+      },
+      {
+        type: "lore",
+        label: "Iron Black Cat",
+        text: "Cast rather than carved, in a material the catalogue lists only as 'dark alloy, composition unconfirmed' — the one object in this gallery heavier than its own size would suggest, by a margin conservation has measured but never explained.",
+        shape: polygon([
+          [1569, 334], [1573, 334], [1577, 336], [1580, 336], [1583, 336], [1585, 335],
+          [1589, 335], [1591, 335], [1594, 335], [1598, 329], [1601, 324], [1603, 325],
+          [1604, 328], [1604, 331], [1603, 334], [1603, 338], [1606, 341], [1608, 343],
+          [1611, 344], [1612, 348], [1615, 351], [1617, 353], [1620, 355], [1622, 356],
+          [1625, 357], [1628, 358], [1632, 359], [1636, 360], [1640, 361], [1641, 363],
+          [1644, 365], [1646, 367], [1648, 369], [1651, 373], [1653, 376], [1656, 378],
+          [1658, 432], [1654, 434], [1648, 434], [1645, 433], [1648, 429], [1650, 426],
+          [1649, 421], [1647, 422], [1644, 420], [1641, 419], [1641, 423], [1641, 427],
+          [1638, 430], [1636, 433], [1634, 432], [1626, 433], [1626, 430], [1627, 427],
+          [1630, 424], [1632, 422], [1630, 419], [1628, 417], [1626, 418], [1622, 417],
+          [1620, 416], [1619, 417], [1619, 423], [1619, 427], [1613, 428], [1613, 424],
+          [1612, 418], [1610, 417], [1607, 418], [1606, 420], [1605, 423], [1605, 427],
+          [1601, 430], [1596, 432], [1591, 430], [1593, 427], [1595, 424], [1596, 420],
+          [1597, 416], [1599, 410], [1598, 407], [1596, 404], [1597, 401], [1594, 399],
+          [1593, 396], [1590, 394], [1588, 392], [1584, 384], [1584, 378], [1584, 371],
+          [1582, 367], [1580, 365], [1578, 365], [1574, 364], [1573, 360], [1571, 357],
+          [1569, 355], [1566, 356], [1566, 353], [1571, 352], [1572, 348], [1571, 346],
+          [1571, 343], [1571, 339], [1570, 336],
         ]),
       },
     ],
-    closeupObjects: [
-      {
-        type: "lore",
-        label: "The gilt frame's crest",
-        text: "The carved cartouche at the frame's crown has no family crest the heralds' office can identify. It has been asked to identify it four separate times, by four separate curators, each unaware the others had already asked — the fourth request filed by the first curator, and the last request on record bearing that title at all.",
-        shape: polygon([[207, 47], [212, 40], [222, 34], [234, 31], [246, 30], [258, 32], [268, 36], [278, 42], [285, 49], [288, 55], [282, 60], [270, 64], [255, 66], [240, 65], [225, 62], [213, 57]], PORTRAIT_REF_VIEWBOX),
-      },
-      {
-        type: "lore",
-        label: "The receding corridor in the painting",
-        text: "Measured against the frame, the painted corridor is longer than the wall it hangs on could physically contain. No restorer has ever proposed correcting the perspective.",
-        shape: polygon([[152, 88], [352, 88], [352, 355], [152, 355]], PORTRAIT_REF_VIEWBOX),
-      },
-      {
-        type: "lore",
-        label: "A wilting rose at the frame's foot",
-        text: "Replaced weekly by a hand no roster accounts for. The replacement is always the same species, always already a little wilted.",
-        shape: ellipse(32, 200, 23, 68, PORTRAIT_REF_VIEWBOX),
-      },
-    ],
+    // This gallery's close-up scene has no remaining way in — same
+    // treatment as specimen's and memento's own close-ups (see those
+    // galleries' matching comments): the one object that used to point
+    // here ("Look closer: The Watching Portrait") was retraced and renamed
+    // into an ordinary main-scene object ("The Watching Portrait") instead,
+    // and this scene's own content was removed along with it rather than
+    // left stranded behind a door nobody can open. The scene itself still
+    // exists (every gallery's own `closeup` config generates one
+    // unconditionally) so the world's scene graph stays uniform;
+    // spec/world.test.ts's object-count floor lists this gallery alongside
+    // specimen and memento as a documented zero-object exception.
+    closeupObjects: [],
   },
   {
     id: "memento",
@@ -2639,21 +2825,32 @@ export function allBuiltinLoreObjects() {
   return out;
 }
 
-// Looks up a built-in lore object's own owning scene id + hand-traced shape
-// by its BARE world-object id (e.g. "hall-chandelier", not the exhibit id
+// Looks up a built-in lore object by its BARE world-object id (e.g.
+// "hall-chandelier", not the exhibit id
 // `exhibit_builtin_hall-chandelier` db.js derives it from) — the one piece
 // of world-graph knowledge db.js's `fullExhibit()` needs to attach a
 // `cropInfo` field to a builtin exhibit's DTO, so the client can render the
 // EXACT real painted object (cropped from that scene's own background
 // image via CSS background-position/background-size) as its dossier
-// preview, rather than duplicating this scene/shape lookup itself. Returns
+// preview, rather than duplicating this scene/shape lookup itself. The
+// result also carries an optional purpose-made dossier image. Most objects
+// intentionally omit `detailImage` and keep using the exact scene-art crop;
+// only objects whose source pixels are too small/occluded to make a legible
+// dossier image opt into a higher-resolution reconstruction authored from
+// that same art. Returns
 // null if objectId doesn't name a real `type: "lore"` object anywhere in
 // the world (should never happen for an id shaped like a real builtin
 // exhibit's own id, but defensive regardless — see db.js's fullExhibit).
 export function builtinObjectCropInfo(objectId) {
   for (const scene of SCENES) {
     const object = scene.interactiveObjects.find((o) => o.id === objectId && o.type === "lore");
-    if (object) return { sceneId: scene.id, shape: object.shape };
+    if (object) {
+      return {
+        sceneId: scene.id,
+        shape: object.shape,
+        detailImage: object.detailImage ?? null,
+      };
+    }
   }
   return null;
 }

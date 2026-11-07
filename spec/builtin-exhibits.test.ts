@@ -99,6 +99,19 @@ describe("unified dossier model: built-in museum objects", () => {
     expect(exhibit.cropInfo.sceneId).toBe(`${gallery.id}-main`);
   });
 
+  it("serves curated dossier images for the three low-resolution portrait-gallery objects", async () => {
+    const expected = new Map([
+      ["portraits-object-1", "/assets/builtin-details/left-plinth-bust.png"],
+      ["portraits-object-2", "/assets/builtin-details/right-plinth-bust.png"],
+      ["portraits-object-4", "/assets/builtin-details/second-framed-portrait.png"],
+    ]);
+
+    for (const [objectId, detailImage] of expected) {
+      const { exhibit } = await (await fetch(url(`/api/exhibits/exhibit_builtin_${objectId}`))).json();
+      expect(exhibit.cropInfo.detailImage).toBe(detailImage);
+    }
+  });
+
   it("a non-builtin exhibit never carries cropInfo", async () => {
     const { exhibits } = await (await fetch(url("/api/exhibits"))).json();
     const founding = exhibits.find((e: { id: string }) => e.id.startsWith("exhibit_founding_"));
@@ -106,15 +119,33 @@ describe("unified dossier model: built-in museum objects", () => {
     expect(founding.cropInfo).toBeNull();
   });
 
-  it("the per-gallery marquee closeup trigger is folded into the dossier model too, carrying its own closeupSceneId", async () => {
+  // Not every gallery still has a marquee "look closer" trigger: portraits,
+  // memento, and specimen each had theirs retraced into an ordinary object
+  // once hand-tracing confirmed what it really was, deliberately leaving
+  // that gallery's own close-up scene with no remaining door in (see each
+  // gallery's own comment in server/src/world.js, and spec/world.test.ts's
+  // matching CLOSEUP_OBJECT_COUNT_EXCEPTIONS). This test only needs to
+  // prove the mechanism itself still works end-to-end somewhere real, so
+  // it checks whichever gallery still has one, not a hardcoded galleries[0]
+  // — that index happened to be portraits, one of the retraced galleries,
+  // which is exactly the kind of coincidence a hardcoded index invites.
+  it("the per-gallery marquee closeup trigger (where a gallery still has one) is folded into the dossier model too, carrying its own closeupSceneId", async () => {
     const { scenes, galleries } = await (await fetch(url("/api/world"))).json();
-    const gallery = galleries[0];
-    const main = scenes.find((s: { id: string }) => s.id === `${gallery.id}-main`);
-    const marquee = main.interactiveObjects.find((o: { closeupSceneId?: string }) => o.closeupSceneId);
-    expect(marquee, "expected the gallery's marquee closeup object to carry closeupSceneId").toBeTruthy();
-    expect(marquee.type).toBe("lore");
+    let gallery: { id: string } | undefined;
+    let marquee: { id: string; type: string } | undefined;
+    for (const g of galleries as Array<{ id: string }>) {
+      const main = scenes.find((s: { id: string }) => s.id === `${g.id}-main`);
+      const found = main.interactiveObjects.find((o: { closeupSceneId?: string }) => o.closeupSceneId);
+      if (found) {
+        gallery = g;
+        marquee = found;
+        break;
+      }
+    }
+    expect(gallery, "expected at least one gallery to still have a marquee closeup trigger").toBeTruthy();
+    expect(marquee!.type).toBe("lore");
 
-    const { exhibit } = await (await fetch(url(`/api/exhibits/exhibit_builtin_${marquee.id}`))).json();
-    expect(exhibit.closeupSceneId).toBe(`${gallery.id}-closeup`);
+    const { exhibit } = await (await fetch(url(`/api/exhibits/exhibit_builtin_${marquee!.id}`))).json();
+    expect(exhibit.closeupSceneId).toBe(`${gallery!.id}-closeup`);
   });
 });
