@@ -2752,7 +2752,21 @@ a {
   height: 100%;
 }
 
-.receipt-preview img {
+/* Direct-child combinator deliberately, not a plain descendant selector: a
+   built-in object's own dossier preview (renderBuiltinObjectVisual's
+   .builtin-object-detail-image) is appended straight into .receipt-preview,
+   but a donated relic's preview (renderRelicVisual) wraps its own
+   .relic-visual-img two levels down inside .relic-visual-wrap — a plain
+   `.receipt-preview img` descendant selector was also matching THAT nested
+   image and overriding its own correct `width/height: 100%` sizing with
+   this unrelated 88%-cap/drop-shadow treatment, shrinking it to a box with
+   a different aspect ratio than its sibling full-box layers (.relic-visual-
+   tint/.relic-visual-paint, both still inset:0 at the wrap's own size) —
+   confirmed live: a recolored relic's tint visibly sat offset from the
+   actual art underneath it instead of in registration. Scoped to direct
+   children only, so it keeps styling the built-in path and leaves the
+   donated-relic path to .relic-visual-img's own sizing entirely. */
+.receipt-preview > img {
   max-width: 88%;
   max-height: 88%;
   object-fit: contain;
