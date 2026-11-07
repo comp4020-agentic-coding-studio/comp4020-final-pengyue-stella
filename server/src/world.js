@@ -37,6 +37,7 @@
 // a gallery not in frame at the hub — the persistent "Rooms" menu.
 
 import { SUBTYPES_BY_CATEGORY, SUBTYPE_SET } from "./constants.js";
+import { GALLERY_NARRATIVE, HALL_NAME, storyForObject } from "./narrative.js";
 
 // Object-shaped hotspots and placement surfaces, replacing this file's
 // previous `anchor: {x, y, width, height}` box model (see docs/adr/0007-
@@ -2350,6 +2351,20 @@ function freePlacementShape() {
 
 export const GALLERIES = GALLERY_LAYOUT.map((g) => ({
   ...g,
+  name: GALLERY_NARRATIVE[g.id]?.name ?? g.name,
+  closeup: {
+    ...g.closeup,
+    caption: GALLERY_NARRATIVE[g.id]?.closeupCaption ?? g.closeup.caption,
+    lore: GALLERY_NARRATIVE[g.id]?.closeupLore ?? g.closeup.lore,
+  },
+  objects: g.objects.map((object, index) => ({
+    ...object,
+    ...(storyForObject(`${g.id}-object-${index}`) ?? {}),
+  })),
+  closeupObjects: (g.closeupObjects ?? []).map((object, index) => ({
+    ...object,
+    ...(storyForObject(`${g.id}-closeup-object-${index}`) ?? {}),
+  })),
   slots: SLOT_ANCHORS.map((a, i) => ({
     id: `${g.id}_slot_${i}`,
     x: a.x,
@@ -2433,7 +2448,7 @@ const DONOR_COUNTER_SHAPE = polygon([
 ]);
 
 export function hallConfig() {
-  return { image: "hall", donorCounter: DONOR_COUNTER };
+  return { image: "hall", name: HALL_NAME, donorCounter: DONOR_COUNTER };
 }
 
 // ---------------------------------------------------------------------------
@@ -2686,18 +2701,22 @@ function buildHallScenes() {
       shape: portal.doorShape,
     };
   });
+  const hallObjects = HALL_LORE_OBJECTS.map((object) => ({
+    ...object,
+    ...(storyForObject(object.id) ?? {}),
+  }));
   return [
     {
       id: "hall",
       kind: "main",
       galleryId: null,
       parentSceneId: null,
-      caption: "Entrance Hall",
+      caption: HALL_NAME,
       image: "hall",
       sourceImage: SOURCE_IMAGE_SIZE.hall,
       objectViewBox: sourceImageViewBox("hall"),
       camera: HALL_CAMERA,
-      interactiveObjects: [donateObject, ...portalObjects, ...HALL_LORE_OBJECTS],
+      interactiveObjects: [donateObject, ...portalObjects, ...hallObjects],
       visitorAnchors: HALL_VISITOR_ANCHORS,
       nav: {},
     },
@@ -2733,7 +2752,7 @@ function buildGalleryScenes(gallery) {
     camera: DEFAULT_MAIN_CAMERA,
     interactiveObjects: objects,
     visitorAnchors: VISITOR_ANCHORS,
-    nav: { back: { targetSceneId: HALL_FACING_BY_GALLERY[gallery.id], label: "Back to the Entrance Hall" } },
+    nav: { back: { targetSceneId: HALL_FACING_BY_GALLERY[gallery.id], label: `Back to ${HALL_NAME}` } },
   };
   // A close-up scene's `objectViewBox` is the SVG object-layer's own window
   // onto the source image — it must match whatever crop/zoom the art layer's

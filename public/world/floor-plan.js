@@ -31,7 +31,7 @@ const VIEWBOX = { width: 1000, height: 1000 };
 // placement, corridor anchors); the drawn outline below is a hand-jittered
 // trace of this rectangle, never a crisp rect itself.
 const ROOMS = {
-  hall: { x: 380, y: 720, w: 240, h: 200, label: "Entrance Hall" },
+  hall: { x: 380, y: 720, w: 240, h: 200, label: "The Hall of the Fifth Door" },
   // Outer-left arm of the fan.
   portraits: { x: 26, y: 515, w: 220, h: 190 },
   // Inner-left arm.
@@ -475,7 +475,7 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
 
   const currentRoomId = roomIdForScene(currentSceneId) ?? "hall";
   const rooms = [
-    { id: "hall", name: "Entrance Hall" },
+    { id: "hall", name: world.hall.name ?? "The Hall of the Fifth Door" },
     ...world.galleries.map((g) => ({ id: g.id, name: g.name })),
   ];
 

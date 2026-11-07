@@ -1178,7 +1178,7 @@ function renderDossier(exhibit) {
     `Exhibit #${exhibit.number} · ${exhibit.category.toUpperCase()} · ${exhibit.classification}`;
   el("dossier-title").textContent = exhibit.title;
   const gallery = world.galleries.find((g) => g.id === exhibit.galleryId);
-  const galleryName = gallery?.name ?? (exhibit.galleryId === "hall" ? "Entrance Hall" : exhibit.galleryId);
+  const galleryName = gallery?.name ?? (exhibit.galleryId === "hall" ? world.hall.name : exhibit.galleryId);
   // A built-in museum object was never "donated" — its provenance line
   // reads as recorded by the curator rather than attributed to a visitor.
   const provenance = exhibit.origin === "builtin" ? `recorded by ${exhibit.donorName}` : `donated by ${exhibit.donorName}`;
@@ -1557,17 +1557,17 @@ function tourSteps() {
       highlightEl: null,
     },
     {
-      text: "Objects that answer the light can be examined.",
+      text: "Glowing objects hold clues to Lenora Vane's disappearance.",
       anchorEl: null,
       highlightObjectId: tourHighlightObjectId(),
     },
     {
-      text: "Use the map to visit another collection and see where other visitors are.",
+      text: "Each room keeps a different part of the case. Use the map to choose your trail.",
       anchorEl: "open-rooms",
       highlightEl: "open-rooms",
     },
     {
-      text: "Leave a relic and story, or inspect the museum record.",
+      text: "Open the archive to compare accounts. You may also leave a relic of your own.",
       anchorEl: "open-donate",
       highlightEl: "open-donate",
     },
@@ -1944,7 +1944,7 @@ function roomIdForScene(sceneId) {
 // matching gallery's own name otherwise. Used for the Séance panel's title
 // ("<Room Name> — Room Séance"), never the old single-visitor name.
 function roomNameFor(roomId) {
-  if (roomId === "hall") return "Entrance Hall";
+  if (roomId === "hall") return world?.hall?.name ?? "The Hall of the Fifth Door";
   return world?.galleries.find((g) => g.id === roomId)?.name ?? roomId;
 }
 
@@ -3328,7 +3328,7 @@ function refreshInteractiveObjects() {
   if (focusedObjectId) setFocusedObject(focusedObjectId);
 
   renderCornerNav(scene);
-  galleryTitleEl.textContent = scene.id === "hall" ? "" : scene.caption;
+  galleryTitleEl.textContent = scene.caption;
 }
 
 // ---------------------------------------------------------------------------

@@ -295,7 +295,7 @@ for (const gallery of GALLERIES) {
 // the Entrance Hall's own built-in objects (which belong to no real
 // gallery) — never shown as a donation destination, never counted among
 // the four real galleries the client's `/api/world` reports.
-insertGallery.run("hall", "Entrance Hall", "hall", -1);
+insertGallery.run("hall", "The Hall of the Fifth Door", "hall", -1);
 
 function logEvent(actorId, eventType, payload) {
   db.prepare(
@@ -865,23 +865,23 @@ export function occupiedSlotIds() {
 const FOUNDING_COLLECTION = {
   portraits: {
     subtype: "painting",
-    title: "The Unfinished Sitter",
-    originClaim: "Commissioned in 1884; the sitter's face was never completed. The museum's first curator acquired it exactly as left on the easel, and signed the intake card — the only founding piece in the collection she signed by name, a name no later record repeats.",
+    title: "Portrait Without a Face",
+    originClaim: "Lenora Vane signed this portrait into the collection. The sitter's face was already gone. Under moonlight, the empty paint mouths five letters: V A N E, then one more.",
   },
   memento: {
     subtype: "clock",
-    title: "The Clock That Keeps No Hour",
-    originClaim: "Found stopped at no particular time in an estate clearance, in the same lot as the first curator's own effects. It has never been wound since arriving, yet it is never found at the same hour twice.",
+    title: "The Clock Between Minutes",
+    originClaim: "This clock came from Lenora's private rooms. It has no mark for 1:13. Each night, its hands vanish for exactly one minute.",
   },
   specimen: {
     subtype: "biological",
-    title: "The Cataloguer's Specimen",
-    originClaim: "Logged by the museum's first curator in 1901 as 'pending identification.' It remains pending — the same word she used for the trunk in the nursery, and for little else besides.",
+    title: "The Unfinished Curator",
+    originClaim: "Lenora catalogued these bones as 'not yet a body.' Five species are present. A sixth set of fingerprints appears on the glass after closing.",
   },
   childhood: {
     subtype: "doll",
-    title: "The Nursery's First Doll",
-    originClaim: "The founding donation to this gallery — present, by the ledger's account, before the nursery it depicts was ever furnished, and entered in the first curator's hand the same year she stopped signing anything else.",
+    title: "Lenora's First Doll",
+    originClaim: "This doll appears in Lenora's earliest nursery photograph. Its face was later carved to match her adult portrait. Nobody admits making the change.",
   },
 };
 
