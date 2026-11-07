@@ -833,17 +833,6 @@ const GALLERY_LAYOUT = [
       },
       {
         type: "lore",
-        label: "The caged glow beyond the arch",
-        text: "Logged as 'garden lighting' in every inventory since 1920. No garden has ever been found on the other side of that arch.",
-        shape: polygon([
-          [1100, 183], [1093, 210], [1083, 225], [1060, 240], [1040, 260], [1030, 285],
-          [1028, 310], [1033, 330], [1045, 345], [1060, 353], [1060, 410], [1050, 410],
-          [1150, 410], [1140, 410], [1140, 353], [1155, 345], [1167, 330], [1172, 310],
-          [1170, 285], [1160, 260], [1140, 240], [1117, 225], [1107, 210],
-        ]),
-      },
-      {
-        type: "lore",
         label: "A really cool plant",
         text: "Shelved under its own glass with no accompanying card at all — the one specimen in this gallery the catalogue doesn't even attempt a name for, though the glow it still gives off at night has never dimmed since the dome was sealed, by nobody now on record.",
         shape: polygon([
