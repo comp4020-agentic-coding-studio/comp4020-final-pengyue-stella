@@ -2343,6 +2343,64 @@ function freePlacementShape() {
   ]);
 }
 
+const GENERATED_BUILTIN_DETAIL_IMAGES = Object.freeze({
+  "hall-angel": "/assets/builtin-details/the-angel-of-the-fifth-bell.png",
+  "specimen-object-1": "/assets/builtin-details/the-articulated-bell-keeper.png",
+  "specimen-object-4": "/assets/builtin-details/the-three-named-kite.png",
+  "specimen-object-6": "/assets/builtin-details/the-perpetual-vane-orrery.png",
+  "specimen-object-9": "/assets/builtin-details/the-lantern-yew.png",
+  "specimen-object-11": "/assets/builtin-details/draco-vaneae-cranium.png",
+  "specimen-object-12": "/assets/builtin-details/the-lesser-corridor-skeleton.png",
+  "specimen-object-13": "/assets/builtin-details/the-fifth-wing.png",
+  "specimen-object-14": "/assets/builtin-details/the-hearthstone-cluster.png",
+  "specimen-object-16": "/assets/builtin-details/aviary-of-the-absent-bird.png",
+  "specimen-object-17": "/assets/builtin-details/the-sinistral-ammonite.png",
+  "specimen-object-18": "/assets/builtin-details/abyssal-white-coral.png",
+  "specimen-object-20": "/assets/builtin-details/fossil-no-v.png",
+  "memento-object-1": "/assets/builtin-details/the-westmere-carriage-clock.png",
+  "memento-object-4": "/assets/builtin-details/the-lagging-mirror.png",
+  "memento-object-5": "/assets/builtin-details/orrery-of-the-fifth-bell.png",
+  "memento-object-6": "/assets/builtin-details/the-silent-pheasant.png",
+  "memento-object-7": "/assets/builtin-details/the-gilded-measure-moth.png",
+  "memento-object-8": "/assets/builtin-details/rose-under-the-last-breath.png",
+  "memento-object-10": "/assets/builtin-details/the-landlocked-coral-reliquary.png",
+  "memento-object-11": "/assets/builtin-details/the-upper-one-thirteen-clock.png",
+  "memento-object-12": "/assets/builtin-details/the-lower-one-thirteen-clock.png",
+  "memento-object-13": "/assets/builtin-details/the-dated-key-cabinet.png",
+  "memento-object-15": "/assets/builtin-details/the-uncatalogued-star-globe.png",
+  "memento-object-16": "/assets/builtin-details/the-vesper-loan-folios.png",
+  "memento-object-18": "/assets/builtin-details/the-anachronist-vase.png",
+  "memento-object-20": "/assets/builtin-details/the-vane-cave-mortal-assemblage.png",
+  "memento-object-21": "/assets/builtin-details/the-handbook-of-returning-doors.png",
+  "memento-object-23": "/assets/builtin-details/tetraptera-vaneae.png",
+  "childhood-object-4": "/assets/builtin-details/the-simmons-cot.png",
+  "childhood-object-6": "/assets/builtin-details/the-ash-mane-rocking-horse.png",
+  "childhood-object-7": "/assets/builtin-details/the-waiting-pageboy.png",
+  "childhood-object-8": "/assets/builtin-details/the-pocket-cavalier.png",
+  "childhood-object-9": "/assets/builtin-details/the-duplicate-ash-mane.png",
+  "childhood-object-11": "/assets/builtin-details/the-moon-turn-ballerina.png",
+  "childhood-object-12": "/assets/builtin-details/the-nightfall-casket.png",
+  "childhood-object-16": "/assets/builtin-details/the-half-curtain-world.png",
+  "childhood-object-17": "/assets/builtin-details/the-pending-trunk.png",
+  "childhood-object-20": "/assets/builtin-details/barnaby-the-returning-bear.png",
+  "childhood-object-21": "/assets/builtin-details/the-uncovered-carousel.png",
+  "childhood-object-22": "/assets/builtin-details/the-mute-carousel.png",
+  "childhood-object-23": "/assets/builtin-details/the-cabinet-foundling.png",
+  "childhood-object-24": "/assets/builtin-details/the-echo-nursery-box.png",
+  "childhood-object-25": "/assets/builtin-details/the-unlisted-daybed.png",
+  "childhood-object-26": "/assets/builtin-details/the-broken-rhythm-cabinet.png",
+  "childhood-object-27": "/assets/builtin-details/landscape-beyond-the-fifth-door.png",
+  "childhood-object-28": "/assets/builtin-details/the-vesper-dagger.png",
+  "childhood-object-29": "/assets/builtin-details/duke-orison.png",
+  "childhood-object-33": "/assets/builtin-details/the-midnight-ward.png",
+  "childhood-object-34": "/assets/builtin-details/the-incomplete-matryoshka.png",
+});
+
+function generatedDetailImageForObject(objectId) {
+  const detailImage = GENERATED_BUILTIN_DETAIL_IMAGES[objectId];
+  return detailImage ? { detailImage } : {};
+}
+
 export const GALLERIES = GALLERY_LAYOUT.map((g) => ({
   ...g,
   name: GALLERY_NARRATIVE[g.id]?.name ?? g.name,
@@ -2354,6 +2412,7 @@ export const GALLERIES = GALLERY_LAYOUT.map((g) => ({
   objects: g.objects.map((object, index) => ({
     ...object,
     ...(storyForObject(`${g.id}-object-${index}`) ?? {}),
+    ...generatedDetailImageForObject(`${g.id}-object-${index}`),
   })),
   closeupObjects: (g.closeupObjects ?? []).map((object, index) => ({
     ...object,
@@ -2698,6 +2757,7 @@ function buildHallScenes() {
   const hallObjects = HALL_LORE_OBJECTS.map((object) => ({
     ...object,
     ...(storyForObject(object.id) ?? {}),
+    ...generatedDetailImageForObject(object.id),
   }));
   return [
     {
