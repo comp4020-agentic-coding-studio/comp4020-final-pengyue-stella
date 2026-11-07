@@ -728,42 +728,6 @@ const GALLERY_LAYOUT = [
       },
       {
         type: "lore",
-        label: "A grinning skull on the upper shelf",
-        text: "Dental records matched it to three different missing persons in three different decades. All three case files were closed as unrelated before anyone compared notes.",
-        shape: polygon([
-          [245, 205], [268, 198], [290, 202], [305, 218], [310, 240],
-          [305, 262], [292, 278], [295, 295], [280, 302], [258, 302],
-          [243, 295], [245, 278], [230, 262], [225, 240], [230, 218],
-        ]),
-      },
-      {
-        type: "lore",
-        label: "A standing bird carved mid-stride",
-        text: "No taxonomist on staff will commit to a species. It is carved walking forward on legs too long for any wading bird in the regional record.",
-        shape: polygon([
-          [78, 250], [95, 235], [108, 225], [112, 245], [120, 270],
-          [128, 300], [132, 330], [128, 360], [120, 385], [108, 400],
-          [95, 405], [82, 395], [80, 370], [88, 345], [82, 320],
-          [75, 295], [72, 270],
-        ]),
-      },
-      {
-        type: "lore",
-        label: "A pressed herbarium of unlabelled flowers",
-        text: "Every specimen is mounted and dated, and not one is named. The first curator left the binomial column blank on every single card, on purpose, according to a note pinned to the back — the same purpose claimed, in the same words, on an unrelated card three rooms away.",
-        shape: polygon([
-          [20, 480], [95, 472], [102, 495], [100, 560], [95, 600],
-          [85, 615], [25, 615], [15, 600], [15, 520],
-        ]),
-      },
-      {
-        type: "lore",
-        label: "A framed orange butterfly in its mounting case",
-        text: "The wings have not faded in a hundred and forty years under direct gallery light, a fact the conservation team has measured four times and reported, without explanation, each time.",
-        shape: polygon([[385, 478], [440, 472], [498, 490], [500, 540], [432, 541], [382, 536]]),
-      },
-      {
-        type: "lore",
         label: "Golden-winged butterfly specimen",
         text: "Catalogued as a companion piece to its neighbour, though the accession ledger records the two arriving at the museum fourteen years apart — this is the one of the pair whose own card gives its wingspan in gold leaf rather than millimetres, a unit no other specimen in this gallery is measured in.",
         shape: polygon([
