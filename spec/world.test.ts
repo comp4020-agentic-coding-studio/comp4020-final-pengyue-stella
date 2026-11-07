@@ -129,6 +129,16 @@ describe("the museum world", () => {
     // passes kept legitimately adding more real objects, which is expected
     // to keep happening — the floor is the invariant worth protecting, not
     // a ceiling nobody wants enforced.
+    //
+    // specimen's own close-up is the one documented exception to the 3-5
+    // floor: its sole "look closer" trigger was retraced and renamed into
+    // an ordinary main-scene object, deliberately leaving this gallery's
+    // close-up scene with no way in, and its own content was removed along
+    // with the door rather than kept stranded behind one nobody can open.
+    // The scene itself still exists — every gallery's `closeup` config
+    // generates one unconditionally — so this is "0 objects, no entrance",
+    // not "object count still enforced but someone forgot to populate it".
+    const CLOSEUP_OBJECT_COUNT_EXCEPTIONS = new Set(["specimen"]);
     for (const gallery of galleries) {
       const main = byId.get(`${gallery.id}-main`)!;
       const closeup = byId.get(`${gallery.id}-closeup`)!;
@@ -136,6 +146,10 @@ describe("the museum world", () => {
         main.interactiveObjects.length,
         `${gallery.id}-main should have at least 6 interactive objects, has ${main.interactiveObjects.length}`,
       ).toBeGreaterThanOrEqual(6);
+      if (CLOSEUP_OBJECT_COUNT_EXCEPTIONS.has(gallery.id)) {
+        expect(closeup.interactiveObjects.length).toBe(0);
+        continue;
+      }
       expect(
         closeup.interactiveObjects.length,
         `${gallery.id}-closeup should have 3-5 interactive objects, has ${closeup.interactiveObjects.length}`,
