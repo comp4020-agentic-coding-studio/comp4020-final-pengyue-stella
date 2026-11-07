@@ -916,7 +916,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "Upper Cave Man fossils",
-        text: "Jointed and shelved beside the grinning skull nearby, though the two were accessioned under entirely different find-sites on different continents — the label here still reads 'provisional,' the same word the first curator used, and nobody has proposed a permanent one since.",
+        text: "Jointed and shelved under a find-site the excavation records themselves list as 'unconfirmed' — the label here still reads 'provisional,' the same word the first curator used in her own notes, and nobody has proposed a permanent one since.",
         shape: polygon([
           [265, 245], [266, 243], [265, 240], [261, 238], [257, 236], [254, 232],
           [251, 228], [251, 225], [251, 220], [250, 216], [252, 211], [254, 208],
@@ -1381,7 +1381,7 @@ const GALLERY_LAYOUT = [
       {
         type: "lore",
         label: "An unclassified fossil",
-        text: "Jointed in a pattern conservation's own notes describe as 'segmented, armoured, purpose unclear,' with a binomial column left blank the same way every other card in this room's founding entry leaves it — except here, nobody has ever proposed filling it in at all.",
+        text: "Jointed in a pattern conservation's own notes describe as 'segmented, armoured, purpose unclear,' with a binomial column left blank the same way this room's own founding entry leaves it — the first curator's own habit, repeated here without her ever once writing down why.",
         shape: polygon([
           [128, 252], [126, 255], [124, 258], [122, 263], [121, 269], [119, 273],
           [119, 277], [119, 282], [120, 286], [123, 290], [126, 292], [126, 294],
