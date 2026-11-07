@@ -360,6 +360,28 @@ function drawCanvasCtx() {
   return drawCtx;
 }
 
+// Keeps the canvas's own pixel buffer (width/height attributes, distinct
+// from its CSS box) at the preset's real aspect ratio, capped to a stable
+// resolution on the longer side — without this, a 340x340 square buffer
+// gets non-uniformly stretched by the browser into the letterboxed
+// non-square CSS box .customiser-draw-canvas now renders at (e.g. 255x340
+// for a portrait preset), squashing every brush dab into an ellipse and
+// visibly warping stroke width. Resizing the buffer clears its pixels, so
+// returns whether it actually resized — callers must redrawDrawCanvas()
+// afterward (only when true) to replay drawStrokes (the actual source of
+// truth) back onto the freshly-sized buffer.
+const DRAW_CANVAS_MAX_DIMENSION = 340;
+function syncDrawCanvasBufferSize(preset) {
+  const canvas = el("customiser-draw-canvas");
+  const ratio = preset && preset.naturalWidth > 0 && preset.naturalHeight > 0 ? preset.naturalWidth / preset.naturalHeight : 1;
+  const width = ratio >= 1 ? DRAW_CANVAS_MAX_DIMENSION : Math.round(DRAW_CANVAS_MAX_DIMENSION * ratio);
+  const height = ratio >= 1 ? Math.round(DRAW_CANVAS_MAX_DIMENSION / ratio) : DRAW_CANVAS_MAX_DIMENSION;
+  if (canvas.width === width && canvas.height === height) return false;
+  canvas.width = width;
+  canvas.height = height;
+  return true;
+}
+
 // Replays the full `drawStrokes` history onto the canvas from scratch —
 // the canvas's own pixels are never the source of truth, so undo/redraw is
 // always "clear, then replay every remaining stroke in order."
@@ -516,6 +538,20 @@ function renderCustomiserStage() {
   const preview = el("customiser-preview");
   const preset = selectedVisualId ? presetById(selectedVisualId) : null;
 
+  // The drawing canvas is a sibling of #customiser-preview, not a child of
+  // its .relic-visual-wrap, so it needs the same --relic-aspect custom
+  // property set directly (see this property's own doc comment on
+  // .relic-visual-wrap/.customiser-draw-canvas in styles.css) to letterbox
+  // identically and keep a drawn stroke's normalized point meaning the same
+  // spot on the artwork as every sticker/tint layer inside the wrap. Its
+  // pixel buffer is kept at a matching ratio too (syncDrawCanvasBufferSize's
+  // own doc comment) so a round brush dab never renders as an ellipse.
+  el("customiser-draw-canvas").style.setProperty(
+    "--relic-aspect",
+    preset ? `${preset.naturalWidth} / ${preset.naturalHeight}` : "1",
+  );
+  if (syncDrawCanvasBufferSize(preset)) redrawDrawCanvas();
+
   renderRelicVisual(preview, {
     visualId: selectedVisualId,
     category: preset?.category,
@@ -532,10 +568,15 @@ function renderCustomiserStage() {
     paintLayer: null,
   });
 
-  // Remove any previously-rendered handles (renderRelicVisual above only
-  // ever touches #customiser-preview, so old handles — appended directly to
-  // the stage, a sibling of the preview — must be cleared separately).
-  for (const handle of stage.querySelectorAll(".overlay-item-handle")) handle.remove();
+  // A handle is appended inside the SAME letterboxed .relic-visual-wrap
+  // renderRelicVisual just (re)built above, not the square stage — its own
+  // left/top percentages must resolve against the actual artwork box, same
+  // coordinate frame every other render path's inert
+  // .relic-visual-overlay-item already uses (see that class's own doc
+  // comment). Falls back to the stage itself only if there's no preset
+  // selected yet (renderRelicVisual's non-preset canvas path), which has no
+  // wrap to anchor against.
+  const wrap = preview.querySelector(".relic-visual-wrap") ?? stage;
 
   customiserItems.forEach((item, index) => {
     const overlay = relicOverlaysById.get(item.assetId);
@@ -591,7 +632,7 @@ function renderCustomiserStage() {
       handle.appendChild(rotateHandle);
     }
 
-    stage.appendChild(handle);
+    wrap.appendChild(handle);
   });
 
   el("customiser-delete-selected").disabled = selectedOverlayIndex === null;
@@ -637,14 +678,28 @@ function buildOverlayPalette() {
   }
 }
 
-// Dragging a placed overlay: pointer movement is read in the stage's own
-// pixel box and converted straight to a 0-1 fraction, clamped generously
+// The live artwork box a sticker's x/y/rotation is measured against — NOT
+// the square .customiser-stage itself, but the actual letterboxed
+// .relic-visual-wrap inside it (pinned to the preset's own aspect ratio,
+// see renderRelicVisual/`.relic-visual-wrap`'s own doc comment). Dragging
+// against the stage's own box here would normalize a sticker's position
+// against empty letterbox space rather than the visible artwork, so a
+// sticker placed in this square stage would land on a visibly different
+// point of the art once rendered in a differently-shaped preview box
+// elsewhere (confirmed live, the same bug class .relic-visual-wrap's own
+// comment documents for the wrap itself).
+function customiserArtworkRect() {
+  const wrap = el("customiser-preview").querySelector(".relic-visual-wrap");
+  return (wrap ?? el("customiser-stage")).getBoundingClientRect();
+}
+
+// Dragging a placed overlay: pointer movement is read against the artwork's
+// own box and converted straight to a 0-1 fraction, clamped generously
 // (OVERLAY_COORD_MIN/MAX server-side already allow slight overhang) so a
-// sticker can sit near an edge without vanishing off the stage entirely.
+// sticker can sit near an edge without vanishing off the artwork entirely.
 function beginOverlayDrag(downEvent, index) {
-  const stage = el("customiser-stage");
   function onMove(e) {
-    const rect = stage.getBoundingClientRect();
+    const rect = customiserArtworkRect();
     const x = Math.min(1.2, Math.max(-0.2, (e.clientX - rect.left) / rect.width));
     const y = Math.min(1.2, Math.max(-0.2, (e.clientY - rect.top) / rect.height));
     customiserItems[index].x = x;
@@ -660,11 +715,10 @@ function beginOverlayDrag(downEvent, index) {
 }
 
 function beginOverlayResize(downEvent, index) {
-  const stage = el("customiser-stage");
   const startScale = customiserItems[index].scale ?? OVERLAY_DEFAULT_SCALE;
   const startX = downEvent.clientX;
   function onMove(e) {
-    const rect = stage.getBoundingClientRect();
+    const rect = customiserArtworkRect();
     const delta = (e.clientX - startX) / rect.width;
     const next = Math.min(4, Math.max(0.2, startScale + delta * 3));
     customiserItems[index].scale = next;
@@ -679,9 +733,8 @@ function beginOverlayResize(downEvent, index) {
 }
 
 function beginOverlayRotate(downEvent, index) {
-  const stage = el("customiser-stage");
   function angleFor(e) {
-    const rect = stage.getBoundingClientRect();
+    const rect = customiserArtworkRect();
     const item = customiserItems[index];
     const centerX = rect.left + item.x * rect.width;
     const centerY = rect.top + item.y * rect.height;
@@ -2769,6 +2822,26 @@ function renderRelicVisual(container, { visualId, category, subtype, accent, exh
   if (preset) {
     const wrap = document.createElement("div");
     wrap.className = "relic-visual-wrap";
+    // The wrap itself is pinned to the preset's own real aspect ratio (not
+    // just the <img> inside it, via object-fit: contain) and letterboxed
+    // within whatever outer box this container happens to be — a fixed
+    // square (.customiser-stage) here, a fixed 420:260 rectangle
+    // (.receipt-preview) there. Every layer below (tint, overlay stickers,
+    // paint) is positioned as a 0-1 fraction of THIS wrap, so without this,
+    // the wrap matched the outer box's own ratio while the visible artwork
+    // (letterboxed by object-fit: contain) sat in a smaller, differently-
+    // positioned sub-rectangle of it — a sticker placed at "20% across the
+    // visible doll" in the square customiser stage would land at a
+    // different fraction of the visible doll in the wide donate-preview,
+    // since each box crops a different amount of empty space around the
+    // same artwork. Pinning the wrap to the artwork's own ratio makes the
+    // wrap BE the visible-artwork box in every context, so a 0-1 fraction
+    // means the same point on the actual art everywhere (confirmed live:
+    // the recolor tint and a dragged sticker both drifted off the doll
+    // before this fix, correcting the color-misalignment report the
+    // .receipt-preview > img fix above already addressed for the base
+    // image/tint, but not yet for stickers/drawing, which this covers).
+    wrap.style.setProperty("--relic-aspect", `${preset.naturalWidth} / ${preset.naturalHeight}`);
 
     const img = document.createElement("img");
     img.src = preset.assetPath;

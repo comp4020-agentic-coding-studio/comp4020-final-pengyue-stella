@@ -1743,11 +1743,29 @@ a {
    sticker dragging underneath keeps working) and "auto" (Draw mode) via
    app.js's setCustomiserMode; it is never removed from the DOM, so a
    drawn stroke is never lost by switching modes mid-session. */
+/* Pinned to the same --relic-aspect custom property as .relic-visual-wrap
+   (set inline by app.js's renderCustomiserStage onto this canvas directly,
+   since there is no shared wrap element here — the canvas sits as its own
+   sibling layer on the square .customiser-stage) and letterboxed the same
+   way, so a drawn stroke's 0-1 normalized point lands on the same spot on
+   the actual artwork as every other render path's paint layer — previously
+   this stayed width/height:100% of the square stage regardless of the
+   artwork's own ratio, so a stroke drawn at "20% across the doll" in this
+   square canvas replayed at a different fraction of the doll once shown as
+   .relic-visual-paint inside a differently-shaped preview box (confirmed
+   live). The draw buffer's own pixel dimensions (canvas.width/height,
+   kept at a matching ratio by app.js's syncDrawCanvasBufferSize, not just
+   this CSS box) are a separate concern — a buffer stretched non-uniformly
+   into a differently-proportioned CSS box would squash every round brush
+   dab into an ellipse, independent of the letterbox-position bug this CSS
+   box fixes. */
 .customiser-draw-canvas {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  margin: auto;
+  aspect-ratio: var(--relic-aspect, 1);
+  max-width: 100%;
+  max-height: 100%;
   z-index: 50;
   cursor: crosshair;
   touch-action: none;
@@ -1916,11 +1934,31 @@ a {
    base image -> optional tint -> optional paint -> customiser overlay
    stickers. Every full-box layer shares the base image's own box exactly
    (object-fit: contain, inset: 0) so they composite in perfect registration
-   regardless of the preset's own aspect ratio. */
+   regardless of the preset's own aspect ratio.
+
+   The wrap itself is pinned to --relic-aspect (set inline by app.js's
+   renderRelicVisual, from the preset's own naturalWidth/naturalHeight) and
+   centred/letterboxed within its parent via absolute+inset:0+margin:auto —
+   NOT simply width/height:100%, which would stretch the wrap to match
+   whatever ratio the parent box happens to have (a square customiser stage,
+   a wide 420:260 receipt frame, ...). Every child layer's 0-1 x/y fraction
+   is relative to THIS wrap, so pinning the wrap to the artwork's real ratio
+   is what makes "20% across" mean the same point on the actual painted
+   object in every context a donor sees it in (customiser stage, donate
+   preview, receipt, dossier) — confirmed live: before this, a sticker
+   dragged to one spot in the square customiser stage landed at a visibly
+   different spot on the doll once shown in the wide donate-preview, since
+   each box's own letterbox trimmed a different amount of empty space
+   around the same artwork. The parent (.customiser-stage, .receipt-preview)
+   needs `position: relative` for this absolute positioning to anchor
+   correctly — both already set it for unrelated reasons. */
 .relic-visual-wrap {
-  position: relative;
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  aspect-ratio: var(--relic-aspect, 1);
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .relic-visual-wrap .relic-visual-img {
@@ -2733,6 +2771,7 @@ a {
 }
 
 .receipt-preview {
+  position: relative;
   width: 100%;
   max-width: 380px;
   aspect-ratio: 420 / 260;
