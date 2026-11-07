@@ -2750,6 +2750,17 @@ a {
   filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.6));
 }
 
+/* Purpose-made dossier reconstructions for scene objects whose original
+   painted footprint is too small or occluded to survive enlargement. The
+   alpha-backed image uses the same contained, non-stretched presentation as
+   donated relic art, with a little extra room for tall frames and busts. */
+.receipt-preview .builtin-object-detail-image {
+  width: auto;
+  height: auto;
+  max-width: 94%;
+  max-height: 94%;
+}
+
 /* A built-in museum object's dossier preview: an inline SVG clipping the
    real scene art to the object's own traced silhouette (see public/app.js's
    renderBuiltinObjectVisual) — everything outside the clip stays

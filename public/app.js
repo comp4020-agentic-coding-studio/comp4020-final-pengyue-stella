@@ -2868,6 +2868,21 @@ function translateShape(shape, dx, dy) {
 function renderBuiltinObjectVisual(container, exhibit) {
   container.innerHTML = "";
   const cropInfo = exhibit.cropInfo;
+
+  // A few distant/partially occluded scene objects have a purpose-made
+  // high-resolution dossier reconstruction derived from the same painted
+  // object. Prefer it here, while every other builtin keeps the exact
+  // scene-art clip below as the default and fallback.
+  if (cropInfo?.detailImage) {
+    const image = document.createElement("img");
+    image.src = cropInfo.detailImage;
+    image.alt = "";
+    image.className = "builtin-object-detail-image";
+    image.decoding = "async";
+    container.appendChild(image);
+    return;
+  }
+
   const scene = cropInfo ? world?.scenes.find((s) => s.id === cropInfo.sceneId) : null;
   if (!cropInfo || !scene) {
     // Defensive fallback only — should never happen for a real builtin
