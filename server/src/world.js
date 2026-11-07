@@ -619,16 +619,6 @@ const GALLERY_LAYOUT = [
       },
       {
         type: "lore",
-        label: "A figurine sealed beneath glass",
-        text: "The dome has never been opened in the gallery's recorded history, yet the figurine's pose is not the one described in the earliest acquisition photograph.",
-        shape: polygon([
-          [1298, 397], [1309, 399], [1319, 406], [1329, 417], [1337, 432],
-          [1341, 450], [1343, 470], [1343, 520], [1261, 520], [1261, 470],
-          [1263, 450], [1267, 432], [1275, 417], [1285, 406], [1292, 399],
-        ]),
-      },
-      {
-        type: "lore",
         label: "A dark urn of long-dried flowers",
         text: "The flowers have not been replaced since the gallery opened. They have also not decayed further in that time, a fact the conservation log simply states without comment.",
         shape: polygon([
