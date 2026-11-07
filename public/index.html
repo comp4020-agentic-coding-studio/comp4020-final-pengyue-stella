@@ -271,6 +271,15 @@
           <button type="button" id="open-customiser" class="secondary customiser-open-btn">Customise Relic&hellip;</button>
           <p id="customiser-summary" class="customiser-summary"></p>
 
+          <!-- Live preview of the relic as currently configured — the SAME
+               renderRelicVisual composite the customiser stage/receipt/
+               dossier already use, kept in sync with every choice made
+               above (appearance, recolor, and the customiser's stickers/
+               drawing) via app.js's renderDonatePreview, so a donor sees
+               what they're about to submit before ever reaching Title. -->
+          <span class="donate-field-label">Your Relic</span>
+          <div id="donate-preview" class="receipt-preview donate-relic-preview"></div>
+
           <label for="donate-title">Title</label>
           <input id="donate-title" name="title" maxlength="80" required placeholder="The Spoon That Remembers" />
 

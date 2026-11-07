@@ -1692,14 +1692,21 @@ a {
   inset: 0;
 }
 
-/* Mode tabs: Stickers / Draw — same small-pill tablist treatment as the
-   Museum Guide's own .guide-tabs/.guide-tab, so switching customisation
-   mode reads as the same site convention rather than a one-off control. */
+/* Mode tabs: Stickers / Draw — same small-pill tablist SHAPE as the Museum
+   Guide's own .guide-tabs/.guide-tab, but its own colours: .guide-tab lives
+   on the dark obsidian .guide-card/.archive-card, where --parchment reads
+   as light text on a dark pill. .customiser-card is a .dossier-card — a
+   LIGHT parchment card — so that same --parchment resting colour rendered
+   as near-invisible light-on-light text (confirmed live: the unselected
+   tab's label was unreadable until selected/hovered). Resting state here
+   instead uses --mahogany on a parchment-tinted pill, matching how every
+   other control on this light card family (.gate-card button.secondary,
+   .donate-field-label) stays legible against the same background. */
 .customiser-mode-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
-  border-bottom: 1px solid rgba(198, 161, 107, 0.25);
+  border-bottom: 1px solid rgba(136, 101, 61, 0.3);
   padding-bottom: 0.5rem;
   margin-bottom: 0.3rem;
 }
@@ -1707,18 +1714,20 @@ a {
 .gate-card .customiser-mode-tab {
   font: inherit;
   font-size: 0.8rem;
+  font-weight: 600;
   padding: 0.4rem 0.7rem;
   border-radius: 999px;
-  border: 1px solid rgba(198, 161, 107, 0.35);
-  background: none;
-  color: var(--parchment);
+  border: 1px solid var(--brass);
+  background: rgba(136, 101, 61, 0.12);
+  color: var(--mahogany);
   cursor: pointer;
 }
 
 .gate-card .customiser-mode-tab[aria-selected="true"] {
-  border-color: var(--gold);
-  color: var(--gold);
-  box-shadow: 0 0 0 1px rgba(198, 161, 107, 0.35);
+  border-color: var(--rose);
+  background: var(--rose);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(102, 61, 67, 0.35);
 }
 
 .gate-card .customiser-mode-tab:hover,
@@ -2750,6 +2759,21 @@ a {
   filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.6));
 }
 
+/* The donate form's own live preview (above Title) is `.receipt-preview`
+   plus this: a smaller footprint appropriate to sitting inline partway down
+   a long scrolling form, rather than the full-size standalone treatment the
+   post-donation receipt/dossier give it as their own singular focal point.
+   `.gate-card` is a flex column and flex items shrink by default to fit
+   available space — without flex-shrink: 0 this was observed live squashed
+   to a 2px sliver next to the other form fields, the exact same failure
+   mode `.customiser-stage`'s own comment above documents for the identical
+   reason (aspect-ratio boxes collapse under flex's default shrink). */
+.donate-relic-preview {
+  max-width: 220px;
+  margin: 0.2rem auto 0.6rem;
+  flex-shrink: 0;
+}
+
 /* Purpose-made dossier reconstructions for scene objects whose original
    painted footprint is too small or occluded to survive enlargement. The
    alpha-backed image uses the same contained, non-stretched presentation as
@@ -2779,42 +2803,18 @@ a {
 
 /* --- dossier -------------------------------------------------------------- */
 
+/* No corner-flourish ::before/::after on this card (unlike .dossier-drawer
+   below, which keeps its own): on the donation flow's own cards (donate
+   form, customiser, receipt — the only three users of this class) the
+   bottom-right triangle visibly overlapped the last row of real content
+   (the visual-preset grid, the sticker palette) rather than resting in a
+   true empty corner, since these cards' content routinely fills the card's
+   full height. Removed here rather than repositioned, since there's no
+   margin on this card family's content where it wouldn't collide with
+   something. */
 .dossier-card {
   width: min(560px, 100%);
   position: relative;
-}
-
-/* `position: absolute` against `.dossier-card`'s own `position: relative`
-   (above) pins each ornament to the CARD's fixed-size padding box itself,
-   not to anything that scrolls inside it — so it sits in the one true
-   visible corner at every scroll position. An earlier `position: sticky` +
-   flex-`align-self` attempt here (to dodge a now-outdated belief that
-   `absolute` anchors to the scrolled content instead of the card) actually
-   made things worse: `sticky` re-anchors to whatever the CURRENT scroll
-   offset makes "the top/bottom of the visible frame", which is a moving
-   target as a flex sibling — confirmed live, scrolling the donation form's
-   long preset grid dragged the bottom-right triangle up over the "Place
-   Relic…" button and the last row of tiles instead of resting in the
-   corner. Plain `absolute` + `top/left`/`bottom/right: 0` has no such
-   dependency on scroll offset, since it's measured from the card's own
-   border box, which never moves or resizes as its content scrolls. */
-.dossier-card::before,
-.dossier-card::after {
-  content: "";
-  position: absolute;
-  width: 34px;
-  height: 34px;
-  pointer-events: none;
-  background: linear-gradient(135deg, var(--gold) 0%, var(--gold) 38%, transparent 40%);
-}
-.dossier-card::before {
-  top: 0;
-  left: 0;
-}
-.dossier-card::after {
-  bottom: 0;
-  right: 0;
-  transform: rotate(180deg);
 }
 
 /* `position: sticky`, matching `.drawer-close`'s own fix above and for the

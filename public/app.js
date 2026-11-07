@@ -176,6 +176,30 @@ function updateCustomiserSummary() {
   summary.textContent = customiserItems.length > 0 ? `${customiserItems.length} sticker(s) placed.` : "";
 }
 
+// Live preview of the relic exactly as it will be submitted — sits in the
+// main donate form itself (above Title), so a donor sees the result of
+// every personalization choice (appearance, recolor, customiser stickers,
+// freehand drawing) without having to reopen the customiser or wait for the
+// post-donation receipt. Reuses the SAME renderRelicVisual composite every
+// other render path uses, fed the same live state (customiserItems,
+// selectedTintColor, the in-progress drawing via capturePaintLayer) — never
+// a second, parallel preview implementation. Called from every place that
+// mutates one of those inputs: selectVisual/selectTint (this file), and
+// renderCustomiserStage/redrawDrawCanvas (stickers and drawing respectively).
+function renderDonatePreview() {
+  const container = el("donate-preview");
+  if (!container) return;
+  const preset = selectedVisualId ? presetById(selectedVisualId) : null;
+  renderRelicVisual(container, {
+    visualId: selectedVisualId,
+    category: preset?.category,
+    subtype: selectedSubtype,
+    overlayItems: customiserItems,
+    tintColor: selectedTintColor,
+    paintLayer: capturePaintLayer(),
+  });
+}
+
 function populateDonateForm() {
   const gallerySelect = el("donate-gallery");
   const visualGrid = el("donate-visual-grid");
@@ -211,6 +235,7 @@ function populateDonateForm() {
     drawStrokes = [];
     redrawDrawCanvas();
     el("donate-error").textContent = "";
+    renderDonatePreview();
   }
 
   // Recolor swatch grid — a fixed small vocabulary (server/src/constants.js's
@@ -222,6 +247,7 @@ function populateDonateForm() {
     for (const swatch of tintGrid.querySelectorAll(".tint-swatch")) {
       swatch.setAttribute("aria-checked", swatch.dataset.hex === String(hex) ? "true" : "false");
     }
+    renderDonatePreview();
   }
   function buildTintGrid() {
     tintGrid.innerHTML = "";
@@ -367,6 +393,7 @@ function redrawDrawCanvas() {
     ctx.stroke();
   }
   ctx.globalCompositeOperation = "source-over";
+  renderDonatePreview();
 }
 
 function clearDrawCanvas() {
@@ -568,6 +595,7 @@ function renderCustomiserStage() {
   });
 
   el("customiser-delete-selected").disabled = selectedOverlayIndex === null;
+  renderDonatePreview();
 }
 
 function selectOverlay(index) {
