@@ -130,15 +130,16 @@ describe("the museum world", () => {
     // to keep happening — the floor is the invariant worth protecting, not
     // a ceiling nobody wants enforced.
     //
-    // specimen's own close-up is the one documented exception to the 3-5
-    // floor: its sole "look closer" trigger was retraced and renamed into
-    // an ordinary main-scene object, deliberately leaving this gallery's
-    // close-up scene with no way in, and its own content was removed along
-    // with the door rather than kept stranded behind one nobody can open.
-    // The scene itself still exists — every gallery's `closeup` config
-    // generates one unconditionally — so this is "0 objects, no entrance",
-    // not "object count still enforced but someone forgot to populate it".
-    const CLOSEUP_OBJECT_COUNT_EXCEPTIONS = new Set(["specimen"]);
+    // specimen and memento's own close-ups are the documented exceptions to
+    // the 3-5 floor: each one's sole "look closer" trigger was retraced and
+    // renamed into an ordinary main-scene object, deliberately leaving that
+    // gallery's close-up scene with no way in, and its own content was
+    // removed along with the door rather than kept stranded behind one
+    // nobody can open. The scene itself still exists in both cases — every
+    // gallery's `closeup` config generates one unconditionally — so this is
+    // "0 objects, no entrance", not "object count still enforced but
+    // someone forgot to populate it".
+    const CLOSEUP_OBJECT_COUNT_EXCEPTIONS = new Set(["specimen", "memento"]);
     for (const gallery of galleries) {
       const main = byId.get(`${gallery.id}-main`)!;
       const closeup = byId.get(`${gallery.id}-closeup`)!;
