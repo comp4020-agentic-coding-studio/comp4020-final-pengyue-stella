@@ -235,9 +235,9 @@ documented decision for this week, recorded in `PROCESS.md` and this file.
   untouched and still the floor. New spec files for this project's own
   invariants (world, archive, votes, realtime) live alongside it.
 - `PROCESS.md` is **rewritten at each crit** to describe the project as it
-  currently stands (its own header says this) — not appended to
-  indefinitely. Fold a past moment forward as a line or two if it's still
-  relevant context; don't let it grow into a diary of every session.
+  currently stands — not appended to indefinitely. Fold a past moment
+  forward as a line or two if it's still relevant context; don't let it
+  grow into a diary of every session.
 - One reflection per crit — `reflections/crit-8.md`, `crit-9.md`, `crit-10.md`
   — each in place by its own cutoff. The sweep reads the exact filename for
   that week; the others staying in the repo doesn't satisfy a missing

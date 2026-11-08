@@ -5,13 +5,12 @@
 ## Context
 
 The final project brief asks for a design decision about several-people-in-it
-behaviour (see `PROCESS.md`, "Open for the next crit"). The app already
-broadcasts a presence count over the existing SSE hub (`sse.js`), but it's
-site-wide: every connected browser is counted together regardless of which
-of the scenes it's looking at. That technically satisfies "real-time" but not
-"feels shared in this place" — a visitor standing alone in one gallery sees
-"3 people wandering the site" and has no way to tell whether any of those 3
-are actually nearby.
+behaviour. The app already broadcasts a presence count over the existing SSE
+hub (`sse.js`), but it's site-wide: every connected browser is counted
+together regardless of which of the scenes it's looking at. That technically
+satisfies "real-time" but not "feels shared in this place" — a visitor
+standing alone in one gallery sees "3 people wandering the site" and has no
+way to tell whether any of those 3 are actually nearby.
 
 The goal (per the C9 brief) is to make visitors feel they share the site
 without the app becoming a social tracking platform — so whatever ships has to
