@@ -150,7 +150,7 @@ SVG shapes, commit `18e9239`:
   own commit — this is the expected cost of "shapes that actually match the
   art," not a regression.
 - The one deliberate dependency exception (`public/tools/vendor-sam/`,
-  ~25MB) exists because of this decision. It is scoped to a dev-only tool
+  ~62MB) exists because of this decision. It is scoped to a dev-only tool
   never reachable from the shipped app, but it is still the project's one
   genuine departure from zero runtime dependencies, and needs to be
   justified again if the tool's scope ever grows.

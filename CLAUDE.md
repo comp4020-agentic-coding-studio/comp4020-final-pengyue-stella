@@ -53,7 +53,7 @@ deliberately and say why in `PROCESS.md`; don't reach for one by habit.
 This rule governs the museum app itself, not a dev-only tool nobody but the
 team ever opens: `public/tools/hotspot-editor.html` vendors a real-image
 segmentation model (SlimSAM) and its JS/wasm runtime under
-`public/tools/vendor-sam/` (~25MB) for AI-assisted hotspot tracing, per this
+`public/tools/vendor-sam/` (~62MB) for AI-assisted hotspot tracing, per this
 rule's own stated exception path — see `PROCESS.md` for why. It is never
 linked from museum navigation, never imported by any `server/` or `public/`
 app code, and the museum's own dependency graph is unaffected by its

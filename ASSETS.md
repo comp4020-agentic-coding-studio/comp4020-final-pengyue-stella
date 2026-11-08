@@ -19,16 +19,26 @@ later single high-resolution foyer replacement (collapsing four stitched
 low-resolution facings into one `entrance-hall-v2.png`) is documented in
 `docs/adr/0010-foyer-repair-and-archive.md`.
 
-Built-in object previews are not separate downloaded thumbnails. The client
-crops the relevant traced object directly from its own scene image, preserving
-the relationship between the dossier and the item the visitor selected.
+Most built-in object previews are not separate downloaded thumbnails: the
+client crops the relevant traced object directly from its own scene image,
+preserving the relationship between the dossier and the item the visitor
+selected. A smaller set of distant or partially occluded objects instead uses
+a purpose-made high-resolution reconstruction of the same painted object,
+stored under `public/assets/builtin-details/` and wired through
+`GENERATED_BUILTIN_DETAIL_IMAGES` in `server/src/world.js`; the client
+(`renderBuiltinObjectVisual` in `public/app.js`) prefers this detail image
+when one exists for an object and falls back to the ordinary scene-art crop
+otherwise.
 
 ## Donated-relic illustrations
 
 `public/assets/donated-relics/` contains sixteen transparent PNG presets
-created for the project. The original twelve cover every subtype in
-`SUBTYPES_BY_CATEGORY` (`server/src/constants.js`); four additional presets
-add a second, visually distinct choice to each gallery family:
+created for the project. The original twelve cover twelve of the thirteen
+subtypes in `SUBTYPES_BY_CATEGORY` (`server/src/constants.js`) — `specimen`'s
+`curiosity` subtype has no matching preset, and since a donor's subtype is
+always derived from the preset they pick (never a separate control), that
+one subtype is not currently reachable through a donation; four additional
+presets add a second, visually distinct choice to most gallery families:
 
 - `cursed-gilt-portrait.png`
 - `lunar-music-box.png`
@@ -118,10 +128,13 @@ replacement. Effects with fine alpha (cobweb, crack, glow, and dust) were
 kept at up to 768px; the other stickers use the same maximum for consistent
 customiser quality.
 
-## Accessory overlays (personalization)
+## Accessory overlays (superseded, unshipped)
 
-`public/assets/accessories/` contains stackable overlay illustrations a donor
-can add to a personalized relic (Stage 3, see `PLAN.md`):
+`public/assets/accessories/` contains stackable overlay illustrations
+explored as an alternative route to relic personalisation before the overlay
+stickers above shipped. They are not referenced by any current server or
+client code and a donor cannot currently add one to a relic — kept only as
+provenance for the attempt and its one known failure mode:
 
 - `glasses.png` — Spectacles
 - `ring.png` — Signet Ring
@@ -183,6 +196,18 @@ flow. `public/world/artifacts.js`, `furniture.js`, and `textures.js` survive as
 a defensive still-preview fallback for an old database row that has no
 curated `visualId`. New donations must choose a curated PNG and never enter
 that fallback.
+
+## Hotspot-tracing dev tool (not shipped to visitors)
+
+`public/tools/vendor-sam/` vendors SlimSAM (a distilled Segment Anything
+model) and its JS/wasm runtime (transformers.js, onnxruntime-web) for
+`public/tools/hotspot-editor.html`, a dev-only page that traces each scene's
+hand-editable SVG object shapes (see `docs/adr/0011-object-shaped-interaction.md`).
+This is the one deliberate exception to `CLAUDE.md`'s zero-runtime-dependency
+rule: never linked from museum navigation, never imported by any `server/` or
+`public/` app code, and the museum's own shipped dependency graph is
+unaffected by its presence. On disk it is roughly 62MB (models, runtime, and
+one wasm backend).
 
 ## Retired assets
 
