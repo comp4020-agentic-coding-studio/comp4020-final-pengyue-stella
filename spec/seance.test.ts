@@ -189,6 +189,33 @@ describe("POST /api/presence/interact: room-scoped group delivery over SSE", () 
     await c.reader.cancel();
   });
 
+  it("echoes a bounded reply id so recipients can thread a message locally", async () => {
+    const aCookie = cookieFrom(await fetch(url("/api/me")));
+    const bCookie = cookieFrom(await fetch(url("/api/me")));
+    const a = await connectInScene(aCookie, "hall");
+    const b = await connectInScene(bCookie, "hall");
+    const replyToMessageId = `local-message-${Date.now()}`;
+
+    const [bText] = await Promise.all([
+      readUntil(b.reader, (t) => t.includes(replyToMessageId), 4000),
+      (async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const res = await interact(aCookie, {
+          kind: "message",
+          body: "This belongs beneath the earlier whisper.",
+          replyToMessageId,
+        });
+        expect(res.status).toBe(200);
+      })(),
+    ]);
+
+    expect(bText).toContain("event: interact");
+    expect(bText).toContain(`\"replyToMessageId\":\"${replyToMessageId}\"`);
+
+    await a.reader.cancel();
+    await b.reader.cancel();
+  });
+
   it("delivers to a visitor sharing a gallery's OTHER exact scene (main vs. closeup) — same logical room", async () => {
     const { galleries } = await (await fetch(url("/api/world"))).json();
     const galleryId = galleries[0].id;

@@ -90,6 +90,12 @@ something under `vendor-sam/` is actually requested.
   own first-person scene. A gallery's main and close-up views share one
   logical room for presence and Séance delivery, while exact-scene
   `visitorAnchors` keep each ghost visually grounded in the current artwork.
+- **Séance activity is ephemeral and room-scoped.** Messages, fixed-vocabulary
+  reactions, wordless reach-outs, and reply links are relayed only to other
+  visitors in the sender's server-derived logical room and are never written
+  to SQLite. A reply carries only a bounded opaque `replyToMessageId`; the
+  server echoes it for client-side transcript threading and never treats it
+  as durable history or permission to address another room.
 - The current story's canonical authored copy is
   `server/src/narrative.js`: **The Hall of the Fifth Door**, **The Gallery of
   Borrowed Faces**, **The Cabinet of the Stolen Hour**, **The Menagerie of
