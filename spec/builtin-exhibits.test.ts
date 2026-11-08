@@ -8,6 +8,7 @@
 // a dossier at all). Accounts/votes/SSE behaviour on a builtin exhibit are
 // covered by spec/archive.test.ts's own extension, not duplicated here.
 import { inject, it, expect, describe } from "vitest";
+import { allBuiltinLoreObjects } from "../server/src/world.js";
 
 const baseUrl = inject("baseUrl");
 const url = (path: string): URL => new URL(path, baseUrl);
@@ -127,8 +128,22 @@ describe("unified dossier model: built-in museum objects", () => {
   // Third-Shelf Lacuna") was removed outright at the user's request — see
   // each gallery's own comment in server/src/world.js, and
   // spec/world.test.ts's CLOSEUP_OBJECT_COUNT_EXCEPTIONS, which now
-  // includes all four galleries. The mechanism itself (closeupSceneId on a
-  // lore object, surfaced through /api/exhibits) is unused content data,
-  // not dead code, so no test for it remains; re-add one alongside
-  // whichever gallery next authors a real marquee trigger.
+  // includes all four galleries.
+
+  // A real regression once slipped past exactly here: db.js's
+  // seedBuiltinLoreExhibits() re-syncs an existing builtin exhibit's title
+  // on every boot but, before this test existed, never re-synced
+  // closeup_scene_id — so an exhibit row written back when e.g. "The
+  // Borrowed Countess" WAS a marquee trigger kept serving a stale non-null
+  // closeupSceneId (and the client's "Inspect Closer" button with it) on
+  // every later boot forever, even once world.js's own authored content
+  // said that object was never a trigger again. world.js is this field's
+  // one source of truth, so a running server's DB must always agree with
+  // it exactly, not just at first-ever seed.
+  it("every builtin exhibit's closeupSceneId matches its current world.js authoring, not a stale seeded value", async () => {
+    for (const object of allBuiltinLoreObjects()) {
+      const { exhibit } = await (await fetch(url(`/api/exhibits/exhibit_builtin_${object.id}`))).json();
+      expect(exhibit.closeupSceneId, `${object.id} has a stale closeupSceneId`).toBe(object.closeupSceneId ?? null);
+    }
+  });
 });

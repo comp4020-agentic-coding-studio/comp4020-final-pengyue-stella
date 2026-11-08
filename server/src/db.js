@@ -951,11 +951,21 @@ export function seedBuiltinLoreExhibits() {
     const accountId = `account_builtin_${object.id}`;
     const existing = db.prepare("SELECT id FROM exhibits WHERE id = ?").get(exhibitId);
     if (existing) {
-      // Re-sync, scoped tightly: only this exhibit's title, and only the
-      // system-seeded account whose id this same function always derives
-      // (author_id = "" guards against ever touching a real visitor row
-      // even if ids somehow collided).
-      db.prepare("UPDATE exhibits SET title = ? WHERE id = ?").run(object.label, exhibitId);
+      // Re-sync, scoped tightly: only this exhibit's title, closeup_scene_id,
+      // and the system-seeded account whose id this same function always
+      // derives (author_id = "" guards against ever touching a real
+      // visitor row even if ids somehow collided). closeup_scene_id is
+      // included here (not just title/text) because world.js is this
+      // column's own source of truth too — an object that used to be a
+      // gallery's marquee "look closer" trigger and was later retraced into
+      // an ordinary object must actually lose its stale "Inspect Closer"
+      // button on the next boot, not keep it forever from a row written
+      // before the retrace.
+      db.prepare("UPDATE exhibits SET title = ?, closeup_scene_id = ? WHERE id = ?").run(
+        object.label,
+        object.closeupSceneId,
+        exhibitId,
+      );
       db.prepare("UPDATE accounts SET body = ? WHERE id = ? AND exhibit_id = ? AND author_id = ''").run(
         object.text,
         accountId,
