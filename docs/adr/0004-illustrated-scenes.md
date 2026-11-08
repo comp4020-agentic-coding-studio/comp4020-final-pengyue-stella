@@ -38,6 +38,31 @@ with no visible cameo restoring the earlier "I can see someone else is
 here" feeling; and nothing surfaced the full exhibit archive independent of
 knowing which gallery to walk into.
 
+## Options considered
+
+1. **Re-texture/re-light the existing Three.js room (keep the live render,
+   improve the art inside it).** Rejected: the honest review in
+   `reflections/crit-10.md` is that the problem is the medium itself —
+   "boxes, planes, and a procedural wallpaper texture do not read as 'a
+   specific, cursed museum,' no matter how well the camera is staged."
+   Better textures on primitive geometry was judged unlikely to close that
+   gap, since the ceiling on procedural-texture fidelity had already been
+   reached.
+2. **Full-bleed illustrated scene images over the same fixed scene graph
+   (chosen).** Keeps ADR 0003's scene graph, hotspot list, and scene-scoped
+   presence entirely intact — only what a slot/hotspot coordinate *means*
+   changes (a picture percentage, not a 3D floor point) — so the pivot is
+   presentation-only, not a backend rewrite, and directly fixes the "reads
+   as generic" problem with real commissioned art instead of a lighting
+   tweak.
+3. **Address the exhibit-visibility, cameo, and archive regressions as
+   isolated point-fixes within the still-3D room**, rather than folding
+   them into the same presentation pivot. Rejected as a false economy: all
+   three regressions trace back to the same underlying gap (the room
+   doesn't make its own content legible), so fixing them separately from
+   the illustrated-scene pivot would have meant re-doing hotspot/cameo/
+   archive work a second time once the art changed anyway.
+
 ## Decision
 
 Replace the live Three.js room with full-bleed illustrated scene images

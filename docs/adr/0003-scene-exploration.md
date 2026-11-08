@@ -33,6 +33,29 @@ unrestricted free roaming is not required and that a slideshow of flat
 images is *not* the goal either — the bar is "a crafted 2.5D experience,"
 not a cheap simplification of the 3D one.
 
+## Options considered
+
+1. **Keep continuous free-roam movement (status quo).** The crit-10
+   free-roam 3D museum — a walkable avatar, server-authoritative
+   `(x, z, yaw)`, client-side collision, two camera rigs — worked and was
+   verified end-to-end (two sessions, a real restart, a real redeploy).
+   Rejected anyway: `reflections/crit-10.md` records the honest assessment
+   directly — "more freedom to walk around an empty room is not the same as
+   a richer museum; unrestricted movement was solving a problem the brief
+   didn't actually pose." Technically sound is not the same as meeting the
+   brief's "crafted cabinet-of-curiosities" bar.
+2. **A slideshow of flat images with simple forward/back navigation.**
+   Rejected per the brief's own explicit standard (quoted above): "the bar
+   is 'a crafted 2.5D experience,' not a cheap simplification of the 3D
+   one" — a plain slideshow would under-deliver on staged interaction, not
+   only on visuals, so it was never seriously attempted.
+3. **A fixed scene graph of named camera vantages with click-driven
+   hotspots, a hub turn, and cut transitions (chosen).** Keeps the brief's
+   explicit permission that multiplayer "does not need to rely on visible
+   third-person characters" while removing continuous movement/collision
+   entirely, without discarding the Three.js camera-staging investment
+   already built.
+
 ## Decision
 
 Replace continuous movement with a **fixed scene graph**: a small, named

@@ -14,6 +14,30 @@ a "Display slot" `<select>` for donation placement. None of that chrome
 looks like it belongs to the museum; all of it sits on top of the art rather
 than inside it.
 
+## Options considered
+
+1. **Restyle the existing chrome in place (reskin hotspot pills and exhibit
+   cards with gothic CSS, keep the flat un-pannable illustration).**
+   Rejected: the problem isn't the pills' *styling*, it's that a label or
+   card floating over the art is structurally a UI affordance bolted on top
+   of a picture, never the picture's own object lighting up — CLAUDE.md's
+   "a highlight/glow treatment is load-bearing, not decorative" standard
+   can't be satisfied by a prettier label, only by the object itself
+   reacting. A flat illustration also still reads as a static image rather
+   than a room, no matter how its overlays are styled.
+2. **Reintroduce a free 3D camera the visitor steers (undo ADR 0003's
+   pivot).** Rejected: this is exactly the "generic 3D sandbox" complexity
+   and embodied-avatar framing ADR 0003 already removed for good reason —
+   bringing back continuous camera movement to fix a 2D chrome problem
+   would re-open the collision/rig surface the prior pivot closed, for a
+   problem that doesn't require it.
+3. **A bounded, per-scene 2.5D camera (pan/tilt/zoom) over the same
+   illustration, with hover/focus glow clipped to each painted object's own
+   anchor instead of a floating label (chosen).** Restores a sense of depth
+   and "looking around a room" without any continuous position to
+   validate, and lets every interactive element — object, nav, placement —
+   read as part of the room rather than UI pasted over it.
+
 ## Decision
 
 **A bounded, per-scene 2.5D camera** (`public/world/camera-math.js` +
