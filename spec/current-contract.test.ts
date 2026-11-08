@@ -12,6 +12,16 @@ const contractDocs = ["DESIGN.md", "PLAN.md", "CLAUDE.md"].map((path) =>
 );
 const normalizedContractDocs = contractDocs.map((document) => document.replace(/\s+/g, " "));
 const publicHtml = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+const normalizedPublicHtml = publicHtml.replace(/\s+/g, " ");
+
+const RETIRED_GALLERY_PHRASES = [
+  "The Portraits That Watch",
+  "Objects That Remember",
+  "The Cabinet of Impossible Life",
+  "impossible life",
+  "The Forgotten Childhood",
+  "forgotten childhood",
+];
 
 describe("current product contract", () => {
   it("keeps current documentation on the canonical room names", () => {
@@ -20,15 +30,13 @@ describe("current product contract", () => {
       for (const name of canonicalNames) expect(document).toContain(name);
     }
 
-    const retiredNames = [
-      "The Portraits That Watch",
-      "Objects That Remember",
-      "The Cabinet of Impossible Life",
-      "The Forgotten Childhood",
-    ];
     for (const document of normalizedContractDocs) {
-      for (const name of retiredNames) expect(document).not.toContain(name);
+      for (const phrase of RETIRED_GALLERY_PHRASES) expect(document).not.toContain(phrase);
     }
+  });
+
+  it("keeps retired gallery names out of visitor-facing HTML (meta tags, titles, copy)", () => {
+    for (const phrase of RETIRED_GALLERY_PHRASES) expect(normalizedPublicHtml).not.toContain(phrase);
   });
 
   it("keeps the running catalogs aligned with their canonical sources", async () => {
