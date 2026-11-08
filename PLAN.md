@@ -88,16 +88,31 @@ from normal reads but their rows, accounts, votes, and events remain retained.
 - Walk through the app in two independent browser contexts: room presence,
   ghost rendering, Floor Plan movement, Séance delivery, account/vote update,
   donation/placement, owner controls, refresh, and redeploy persistence.
-- Check desktop and narrow mobile layouts with console errors monitored.
+- Check desktop and narrow mobile layouts with console errors monitored, at
+  both marking viewports (1920×1080 and 390×844), including keyboard-only
+  use and a slow/reconnecting SSE path.
+- `spec/persistence-restart.test.ts` proves the redeploy-persistence claim
+  directly: it spawns the server twice against one temporary SQLite file and
+  asserts a visitor contribution survives the process boundary, rather than
+  relying only on the manual walkthrough above.
+- `spec/accessibility.test.ts` checks the semantic accessibility floor
+  (declared language, one main landmark, a visible heading, alt text,
+  labelled form fields, accessible dialog/control names) on every published
+  page.
 - Keep README, `CLAUDE.md`, `spec/README.md`, `DESIGN.md`, and this plan aligned
   with the shipped product and its single definition of good.
 
 ## Explicit limits
 
 The current version deliberately has four galleries, sixteen curated donation
-visuals, three apparition forms, no login, no arbitrary image upload, and no
-moderation queue beyond validation and rate limits. Four empty legacy close-up
-scene records remain for compatibility but are not reachable from current
-objects. The Séance is ephemeral and room-scoped; it is not part of the
-durable museum archive. The experience is a bounded illustrated 2.5D museum,
-not a full 360° or free-roam 3D world.
+visuals, three apparition forms, no login, no moderation queue beyond
+validation and rate limits, and no arbitrary image upload — the donation UI
+offers no file picker or remote-image URL field, only a server-published
+`visualId` plus tint/sticker/freehand personalisation of that curated asset,
+a tested invariant (`spec/current-contract.test.ts`). Four empty legacy
+close-up scene records remain for compatibility but are not reachable from
+current objects. The Séance is ephemeral and room-scoped and not part of the
+durable museum archive; a reply carries only a bounded opaque
+`replyToMessageId`, echoed for client-side transcript threading and never
+persisted or treated as permission to address another room. The experience
+is a bounded illustrated 2.5D museum, not a full 360° or free-roam 3D world.
