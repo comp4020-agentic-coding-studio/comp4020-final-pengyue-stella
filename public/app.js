@@ -2852,10 +2852,55 @@ function presetById(visualId) {
 // the relic itself does. Rotating the WRAP (not just the base image) keeps
 // every personalization layer — tint/paint/overlay stickers — turning
 // together.
+//
+// A rotated rectangle's own bounding box is wider/taller than the
+// unrotated one (most severely near 45/135/225/315° for a square asset,
+// and near 90/270° for an elongated one like a spoon or a wand), and every
+// container this lands in — the free-placement <foreignObject>, the other
+// surfaces' <foreignObject>, and the fixed-box .receipt-preview/.dossier-
+// preview — is sized to the UNROTATED artwork with no rotation headroom,
+// clipping whatever spills past it. Scaling the wrap down by the exact
+// factor that makes its rotated bounding box fit back inside its own
+// original box keeps the whole relic visible at every angle instead of
+// slicing it off at the container edge. The ratio needed for that formula
+// comes from the `--relic-aspect` custom property `renderRelicVisual` just
+// set inline (or a procedural canvas's own width/height) rather than a
+// measured `offsetWidth`/`offsetHeight` — several call sites (the receipt,
+// the dossier) apply this rotation while their container is still
+// `hidden` or not yet attached to the document, where every measured
+// layout size reads as 0.
+function relicVisualAspectRatio(visual) {
+  const aspectProp = visual.style?.getPropertyValue?.("--relic-aspect");
+  if (aspectProp) {
+    const [w, h] = aspectProp.split("/").map((part) => parseFloat(part));
+    if (w > 0 && h > 0) return w / h;
+  }
+  if (visual.tagName === "CANVAS" && visual.width > 0 && visual.height > 0) {
+    return visual.width / visual.height;
+  }
+  return 1;
+}
+
 function applyPlacementRotation(container, rotationDegrees) {
   const visual = container.querySelector(".relic-visual-wrap, canvas");
   if (!visual) return;
-  visual.style.transform = rotationDegrees ? `rotate(${rotationDegrees}deg)` : "";
+  const angle = ((Number(rotationDegrees) || 0) % 360 + 360) % 360;
+  if (!angle) {
+    visual.style.transform = "";
+    visual.style.transformOrigin = "";
+    return;
+  }
+  const ratio = relicVisualAspectRatio(visual);
+  const rad = (angle * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(rad));
+  const sin = Math.abs(Math.sin(rad));
+  // Treat the wrap as a ratio:1 rectangle. Its rotated bounding box is
+  // (ratio*cos + sin) wide and (ratio*sin + cos) tall; scaling by the
+  // smaller of "fit the width back to ratio" and "fit the height back to
+  // 1" brings the larger of those two back within the original box, which
+  // brings the other back too (never above 1, i.e. never scales up).
+  const scale = Math.min(ratio / (ratio * cos + sin), 1 / (ratio * sin + cos), 1);
+  visual.style.transform = `rotate(${rotationDegrees}deg) scale(${scale})`;
   visual.style.transformOrigin = "center center";
 }
 
