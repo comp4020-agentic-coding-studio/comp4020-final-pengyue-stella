@@ -134,11 +134,19 @@ scene.
 ### Donate and place a relic
 
 **Donate a Relic** is available from the main interface. The donor chooses one
-of sixteen curated appearances covering all twelve subtypes. Appearance fixes
-the relic's category, subtype, and compatible surface types, but not its room:
-any relic may be placed in any gallery's free-placement region. The donor may
-also apply one of four optional tints, arrange any of twelve sticker overlays,
-paint a capped freehand layer, and set scale and rotation. They then provide a
+of sixteen curated appearances covering twelve of the thirteen subtypes (the
+specimen gallery's `curiosity` subtype has no matching preset, so it isn't
+currently reachable through a donation). Appearance fixes the relic's
+category, subtype, and compatible surface types, but not its room: any relic
+may be placed in any gallery's free-placement region. The donor may also
+apply one of four optional tints, arrange any of twelve sticker overlays,
+paint a capped freehand layer, and set scale and rotation. A rotated relic
+never changes visible size: the preview and placed exhibit grow their own
+invisible layout box to the rotated bounding box rather than shrinking the
+artwork to fit a fixed one (a shrink-based fix was tried, shipped, and
+reverted after watching it live — see `docs/adr/0009-rotated-relic-sizing.md`);
+the two static card previews are the one place that still shrinks to fit,
+since there the rotation is never watched live. The donor then provides a
 title, one-sentence origin claim, and donor name.
 
 After selecting **Place Relic**, the visitor enters the destination scene with
@@ -174,7 +182,10 @@ first-person view. If a legacy close-up scene is reached by an old link, it
 still shares the gallery's logical room.
 
 Selecting a ghost opens the room-scoped **Séance**. It supports short messages,
-a fixed reaction vocabulary, threaded replies, and wordless reach-outs. These
+a fixed reaction vocabulary, threaded replies, and wordless reach-outs. A
+reply carries only a bounded opaque `replyToMessageId`, which the server
+echoes back purely for client-side transcript threading — it is never
+persisted and never treated as permission to address a different room. These
 events are ephemeral and delivered only to other visitors currently in the
 same logical room. This makes co-presence visible without adding a permanent,
 museum-wide social feed to the archive.
@@ -221,9 +232,23 @@ without receiving the raw identity.
   controls are keyboard reachable. Pan and zoom have keyboard alternatives.
 - `prefers-reduced-motion` disables camera inertia and shortens decorative
   transitions.
-- There is no login, user-uploaded image system, or moderation queue beyond
-  validation and rate limits; this is a classroom-scale shared museum.
+- Every published page keeps a semantic accessibility floor: a declared
+  language, meaningful title, one main landmark (never `role="application"`,
+  which would opt assistive technology out of ordinary browser navigation),
+  a visible heading, alt text on every image, labelled form fields, and
+  accessible names on dialogs and controls — checked by
+  `spec/accessibility.test.ts`.
+- There is no login or moderation queue beyond validation and rate limits;
+  this is a classroom-scale shared museum. Donation appearance stays
+  curated: the public UI offers no file picker or remote-image URL field —
+  only a server-published `visualId`, with tint, sticker, and paint-layer
+  personalisation of that curated asset — enforced by
+  `spec/current-contract.test.ts`.
 - Sixteen curated donated-relic illustrations, fixed tint and sticker
   vocabularies, and a capped paint layer scaffold contribution while keeping
   new objects coherent. Three.js remains only
   as a defensive preview fallback for a legacy row with no curated visual.
+- `spec/persistence-restart.test.ts` spawns the server twice against one
+  temporary SQLite file and asserts a visitor contribution survives the
+  process boundary, proving the redeploy-persistence claim directly rather
+  than relying only on a manual walkthrough.
