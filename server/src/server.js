@@ -38,6 +38,10 @@ db.seedFoundingCollection();
 // real seeded exhibit too, so it gets the same dossier/accounts/votes
 // machinery a donated relic does — see db.js's own comment.
 db.seedBuiltinLoreExhibits();
+// Selected story-critical objects start with varied testimony and vote
+// histories, so the living archive and its trust ordering can be understood
+// immediately on a fresh database. Stable ids keep this idempotent.
+db.seedCommunityAccounts();
 // Backfill a curated visual onto any exhibit donated/seeded before the
 // preset catalog existed, so no primitive procedural model ever renders in
 // a visible illustrated gallery — see db.js's own comment.

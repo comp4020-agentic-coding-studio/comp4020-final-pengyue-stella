@@ -3170,6 +3170,13 @@ a {
   color: #6b5d47;
 }
 
+.account-ranking-score {
+  color: #6b5d47;
+  font-variant-numeric: tabular-nums;
+  border-left: 1px solid rgba(107, 93, 71, 0.35);
+  padding-left: 0.35rem;
+}
+
 .vote-buttons {
   display: flex;
   gap: 0.3rem;

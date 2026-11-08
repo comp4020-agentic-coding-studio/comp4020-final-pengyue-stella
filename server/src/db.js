@@ -19,6 +19,7 @@ import {
 import { pointInShape, shapeBounds } from "./geometry.js";
 import { VERDICTS, RELIC_TINT_HEXES, PAINT_LAYER_MAX_BYTES } from "./constants.js";
 import { RELIC_PRESETS_BY_ID, RELIC_PRESETS, RELIC_OVERLAYS_BY_ID } from "./relic-presets.js";
+import { COMMUNITY_ACCOUNT_SEEDS } from "./community-seeds.js";
 
 // A placed overlay's x/y/scale/rotation must be finite numbers in a sane
 // bounded range — generous enough for a donor to place a sticker slightly
@@ -990,6 +991,71 @@ export function seedBuiltinLoreExhibits() {
       db.exec("ROLLBACK");
       throw err;
     }
+  }
+}
+
+// Seed a modest, fixed set of visitor contributions and votes onto selected
+// story-critical built-in objects. This gives a new museum believable prior
+// activity and, crucially, varied vote distributions for the dossier's
+// Wilson-score ordering: strong consensus, thin evidence, suspicion, curses,
+// ties, and zero-vote records all appear. Fixed ids plus INSERT OR IGNORE make
+// the pass fully idempotent. These synthetic visitor accounts are historical
+// fixtures, so they are never updated or announced over SSE on later boots.
+export function seedCommunityAccounts() {
+  const insertAccount = db.prepare(
+    "INSERT OR IGNORE INTO accounts (id, exhibit_id, parent_id, kind, body, author_name, author_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  );
+  const insertVote = db.prepare(
+    "INSERT OR IGNORE INTO votes (id, account_id, visitor_id, verdict, updated_at) VALUES (?, ?, ?, ?, ?)",
+  );
+  const seededAt = Date.now();
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const exhibitSeed of COMMUNITY_ACCOUNT_SEEDS) {
+      const exhibitId = `exhibit_builtin_${exhibitSeed.objectId}`;
+      const originalAccountId = `account_builtin_${exhibitSeed.objectId}`;
+      const exhibitExists = db.prepare("SELECT 1 FROM exhibits WHERE id = ?").get(exhibitId);
+      const originalAccount = db.prepare("SELECT created_at FROM accounts WHERE id = ?").get(originalAccountId);
+      if (!exhibitExists || !originalAccount) continue;
+
+      for (const [accountIndex, accountSeed] of exhibitSeed.accounts.entries()) {
+        const accountId = `account_seed_${exhibitSeed.objectId}_${accountSeed.key}`;
+        const authorId = `seed_author_${exhibitSeed.objectId}_${accountSeed.key}`;
+        const intendedCreatedAt = seededAt - accountSeed.hoursAgo * 60 * 60 * 1000;
+        // A visitor cannot challenge a record before that record exists. On
+        // an established database the intended historical date wins; on a
+        // brand-new database, place the account a few milliseconds after the
+        // just-seeded museum record so chronology remains truthful.
+        const afterOriginal = Date.parse(originalAccount.created_at) + accountIndex + 1;
+        const createdAt = new Date(Math.max(intendedCreatedAt, afterOriginal)).toISOString();
+        insertAccount.run(
+          accountId,
+          exhibitId,
+          originalAccountId,
+          accountSeed.kind,
+          accountSeed.body,
+          accountSeed.authorName,
+          authorId,
+          createdAt,
+        );
+
+        let voterIndex = 0;
+        for (const verdict of VERDICTS) {
+          const count = accountSeed.votes[verdict] ?? 0;
+          for (let i = 0; i < count; i += 1) {
+            const voterId = `seed_voter_${exhibitSeed.objectId}_${accountSeed.key}_${voterIndex}`;
+            const voteId = `vote_seed_${exhibitSeed.objectId}_${accountSeed.key}_${voterIndex}`;
+            insertVote.run(voteId, accountId, voterId, verdict, createdAt);
+            voterIndex += 1;
+          }
+        }
+      }
+    }
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
   }
 }
 
