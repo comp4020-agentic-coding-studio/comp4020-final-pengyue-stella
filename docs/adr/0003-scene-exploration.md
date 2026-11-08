@@ -1,6 +1,17 @@
 # ADR 0003: 2.5D fixed-scene exploration, not free-roam first/overhead movement
 
-**Status:** Accepted — Final Project, post-crit-10 presentation pivot
+**Status:** Accepted — Final Project, post-crit-10 presentation pivot.
+**Superseded in part** by later passes: the live-Three.js scene rendering,
+`exploration.js`'s scene-cut/turn controller, screen-projected `<button>`
+hotspots, and `CEILING_LAYER` described below were all replaced by ADR 0004
+(illustrated scene images), ADR 0005 (the CSS 2.5D camera), and ADR 0011
+(hand-traced SVG object shapes) — none of that machinery exists in the
+current codebase. What this ADR decided and still holds: a **fixed scene
+graph** instead of free-roam movement, and **scene-scoped presence** instead
+of embodied avatars — every later ADR builds on that structural choice
+without revisiting it. Read this ADR for why those two decisions were made
+and what free-roam cost; read 0004/0005/0011 for how scenes are actually
+rendered and interacted with today.
 
 ## Context
 
