@@ -162,6 +162,12 @@ something under `vendor-sam/` is actually requested.
   keyboard alternatives, and the dossier, donation/account forms, Archive,
   Museum Guide, Floor Plan, and Séance remain operable without a mouse. This
   is checked live — don't let it regress behind a pointer-only feature.
+- **Every published page keeps a semantic accessibility floor:** a declared
+  language, meaningful title, one main landmark, a visible heading, alt text
+  on every image, associated labels for form fields, and accessible names on
+  dialogs and controls. Do not use `role="application"` to replace the main
+  landmark; this museum is built from ordinary web controls and should keep
+  their browser and assistive-technology behaviour.
 - Keep the four galleries visually distinct (lighting colour-grade, prop
   density, palette accent) so "which gallery am I in" never relies on
   reading the sign text alone.
@@ -237,6 +243,7 @@ split between what the course's own `invariants.test.ts` covers and what's
 ours to add. In CI, `check` runs against the same Docker image `deploy`
 ships, built fresh with a throwaway `/data` standing in for the Fly volume;
 `deploy` only runs once `check` is green and the repo is public.
+`spec/accessibility.test.ts` protects the semantic floor.
 
 **Secrets.** `.githooks/pre-commit` (installed by `pnpm install`) blocks any
 staged content shaped like the course API key before it's committed — that's
