@@ -160,6 +160,7 @@ const SPECIMEN_STORIES = [
 ];
 
 const CHILDHOOD_STORIES = [
+  ["The Third-Shelf Lacuna", "The gap fits a child's music box. Dust has written LENORA across the wood. Fresh fingerprints cross the letters each morning."],
   ["Miss L., the Waking Doll", "The doll blinks once each hour. At 1:13, it blinks five times. Its voice box says, She is still downstairs."],
   ["The Laughing Harlequin", "Its grin never changes. Its painted eyes do. They follow the silver thread that runs behind the cabinet."],
   ["Vane's Primer of Quiet Doors", "The book teaches five rules for hiding. The last page was cut out. Lenora's childish hand wrote: Never answer the fifth knock."],
@@ -198,6 +199,12 @@ const CHILDHOOD_STORIES = [
   ["The Seamless Cabinet", "The floor plan shows a lower compartment. The wood shows no seam. At 1:13, a child can be heard counting inside."],
 ];
 
+const CHILDHOOD_CLOSEUP_STORIES = [
+  ["Barnaby, the Mended Bear", "The same uneven stitch repairs every tear. Lenora learned that stitch at thirteen. The thread now leads into the wall."],
+  ["Ash-Mane II", "This horse repeats every scratch on Ash-Mane I. The scratches form two halves of a sentence: I WENT THROUGH."],
+  ["The Lenora Headboard", "The carving is a lullaby and a warning. Its final line reads: Lenora keeps the fifth door sleeping. The last word changes when the bell rings."],
+];
+
 const STORY_BY_ID = new Map(Object.entries(HALL_STORIES));
 
 function addIndexedStories(prefix, stories) {
@@ -208,6 +215,9 @@ addIndexedStories("portraits", PORTRAIT_STORIES);
 addIndexedStories("memento", MEMENTO_STORIES);
 addIndexedStories("specimen", SPECIMEN_STORIES);
 addIndexedStories("childhood", CHILDHOOD_STORIES);
+CHILDHOOD_CLOSEUP_STORIES.forEach((story, index) =>
+  STORY_BY_ID.set(`childhood-closeup-object-${index}`, story),
+);
 
 export function storyForObject(id) {
   const story = STORY_BY_ID.get(id);
