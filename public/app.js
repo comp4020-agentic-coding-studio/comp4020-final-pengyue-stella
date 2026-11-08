@@ -1151,26 +1151,48 @@ el("open-archive").addEventListener("click", openArchive);
 el("archive-close").addEventListener("click", closeArchive);
 
 // ---------------------------------------------------------------------------
-// Ambient sound: a small procedural soundscape (world/ambient.js), gated
-// strictly behind this click so the AudioContext is never constructed
-// before a real user gesture — a visitor who had it on in a previous visit
-// is not resumed automatically on load (that would mean starting audio
-// without a fresh gesture); the toggle's visual state always matches
-// whether audio is actually playing right now, never a stale preference,
-// so a screen reader never announces "on" for silence. The preference is
-// still remembered (ambient.wasPreferredOn) purely so a future on/off
-// default could use it without ever auto-playing.
+// Background music (world/ambient.js — see ASSETS.md for the track's title
+// and source link), gated strictly behind a real user gesture so playback
+// is never started before one (autoplay without a gesture is blocked by
+// browsers anyway, and would be inappropriate even where it isn't); the
+// toggle's visual state always matches whether audio is actually playing
+// right now, never a stale preference, so a screen reader never announces
+// "on" for silence. The default preference (no stored choice yet) is now
+// "on" — see armDefaultAmbientStart below — but an explicit choice via this
+// toggle always wins on a later visit.
 function updateSoundToggleUi(on) {
   const btn = el("sound-toggle");
   btn.setAttribute("aria-pressed", String(on));
-  btn.setAttribute("aria-label", on ? "Ambient sound is on. Click to turn off." : "Ambient sound is off. Click to turn on.");
+  btn.setAttribute("aria-label", on ? "Background music is on. Click to turn off." : "Background music is off. Click to turn on.");
   btn.querySelector("span").textContent = on ? "\u{1F50A}" : "\u{1F507}";
 }
 el("sound-toggle").addEventListener("click", () => {
   const on = ambient.toggle();
   updateSoundToggleUi(on);
-  if (on) ambient.setGallery(illustrator?.currentScene()?.galleryId ?? null);
 });
+
+// A visitor who has never explicitly chosen (ambient.wasPreferredOn reads
+// the stored preference, defaulting to true) gets music starting on their
+// very first click/tap/key press anywhere on the page — not only if they
+// happen to find the topbar toggle — since `HTMLAudioElement.play()` still
+// requires a real gesture. Capturing listeners removed after the first
+// genuine trigger; the sound-toggle button's own click is excluded here
+// since its own handler above already starts/stops playback explicitly.
+function armDefaultAmbientStart() {
+  if (!ambient.wasPreferredOn) return;
+  let armed = true;
+  function trigger(e) {
+    if (!armed || ambient.isOn) return;
+    if (e.target?.closest?.("#sound-toggle")) return;
+    armed = false;
+    ambient.start();
+    updateSoundToggleUi(ambient.isOn);
+    window.removeEventListener("pointerdown", trigger, true);
+    window.removeEventListener("keydown", trigger, true);
+  }
+  window.addEventListener("pointerdown", trigger, true);
+  window.addEventListener("keydown", trigger, true);
+}
 
 // ---------------------------------------------------------------------------
 // Dossier
@@ -3623,6 +3645,8 @@ window.addEventListener("keydown", (e) => {
 // Boot
 
 async function boot() {
+  armDefaultAmbientStart();
+
   myIdentity = await fetchMe();
   updateWhoami();
 

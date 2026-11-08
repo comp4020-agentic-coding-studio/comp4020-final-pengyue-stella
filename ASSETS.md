@@ -154,9 +154,25 @@ not stored as separate image files.
 ## Interface and procedural assets
 
 The Floor Plan, SVG object glows, placement-surface outlines, focus effects,
-ornamental frames, dust, and ambient audio are generated from HTML/CSS/SVG or
-small browser scripts. Object and surface geometry comes from hand-authored
-shapes in `server/src/world.js`, not from an invisible rectangular image map.
+ornamental frames, and dust are generated from HTML/CSS/SVG or small browser
+scripts. Object and surface geometry comes from hand-authored shapes in
+`server/src/world.js`, not from an invisible rectangular image map.
+
+## Background music
+
+`public/assets/audio/museum-ambient-theme.m4a` is a licensed audio track
+(not an original composition, and not synthesized in-browser — an earlier
+version of `public/world/ambient.js` instead generated its own ambience
+purely from Web Audio oscillators/noise; that approach was replaced with
+this track at the project owner's direction):
+
+- Title: 【童话氛围音乐】满月秋夜，南瓜灯照亮蜜溪谷小镇｜万圣节氛围音乐丨放松 · 休息 · 阅读
+- Source: <https://www.bilibili.com/video/BV1KEJe6oEGr/>
+
+It plays looped through `public/world/ambient.js`'s `#sound-toggle` control,
+gated behind a real user gesture (never autoplayed on load), and defaults to
+on for a visitor who has never explicitly chosen either way — an explicit
+toggle choice is always remembered and respected on later visits.
 
 Three.js r169 remains vendored at `public/vendor/three.module.min.js` under its
 MIT licence. It is no longer part of the museum rooms or the normal donation

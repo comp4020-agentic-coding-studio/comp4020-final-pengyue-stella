@@ -203,6 +203,17 @@ horizontal one, and no console errors across the walkthrough.
 
 ## Addendum: procedural ambient audio
 
+**Superseded.** This addendum describes the soundscape as it stood at the
+time it was written. At the project owner's direction it was later replaced
+with a single licensed music track played through an `HTMLAudioElement`
+instead of synthesized Web Audio — see `ASSETS.md`'s "Background music"
+section for the track's title/source and `public/world/ambient.js`'s own
+header comment for the current implementation. The user-gesture gating,
+on/off toggle, persisted preference, and pause-while-hidden behaviour
+described below all still apply to the current version; only the audio
+source itself (synthesized vs. a decoded file) and the default preference
+(now on, not off) changed.
+
 A small, original Web Audio soundscape (`public/world/ambient.js`) — a low
 sine/triangle drone plus occasional distant chime tones and filtered-noise
 creaks, entirely synthesized, never a decoded audio file — gives each

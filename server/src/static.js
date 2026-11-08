@@ -17,6 +17,7 @@ const CONTENT_TYPES = {
   ".webp": "image/webp",
   ".ico": "image/x-icon",
   ".glb": "model/gltf-binary",
+  ".m4a": "audio/mp4",
   // Served only from public/tools/vendor-sam/ — the hotspot-editor dev
   // tool's local AI-trace model/runtime (see that directory's own README).
   // Never referenced by the museum app itself.
