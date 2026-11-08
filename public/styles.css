@@ -863,19 +863,18 @@ a {
    contrast so it reads as ornament, never gore or visual noise.
    `position: absolute`, anchored to `.side-drawer`'s own padding box (it
    already establishes the positioning context via `position: absolute;
-   top: 0; bottom: 0`) — this pins each ornament to the drawer's fixed
+   top: 0; bottom: 0`) — this pins the ornament to the drawer's fixed
    VISIBLE frame regardless of scroll offset. An earlier `position: sticky`
    attempt here (reasoning that `absolute` would anchor to the scrolled
    CONTENT instead) had it backwards and made things worse: `sticky`
    re-anchors to wherever the scroll position currently puts "the edge of
    the visible frame" as a point in the document, which drifts under
-   mid-scroll zero-margin math — confirmed live, scrolling a long dossier
-   dragged the bottom-right triangle up over list content instead of
-   resting in the true corner. Plain `absolute` + `top/bottom: 0` is instead
-   measured straight from the (non-scrolling) container box, so it's exactly
-   the fix `.dossier-card`'s identical corner ornaments above now use too. */
-.dossier-drawer::before,
-.dossier-drawer::after {
+   mid-scroll zero-margin math. Only the top-left `::before` remains: the
+   bottom-right `::after` counterpart visibly overlapped the account form's
+   own content (the counter-evidence textarea/buttons sit right in that
+   corner) rather than resting in a true empty corner, the same reason
+   `.dossier-card` below has no corner flourish of its own at all. */
+.dossier-drawer::before {
   content: "";
   position: absolute;
   width: 46px;
@@ -883,15 +882,8 @@ a {
   pointer-events: none;
   opacity: 0.55;
   background: linear-gradient(135deg, var(--gold) 0%, var(--gold) 28%, transparent 30%);
-}
-.dossier-drawer::before {
   top: 10px;
   left: 10px;
-}
-.dossier-drawer::after {
-  bottom: 10px;
-  right: 10px;
-  transform: rotate(180deg);
 }
 
 .dossier-drawer h3 {
