@@ -7,13 +7,13 @@
 The final project brief asks for a design decision about several-people-in-it
 behaviour (see `PROCESS.md`, "Open for the next crit"). The app already
 broadcasts a presence count over the existing SSE hub (`sse.js`), but it's
-campus-wide: every connected browser is counted together regardless of which
-of the four scenes it's looking at. That technically satisfies "real-time"
-but not "feels shared in this place" — a visitor standing alone at Union Court
-sees "3 people wandering campus" and has no way to tell whether any of those 3
+site-wide: every connected browser is counted together regardless of which
+of the scenes it's looking at. That technically satisfies "real-time" but not
+"feels shared in this place" — a visitor standing alone in one gallery sees
+"3 people wandering the site" and has no way to tell whether any of those 3
 are actually nearby.
 
-The goal (per the C9 brief) is to make visitors feel they share the campus
+The goal (per the C9 brief) is to make visitors feel they share the site
 without the app becoming a social tracking platform — so whatever ships has to
 answer "how many people are here with me" without exposing who they are or
 where exactly they are.
@@ -41,7 +41,7 @@ Mechanically:
 ## Options considered
 
 1. **Global count only (status quo).** Already shipped, cheapest to keep, but
-   answers the wrong question — it's campus traffic, not room occupancy.
+   answers the wrong question — it's site-wide traffic, not room occupancy.
 2. **Scene-scoped count (chosen).** One new route, one extra field per
    tracked connection, no new persisted data, same SSE transport. Answers
    "who's here with me" directly while still exposing nothing more specific
@@ -76,9 +76,9 @@ Mechanically:
 Two independent browser sessions (separate cookies), same method already used
 for traces in `PROCESS.md`:
 
-1. Session A at Union Court, session B at Kambri Lawn — A shows "1 person
+1. Session A in one scene, session B in a different scene — A shows "1 person
    here", not "2".
-2. Navigate B to Union Court — A's count updates to "2 people here" within
+2. Navigate B to A's scene — A's count updates to "2 people here" within
    about a second, no reload.
 3. Close or navigate B away — A's count drops back to "1" within about a
    second.

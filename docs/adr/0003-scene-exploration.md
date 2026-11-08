@@ -90,10 +90,10 @@ level or slightly up, so the ceiling simply always renders.
 Per the brief's explicit permission ("multiplayer does not need to rely
 on visible third-person characters... the primary multiplayer goal is
 shared state and shared activity"), presence is now **scene-scoped**, in
-the same spirit ADR 0001 (Traces of ANU) already established for that
-prior project: `GET /api/events?scene=<id>` tags a connection with the
-scene its visitor is currently viewing; `POST /api/presence` re-tags it
-on every navigation; `server/src/sse.js` broadcasts `{ sceneId, count }`
+the same spirit ADR 0001 already established: `GET /api/events?scene=<id>`
+tags a connection with the scene its visitor is currently viewing;
+`POST /api/presence` re-tags it on every navigation; `server/src/sse.js`
+broadcasts `{ sceneId, count }`
 to everyone, and the client only surfaces the count for whichever scene
 it's currently in ("You are alone in this room" / "N visitors in this
 room"). A restrained toast ("Another visitor has entered this room")

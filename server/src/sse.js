@@ -6,8 +6,8 @@
 //
 // Presence is scene-scoped, not a position: there is no (x, z, yaw) to relay
 // — a visitor is just "currently looking at scene S," the same shape ADR
-// 0001 ("Traces of ANU") used for campus presence. `POST /api/presence`
-// (see server.js) re-tags a visitor's connection whenever they navigate;
+// 0001 established. `POST /api/presence` (see server.js) re-tags a
+// visitor's connection whenever they navigate;
 // this module turns that into a live per-scene roster (who, by a stable
 // public key and display name — never the raw visitor cookie) and headcount,
 // restoring visible visitor cameos without ever reintroducing a position or
