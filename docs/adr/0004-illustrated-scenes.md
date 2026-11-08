@@ -1,6 +1,22 @@
 # ADR 0004: Illustrated full-bleed scenes, not a live Three.js room
 
-**Status:** Accepted — Crit 10 presentation pivot, following 0003
+**Status:** Accepted — Crit 10 presentation pivot, following 0003.
+**Superseded in part** by later passes: the bare `{x, z}` percentage-point
+anchor model grew into a percentage *box* in ADR 0005, then into
+hand-traced SVG shapes in ADR 0011; the pill-shaped hotspot labels,
+"Gothic display card" exhibit rendering, and `.quiet` sibling-dim state
+described below were all replaced by ADR 0005's invisible-until-attended
+`.interactive-object` glow (itself refined by ADR 0011's silhouette clip);
+and visitor cameos moved from a single fixed spot per visitor to ADR 0005's
+`visitorAnchors` box set. The "hub turn is a cross-slide" transition
+described below is also stale on its own: ADR 0010 collapsed the four-facing
+hub into one ordinary `hall` scene, so every transition — hub included — is
+now the page-turn/cabinet-door cut; the cross-slide CSS classes remain in
+`styles.css` but nothing assigns them any more. What still holds: full-bleed
+illustrated scene images over a live Three.js room, the page-turn/cabinet-
+door cut mechanism itself, Three.js kept only for static exhibit-preview
+still frames, and everything in "What was removed" below. Read 0005 and
+0011 for how scenes are actually interacted with today.
 
 ## Context
 
