@@ -16,8 +16,12 @@ pan/zoom system can be applied consistently.
 The decision to replace a technically functional but visually generic 3D room
 with illustration is documented in `docs/adr/0004-illustrated-scenes.md`. The
 later single high-resolution foyer replacement (collapsing four stitched
-low-resolution facings into one `entrance-hall-v2.png`) is documented in
-`docs/adr/0010-foyer-repair-and-archive.md`.
+low-resolution facings into one `entrance-hall-v2.png`, commit `b55d693`) is
+documented in `docs/adr/0010-foyer-repair-and-archive.md`. Its own embedded
+C2PA/IPTC metadata (`digitalSourceType: trainedAlgorithmicMedia`, generator
+`ChatGPT`/`gpt-image`) was never recorded in prose at the time; this file now
+states it directly rather than leaving it to be found only by inspecting the
+PNG itself.
 
 Most built-in object previews are not separate downloaded thumbnails: the
 client crops the relevant traced object directly from its own scene image,
@@ -29,6 +33,16 @@ stored under `public/assets/builtin-details/` and wired through
 (`renderBuiltinObjectVisual` in `public/app.js`) prefers this detail image
 when one exists for an object and falls back to the ordinary scene-art crop
 otherwise.
+
+### Provenance — `public/assets/builtin-details/` (2026-11-07 to 2026-11-08)
+
+All 82 images in this directory (`b402686`, `d97e6cf`, `31c9cd9`, `3248d79`)
+carry the same embedded C2PA/IPTC metadata as `entrance-hall-v2.png` above
+(`digitalSourceType: trainedAlgorithmicMedia`, generator `ChatGPT`/
+`gpt-image`), confirmed by inspection rather than recorded in any of those
+commit messages at the time. Each reconstructs one specific painted object
+already described in `server/src/narrative.js`/`world.js` at a resolution
+the source scene image can't support once cropped and zoomed.
 
 ## Donated-relic illustrations
 
@@ -159,10 +173,13 @@ would be needed to fill this one slot.
 
 `public/assets/ui/visitor-ghost-masculine.png`,
 `visitor-ghost-feminine.png`, and `visitor-ghost-small.png` are transparent
-project-specific apparition templates. A visitor chooses one at the entrance;
-the selected id is shared with room-scoped presence so other visitors render
-the same form. Colour and placement variation are applied by the interface,
-not stored as separate image files.
+project-specific apparition templates, replacing an earlier generated-SVG
+approach (commit `c2a12f9`). A visitor chooses one at the entrance; the
+selected id is shared with room-scoped presence so other visitors render the
+same form. Colour and placement variation are applied by the interface, not
+stored as separate image files. All three carry the same embedded C2PA/IPTC
+metadata as the assets above (`digitalSourceType: trainedAlgorithmicMedia`,
+generator `ChatGPT`/`gpt-image`).
 
 ## Interface and procedural assets
 
