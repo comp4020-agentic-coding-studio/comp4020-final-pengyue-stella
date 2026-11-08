@@ -25,6 +25,25 @@ mechanical invariants that make that experience trustworthy:
 Tests can prove these contracts hold. Human walkthroughs still decide whether
 the resulting participation, atmosphere, and discovery are actually good.
 
+## From the README argument to executable checks
+
+The same definition of good is carried through `README.md`, the rules in
+`CLAUDE.md`, and these checks:
+
+| README promise | Durable rule | Primary checks |
+| --- | --- | --- |
+| Participation leaves value for later visitors | donations, accounts and votes commit before broadcast and remain in SQLite | `archive.test.ts`, `exhibit-ownership.test.ts`, `persistence-restart.test.ts` |
+| Disagreement stays visible | published accounts are append-only; votes derive verdicts and trust order | `archive.test.ts`, `account-ranking.test.ts`, `community-seeds.test.ts` |
+| Other visitors feel present without a global feed | identity is pseudonymous; presence, focus and Séance delivery are room-scoped; Séance is ephemeral | `presence-ghosts.test.ts`, `world.test.ts`, `map.test.ts`, `seance.test.ts` |
+| Illustrated rooms focus curiosity on objects | the authored scene graph, object shapes, camera bounds and placement surfaces remain coherent | `world.test.ts`, `camera.test.ts`, `builtin-exhibits.test.ts`, `narrative.test.ts` |
+| The experience remains usable at its edges | semantic structure, ownership, validation and input limits do not depend on the happy path | `accessibility.test.ts`, `exhibit-ownership.test.ts`, `relic-presets.test.ts`, `personalization.test.ts` |
+
+Atmosphere, visual distinction, clue coherence and whether the museum is
+actually intriguing remain human judgements. They are walked through at
+1920×1080 and 390×844 with two browser profiles, keyboard and touch input,
+resize during interaction, and a slow/reconnecting connection, as required by
+`CLAUDE.md`; a test must not pretend to score those qualities.
+
 ## What ships
 
 `invariants.test.ts` checks the two things the course relies on:
