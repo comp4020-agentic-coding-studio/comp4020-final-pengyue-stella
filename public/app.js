@@ -1,7 +1,7 @@
 import { renderArtifactObject } from "./world/artifacts.js";
 import { createIllustrationController } from "./world/illustration.js";
 import { createAmbientSoundscape } from "./world/ambient.js";
-import { shapeBounds, snapIntoShape, surfaceUvFromPoint, surfacePointFromUv, surfaceCentroidUv, expandShape, relicLayoutFree } from "./world/geometry.js";
+import { shapeBounds, snapIntoShape, surfaceUvFromPoint, surfacePointFromUv, surfaceCentroidUv, expandShape, relicLayoutFree, rotatedBoundingBox } from "./world/geometry.js";
 import { renderFloorPlan } from "./world/floor-plan.js";
 import { sortAccountsForDisplay, trustScore } from "./account-ranking.js";
 
@@ -2855,20 +2855,29 @@ function presetById(visualId) {
 //
 // A rotated rectangle's own bounding box is wider/taller than the
 // unrotated one (most severely near 45/135/225/315° for a square asset,
-// and near 90/270° for an elongated one like a spoon or a wand), and every
-// container this lands in — the free-placement <foreignObject>, the other
-// surfaces' <foreignObject>, and the fixed-box .receipt-preview/.dossier-
-// preview — is sized to the UNROTATED artwork with no rotation headroom,
-// clipping whatever spills past it. Scaling the wrap down by the exact
-// factor that makes its rotated bounding box fit back inside its own
-// original box keeps the whole relic visible at every angle instead of
-// slicing it off at the container edge. The ratio needed for that formula
-// comes from the `--relic-aspect` custom property `renderRelicVisual` just
-// set inline (or a procedural canvas's own width/height) rather than a
-// measured `offsetWidth`/`offsetHeight` — several call sites (the receipt,
-// the dossier) apply this rotation while their container is still
-// `hidden` or not yet attached to the document, where every measured
-// layout size reads as 0.
+// and near 90/270° for an elongated one like a spoon or a wand). For the
+// two fixed-box call sites (.receipt-preview, .dossier-preview — a bordered
+// card laid out alongside its own title/meta text, never resized by a
+// rotation the visitor chose earlier and is now just looking back at),
+// shrinking the rotated wrap just enough to fit back inside that box is the
+// right call. But the in-room placement preview and the confirmed exhibit
+// both sit inside an otherwise-invisible <foreignObject> hit box with
+// nothing else anchored to it — there, that same shrink reads as "the
+// relic itself gets smaller as you turn the rotation dial," which is
+// visually wrong (a real object doesn't shrink when you turn it) and is
+// confusing while live-dragging the rotation stepper. Those two call sites
+// size their own <foreignObject> directly around `rotatedBoundingBox()`
+// instead (see buildExhibitObject/renderPlacementSurfaces/
+// updatePlacementPreviewLayout) and pass `shrinkToFit: false` here, so the
+// relic rotates at its true, constant pixel size inside a box that grew to
+// match instead of being asked to shrink into one that didn't.
+//
+// The ratio needed for the shrink-to-fit formula comes from the
+// `--relic-aspect` custom property `renderRelicVisual` just set inline (or
+// a procedural canvas's own width/height) rather than a measured
+// `offsetWidth`/`offsetHeight` — the receipt/dossier call sites apply this
+// rotation while their container is still `hidden` or not yet attached to
+// the document, where every measured layout size reads as 0.
 function relicVisualAspectRatio(visual) {
   const aspectProp = visual.style?.getPropertyValue?.("--relic-aspect");
   if (aspectProp) {
@@ -2881,13 +2890,18 @@ function relicVisualAspectRatio(visual) {
   return 1;
 }
 
-function applyPlacementRotation(container, rotationDegrees) {
+function applyPlacementRotation(container, rotationDegrees, { shrinkToFit = true } = {}) {
   const visual = container.querySelector(".relic-visual-wrap, canvas");
   if (!visual) return;
   const angle = ((Number(rotationDegrees) || 0) % 360 + 360) % 360;
   if (!angle) {
     visual.style.transform = "";
     visual.style.transformOrigin = "";
+    return;
+  }
+  if (!shrinkToFit) {
+    visual.style.transform = `rotate(${rotationDegrees}deg)`;
+    visual.style.transformOrigin = "center center";
     return;
   }
   const ratio = relicVisualAspectRatio(visual);
@@ -3240,6 +3254,37 @@ function prefersReducedMotion() {
 // <foreignObject><canvas> positioned at the exhibit's placement point,
 // scaled by its own `scale`; title/donor text lives only in the dossier, a
 // short label appearing near it on hover/focus like any other object.
+// Sizes an otherwise-invisible <foreignObject> (`fo`) to a relic's rotated
+// bounding box around `point`, centred, so the relic itself keeps rendering
+// at its true width/height (never stretched to fill the grown box) while
+// turning freely inside the extra room — shared by the free-placement drag
+// preview, its re-layout on scale/rotation-stepper clicks, and the final
+// confirmed exhibit, so the three can never disagree about where a relic's
+// edges actually end up on screen. Returns the inner `container` div, sized/
+// positioned and appended to `fo`, ready for `renderRelicVisual`/
+// `applyPlacementRotation({ shrinkToFit: false })` — or, if `container` is
+// passed (the live drag preview's re-layout, where it already holds the
+// rendered relic and must keep its children untouched), that same node is
+// just resized/repositioned in place instead of being replaced.
+function layoutFreeformRelicBox(fo, point, width, height, rotation, container) {
+  const grown = rotatedBoundingBox(width, height, rotation);
+  fo.setAttribute("x", String(point.x - grown.width / 2));
+  fo.setAttribute("y", String(point.y - grown.height / 2));
+  fo.setAttribute("width", String(grown.width));
+  fo.setAttribute("height", String(grown.height));
+  if (!container) {
+    container = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
+    fo.appendChild(container);
+  }
+  container.style.position = "absolute";
+  container.style.left = "50%";
+  container.style.top = "50%";
+  container.style.width = `${width}px`;
+  container.style.height = `${height}px`;
+  container.style.transform = "translate(-50%, -50%)";
+  return container;
+}
+
 function buildExhibitObject(exhibit, gallery, scene) {
   const surface = gallery.placementSurfaces.find((s) => s.id === exhibit.placement?.surfaceId);
   if (!surface || !exhibit.placement) return null;
@@ -3269,15 +3314,15 @@ function buildExhibitObject(exhibit, gallery, scene) {
   // at, never a bottom "resting" anchor and never a square-forced footprint.
   const preset = exhibit.visualId ? presetById(exhibit.visualId) : null;
   const aspect = preset ? preset.naturalWidth / preset.naturalHeight : 1;
-  let width, height, half;
+  const rotation = exhibit.placement.rotation ?? 0;
+  let width, height, half, container;
   const fo = document.createElementNS(SVG_NS, "foreignObject");
   if (surface.surfaceType === "freeform") {
     const layout = relicLayoutFree(point, aspect, scale);
     width = layout.width;
     height = layout.height;
     half = Math.max(width, height) / 2;
-    fo.setAttribute("x", String(layout.x));
-    fo.setAttribute("y", String(layout.y));
+    container = layoutFreeformRelicBox(fo, point, width, height, rotation);
   } else {
     const b = shapeBounds(surface.shape);
     const baseSize = Math.max(60, Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.55) * scale;
@@ -3286,14 +3331,14 @@ function buildExhibitObject(exhibit, gallery, scene) {
     half = Math.max(width, height) / 2;
     fo.setAttribute("x", String(point.x - width / 2));
     fo.setAttribute("y", String(preset?.anchor === "resting" ? point.y - height : point.y - height / 2));
+    fo.setAttribute("width", String(width));
+    fo.setAttribute("height", String(height));
+    container = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
+    container.style.width = "100%";
+    container.style.height = "100%";
+    fo.appendChild(container);
   }
-  fo.setAttribute("width", String(width));
-  fo.setAttribute("height", String(height));
   fo.setAttribute("class", "object-hit");
-  const container = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
-  container.style.width = "100%";
-  container.style.height = "100%";
-  fo.appendChild(container);
   g.appendChild(fo);
   renderRelicVisual(container, {
     visualId: exhibit.visualId,
@@ -3305,7 +3350,7 @@ function buildExhibitObject(exhibit, gallery, scene) {
     overlayItems: exhibit.overlayItems,
     paintLayer: exhibit.paintLayer,
   });
-  applyPlacementRotation(container, exhibit.placement.rotation ?? 0);
+  applyPlacementRotation(container, rotation, { shrinkToFit: surface.surfaceType !== "freeform" });
 
   const labelShape = { type: "ellipse", cx: point.x, cy: point.y, rx: half, ry: half };
   g.appendChild(svgLabelFor(labelShape, exhibit.title));
@@ -3391,15 +3436,8 @@ function renderPlacementSurfaces(objectLayer, scene) {
 
   const fo = document.createElementNS(SVG_NS, "foreignObject");
   fo.setAttribute("id", "placement-preview");
-  fo.setAttribute("x", String(layout.x));
-  fo.setAttribute("y", String(layout.y));
-  fo.setAttribute("width", String(layout.width));
-  fo.setAttribute("height", String(layout.height));
   fo.setAttribute("class", "placement-preview");
-  const container = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
-  container.style.width = "100%";
-  container.style.height = "100%";
-  fo.appendChild(container);
+  const container = layoutFreeformRelicBox(fo, point, layout.width, layout.height, placement.rotation ?? 0);
   objectLayer.appendChild(fo);
   renderRelicVisual(container, {
     visualId: placement.exhibitForm.visualId,
@@ -3411,7 +3449,7 @@ function renderPlacementSurfaces(objectLayer, scene) {
     overlayItems: placement.exhibitForm.overlayItems,
     paintLayer: placement.exhibitForm.paintLayer,
   });
-  applyPlacementRotation(container, placement.rotation ?? 0);
+  applyPlacementRotation(container, placement.rotation ?? 0, { shrinkToFit: false });
 
   wirePlacementDrag(objectLayer, fo, gallery, freeSurface);
 }
@@ -3448,12 +3486,14 @@ function updatePlacementPreviewLayout() {
   const preset = placement.exhibitForm.visualId ? presetById(placement.exhibitForm.visualId) : null;
   const aspect = preset ? preset.naturalWidth / preset.naturalHeight : 1;
   const layout = relicLayoutFree(placement.point, aspect, placement.scale ?? 1);
-  placementPreviewNode.setAttribute("x", String(layout.x));
-  placementPreviewNode.setAttribute("y", String(layout.y));
-  placementPreviewNode.setAttribute("width", String(layout.width));
-  placementPreviewNode.setAttribute("height", String(layout.height));
+  const rotation = placement.rotation ?? 0;
+  // Re-sizes the foreignObject and the EXISTING container in place (passing
+  // it in rather than letting layoutFreeformRelicBox create a new one) so
+  // the relic artwork already rendered inside it is never torn down and
+  // rebuilt just because a scale/rotation stepper was clicked.
   const container = placementPreviewNode.firstChild;
-  if (container) applyPlacementRotation(container, placement.rotation ?? 0);
+  layoutFreeformRelicBox(placementPreviewNode, placement.point, layout.width, layout.height, rotation, container);
+  if (container) applyPlacementRotation(container, rotation, { shrinkToFit: false });
 }
 
 function wirePlacementDrag(objectLayer, previewNode, gallery, freeSurface) {

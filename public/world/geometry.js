@@ -101,6 +101,21 @@ export function relicLayoutFree(point, aspect, scale = 1) {
   return { x: point.x - width / 2, y: point.y - height / 2, width, height };
 }
 
+// The axis-aligned bounding box of a width×height rectangle after it's
+// rotated in-plane by rotationDegrees around its own centre — the same
+// growth a CSS `transform: rotate()` produces on an element's own rendered
+// footprint. Used to size an otherwise-invisible layout container (a
+// <foreignObject>, never a bordered card) so a rotated relic preview has
+// room to turn without clipping at the container's edge, while the relic
+// artwork itself keeps rendering at its real, unrotated pixel size — only
+// its invisible surrounding box grows, never the relic a visitor sees.
+export function rotatedBoundingBox(width, height, rotationDegrees) {
+  const rad = (((Number(rotationDegrees) || 0) % 360 + 360) % 360) * (Math.PI / 180);
+  const cos = Math.abs(Math.cos(rad));
+  const sin = Math.abs(Math.sin(rad));
+  return { width: width * cos + height * sin, height: width * sin + height * cos };
+}
+
 // Grows a shape outward from its own centroid by `pad` viewBox units — used
 // for a larger invisible touch/click hit region distinct from the exact
 // silhouette the visible glow renders at ("larger invisible touch hit areas
