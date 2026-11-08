@@ -453,7 +453,7 @@ const server = createServer(async (req, res) => {
       }
       if (result.error === "invalid_visual") {
         logAction(identity, "donate", { gallery: galleryId, visual: String(visualId) }, "rejected:invalid_visual");
-        json(res, 400, { error: "that relic appearance isn't available for this gallery/surface" }, withCookies({}, identity));
+        json(res, 400, { error: "that relic appearance doesn't match this relic type or surface" }, withCookies({}, identity));
         return;
       }
       if (result.error === "not_found") {

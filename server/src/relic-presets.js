@@ -11,9 +11,9 @@
 //
 // Each entry is validated server-side on donation (never trust a client-
 // supplied visualId blindly, same discipline as subtype/surfaceId): a
-// visualId must both exist in this catalog AND be listed in its matching
-// gallery/category's `compatibleSubtypes`, so a donor can never attach an
-// portrait's appearance to a toy-gallery donation.
+// visualId must exist, match the submitted subtype, and support the chosen
+// surface type. A relic may be placed in any gallery; its preset category
+// describes the relic itself, not a room restriction.
 //
 // `naturalWidth`/`naturalHeight` are the source asset's own pixel
 // dimensions (used to preserve aspect ratio client-side — CLAUDE.md-aligned

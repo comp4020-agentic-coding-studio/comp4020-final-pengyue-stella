@@ -549,7 +549,7 @@ export function renderFloorPlan(container, { world, sceneVisitors, exhibitsById,
     // Never rotated, never pressed against the room's own border — the name
     // region sits inset from both side walls, wraps onto up to two lines,
     // and starts a fixed distance below the top edge so a long name (e.g.
-    // "The Cabinet of Impossible Life") stays fully inside the room box
+    // "The Menagerie of Unfinished Things") stays fully inside the room box
     // instead of overflowing it. Applies identically to the Entrance Hall.
     const labelInset = 12;
     const labelFontSize = 15.5;

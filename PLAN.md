@@ -15,25 +15,33 @@ museum into a generic chat room or CRUD dashboard.
 
 ## Completed system
 
-1. **Illustrated 2.5D exploration** — one high-resolution Entrance Hall and
-   four distinct galleries, bounded pan/zoom, object-shaped SVG hotspots,
-   close-ups, edge navigation, reduced-motion behaviour, and mouse/touch/
-   keyboard input.
+The current rooms are **The Hall of the Fifth Door**, **The Gallery of
+Borrowed Faces**, **The Cabinet of the Stolen Hour**, **The Menagerie of
+Unfinished Things**, and **The Nursery of the Unclaimed Child**.
+
+1. **Illustrated 2.5D exploration** — **The Hall of the Fifth Door** and four
+   distinct galleries, bounded two-axis pan/zoom, object-shaped SVG hotspots,
+   edge navigation, reduced-motion behaviour, and mouse/touch/keyboard input.
 2. **Unified living archive** — built-in, Founding Collection, and donated
    objects share dossiers, attributed accounts, challenge relationships,
    classifications, and non-destructive vote history.
-3. **Curated spatial donation** — four illustrated relic presets, compatible
-   wall/furniture surfaces, draggable placement, scale and collision
-   validation, ownership, revision-based editing, and soft withdrawal.
+3. **Curated spatial donation** — sixteen illustrated relic presets, optional
+   tint/sticker/freehand customisation, placement in any gallery, draggable
+   scale/rotation, collision validation, ownership, revision-based editing,
+   and soft withdrawal.
 4. **Visible shared presence** — three selectable ghost forms, named visitors
-   anchored in the artwork, logical-room presence across main/close-up views,
-   focus cues, and a room-scoped ephemeral Séance.
+   anchored in the artwork, focus cues, and a room-scoped ephemeral Séance
+   with messages, replies, reactions, and wordless reach-outs.
 5. **Wayfinding and discovery** — a physical hall-map Guide, live Floor Plan
    with individual visitor markers, room travel, and an Archive index that
    reopens any active dossier.
 6. **Durability and realtime** — SQLite/WAL transactions, one SSE hub, restart
    and redeploy persistence, reconnect hydration, validation, rate limits,
    and browser-cookie ownership.
+7. **A coherent central case** — the Hall, all four room names, and 118
+   built-in object records follow Lenora Vane's erased-curator mystery. Seven
+   key objects include 28 deterministic prior-visitor accounts and 463 votes
+   so every ranking and verdict state is visible on a fresh production boot.
 
 ## Current API surface
 
@@ -42,6 +50,8 @@ museum into a generic chat room or CRUD dashboard.
 - `GET /api/world` — galleries, illustrated scenes, cameras, object shapes,
   visitor anchors, internal capacity slots, and placement surfaces.
 - `GET /api/relic-presets` — curated donation visuals and compatibility data.
+- `GET /api/relic-tints` and `GET /api/relic-overlays` — fixed relic
+  personalisation vocabularies.
 - `GET /api/reactions` — the fixed Séance reaction vocabulary.
 - `GET|POST /api/me` — read or update cookie-backed display identity and
   apparition form.
@@ -83,8 +93,10 @@ from normal reads but their rows, accounts, votes, and events remain retained.
 
 ## Explicit limits
 
-The current version deliberately has four galleries, twelve curated donation
+The current version deliberately has four galleries, sixteen curated donation
 visuals, three apparition forms, no login, no arbitrary image upload, and no
-moderation queue beyond validation and rate limits. The Séance is ephemeral
-and room-scoped; it is not part of the durable museum archive. The experience
-is a bounded illustrated 2.5D museum, not a full 360° or free-roam 3D world.
+moderation queue beyond validation and rate limits. Four empty legacy close-up
+scene records remain for compatibility but are not reachable from current
+objects. The Séance is ephemeral and room-scoped; it is not part of the
+durable museum archive. The experience is a bounded illustrated 2.5D museum,
+not a full 360° or free-roam 3D world.

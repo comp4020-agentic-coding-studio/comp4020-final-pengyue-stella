@@ -148,9 +148,9 @@ await b.page.screenshot({ path: `${SHOT_DIR}/01-hall-b.png` });
 
 // ---------------------------------------------------------------------------
 console.log("\n=== Main/closeup grouping: A in portraits-main, B in portraits-closeup — must count as one room ===");
-await goToRoom(a.page, "The Portraits That Watch");
+await goToRoom(a.page, "The Gallery of Borrowed Faces");
 await a.page.waitForTimeout(800);
-await goToRoom(b.page, "The Portraits That Watch");
+await goToRoom(b.page, "The Gallery of Borrowed Faces");
 await b.page.waitForTimeout(800);
 // B heads into a closeup scene: click the "Look closer: ..." lore object
 // (opens its dossier), then the dossier's own "inspect closer" button,
@@ -211,17 +211,17 @@ await b.page.screenshot({ path: `${SHOT_DIR}/02-main-closeup-b.png` });
 
 // ---------------------------------------------------------------------------
 console.log("\n=== Moving B away removes the roster entry from the old room, and the new room gains it ===");
-await goToRoom(b.page, "The Forgotten Childhood");
+await goToRoom(b.page, "The Nursery of the Unclaimed Child");
 await b.page.waitForTimeout(1200);
 const aPresenceAfterLeave = await a.page.locator("#presence").textContent();
 check("A is alone again once B leaves the shared room", /alone/i.test(aPresenceAfterLeave ?? ""), aPresenceAfterLeave);
 const aCameosAfterLeave = await visibleCameos(a.page);
 check("A's cameo layer is empty once B has left", aCameosAfterLeave.length === 0, JSON.stringify(aCameosAfterLeave));
 
-await goToRoom(a.page, "The Forgotten Childhood");
+await goToRoom(a.page, "The Nursery of the Unclaimed Child");
 await a.page.waitForTimeout(1200);
 const bPresenceAfterJoin = await b.page.locator("#presence").textContent();
-check("B sees A join The Forgotten Childhood", /2 visitors/.test(bPresenceAfterJoin ?? ""), bPresenceAfterJoin);
+check("B sees A join The Nursery of the Unclaimed Child", /2 visitors/.test(bPresenceAfterJoin ?? ""), bPresenceAfterJoin);
 
 // ---------------------------------------------------------------------------
 console.log("\n=== Reconnect: forcing a network drop (EventSource auto-reconnects) must not duplicate ghosts ===");

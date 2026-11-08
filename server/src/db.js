@@ -277,10 +277,16 @@ if (!exhibitColumnsAfterOverlays.some((c) => c.name === "paint_layer")) {
 
 // Seed galleries + slots from the static world layout, idempotently — this
 // is config, never written to via the public API, so re-seeding on every
-// boot (INSERT OR IGNORE) just confirms the schema matches the current
-// layout rather than duplicating rows.
+// boot updates authored metadata as well as inserting missing rows. This is
+// important for long-lived Fly volumes: room names changed with the Lenora
+// Vane narrative, and INSERT OR IGNORE would leave the production database
+// carrying retired names forever even while /api/world showed the new ones.
 const insertGallery = db.prepare(
-  "INSERT OR IGNORE INTO galleries (id, name, category, order_index) VALUES (?, ?, ?, ?)",
+  `INSERT INTO galleries (id, name, category, order_index) VALUES (?, ?, ?, ?)
+   ON CONFLICT(id) DO UPDATE SET
+     name = excluded.name,
+     category = excluded.category,
+     order_index = excluded.order_index`,
 );
 const insertSlot = db.prepare(
   "INSERT OR IGNORE INTO display_slots (id, gallery_id, x, z, rotation_y) VALUES (?, ?, ?, ?, ?)",

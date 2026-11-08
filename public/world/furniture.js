@@ -159,7 +159,7 @@ export function buildPortraitFrame({ width = 0.9, height = 1.2, accent = "#663D4
   return group;
 }
 
-// A glass specimen vitrine for the Cabinet of Impossible Life — low
+// A glass specimen vitrine for The Menagerie of Unfinished Things — low
 // table-height case with a visible specimen inside.
 export function buildSpecimenVitrine({ accent = "#4A5A3D" } = {}) {
   const group = new THREE.Group();

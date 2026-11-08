@@ -1,4 +1,4 @@
-// Static world layout. The museum is one Entrance Hall with four galleries
+// Static world layout. The museum is The Hall of the Fifth Door with four galleries
 // off it — `galleries` and `display_slots` rows are seeded from exactly this
 // at startup (see db.js) and never created through the public API; only a
 // slot's occupied_exhibit_id ever changes. Shared vocabulary with
@@ -37,7 +37,7 @@
 // a gallery not in frame at the hub — the persistent "Rooms" menu.
 
 import { SUBTYPES_BY_CATEGORY, SUBTYPE_SET } from "./constants.js";
-import { GALLERY_NARRATIVE, HALL_NAME, storyForObject } from "./narrative.js";
+import { GALLERY_NARRATIVE, HALL_NAME, MUSEUM_MYSTERY, storyForObject } from "./narrative.js";
 
 // Object-shaped hotspots and placement surfaces, replacing this file's
 // previous `anchor: {x, y, width, height}` box model (see docs/adr/0007-
@@ -379,15 +379,15 @@ const HALL_CAMERA = DEFAULT_MAIN_CAMERA;
 const GALLERY_LAYOUT = [
   {
     id: "portraits",
-    name: "The Portraits That Watch",
+    name: "The Gallery of Borrowed Faces",
     category: "portrait",
     accent: "#663D43",
     orderIndex: 0,
     image: "portraits",
     closeup: {
       image: "portrait-reference",
-      caption: "The Watching Portrait",
-      lore: "The mirror fogs from the edges inward, never from breath. Conservation notes say the fog always clears last around whoever has already looked away — the same note, in the same hand, every time it is written.",
+      caption: "The Borrowed Countess",
+      lore: "The sitter has Lenora Vane's eyes. The paint is older than Lenora. Her reflection is not.",
     },
     // Eight real painted objects in portraits.webp (1672x941), each
     // hand-traced against the actual illustration rather than a percentage
@@ -798,21 +798,21 @@ const GALLERY_LAYOUT = [
   },
   {
     id: "memento",
-    name: "Objects That Remember",
+    name: "The Cabinet of the Stolen Hour",
     category: "memento",
     accent: "#88653D",
     orderIndex: 1,
     image: "memento",
     closeup: {
       image: "cabinet-reference",
-      caption: "The Long Cabinet",
-      lore: "Every drawer is catalogued; no two catalogues agree on a date. Objects That Remember keeps the disagreements as carefully as the objects — including the one drawer whose card names a curator no later catalogue repeats.",
+      caption: "The One-Thirteen Cabinet",
+      lore: "Every clock in this cabinet loses the same minute. The missing minute begins at 1:13. A key scratches softly inside Drawer XIII.",
     },
     objects: [
       {
         type: "lore",
-        label: "The Long Cabinet",
-        text: "Every drawer is catalogued; no two catalogues agree on a date. Objects That Remember keeps the disagreements as carefully as the objects — including the one drawer whose card names a curator no later catalogue repeats.",
+        label: "The One-Thirteen Cabinet",
+        text: "Every drawer remembers a different date. All locks stop clicking at 1:13. Drawer XIII keeps breathing.",
         shape: polygon([
           [743, 483], [718, 498], [717, 569], [820, 572], [937, 572], [992, 571],
           [992, 498], [972, 485], [924, 482], [829, 483], [748, 483],
@@ -1246,7 +1246,7 @@ const GALLERY_LAYOUT = [
   },
   {
     id: "specimen",
-    name: "The Cabinet of Impossible Life",
+    name: "The Menagerie of Unfinished Things",
     category: "specimen",
     accent: "#4A5A3D",
     orderIndex: 2,
@@ -1254,8 +1254,8 @@ const GALLERY_LAYOUT = [
     closeup: {
       image: "specimen",
       zoom: true,
-      caption: "Under Glass",
-      lore: "Logged as botanical in 1911, biological in 1958, and 'undetermined — do not reclassify again' in 2003, in the same hand as the first entry. The jar has not been opened since.",
+      caption: "The Briarwick Micro-Habitat",
+      lore: "Something built a cottage inside the sealed jar. Its tiny door bears Lenora's crest. One warm footprint leads out.",
       closeupCamera: {
         initialPan: 50,
         minPan: 30,
@@ -1687,7 +1687,7 @@ const GALLERY_LAYOUT = [
   },
   {
     id: "childhood",
-    name: "The Forgotten Childhood",
+    name: "The Nursery of the Unclaimed Child",
     category: "toy",
     accent: "#C6A16B",
     orderIndex: 3,
@@ -1695,8 +1695,8 @@ const GALLERY_LAYOUT = [
     closeup: {
       image: "childhood",
       zoom: true,
-      caption: "The Shelf That Waits",
-      lore: "The shelf is dusted every week, the gap on the third row included, around whatever used to sit there — and whatever it was, the inventory card for that slot still bears the first curator's own initials, never crossed out.",
+      caption: "The Third-Shelf Lacuna",
+      lore: "The empty space fits a child's music box. Dust has written one word there: LENORA. Fresh fingerprints cross the letters each morning.",
       closeupCamera: {
         initialPan: 28,
         minPan: 10,
@@ -2946,6 +2946,7 @@ export function builtinObjectCropInfo(objectId) {
 export function publicWorld() {
   return {
     hall: hallConfig(),
+    mystery: MUSEUM_MYSTERY,
     defaultSceneId: DEFAULT_SCENE_ID,
     scenes: SCENES,
     galleries: GALLERIES.map((g) => ({

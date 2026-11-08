@@ -9,7 +9,7 @@ An eerie yet elegant multiplayer interactive museum, with dense Victorian curios
 ## Player experience
 - Enter with a visitor nickname; move an avatar around interconnected galleries using WASD/arrow keys; E or mouse-click to inspect nearby exhibits. Camera: 2.5D/isometric or fixed perspective; priority is reliable collision, navigability, and beautiful curated scenes.
 - Other active visitors appear in the room, with smoothly updated live positions; idle/disconnect handling.
-- Galleries: Portraits That Watch; Objects That Remember; Cabinet of Impossible Life; Forgotten Childhood. Each room has varied decorative props and clearly identifiable interactive exhibit positions.
+- Historical blueprint gallery labels (superseded by `server/src/narrative.js`): Portraits That Watch; Objects That Remember; Cabinet of Impossible Life; Forgotten Childhood. Each room has varied decorative props and clearly identifiable interactive exhibit positions.
 - Donate Relic: title, description, donor name, object type, target gallery, display slot; new exhibit appears for everyone.
 - Exhibit dossier: illustration, original donor statement, chronological provenance/history, claimed contradictions, current consensus, vote counts and activity.
 - Rewrite History: add a new competing account or annotation; NEVER erase or silently overwrite another person's writing. Preserve provenance and version/event history.

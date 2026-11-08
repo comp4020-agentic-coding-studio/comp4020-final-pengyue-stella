@@ -76,19 +76,27 @@ something under `vendor-sam/` is actually requested.
   WebSocket layer, and don't add one without updating that ADR first.
 - The world is a server-defined **illustrated scene graph**, not a 3D
   collision world (`server/src/world.js`). Each scene has authored bounds
-  for horizontal pan and zoom; drag/swipe, wheel/pinch, and keyboard input
+  for horizontal and vertical pan plus zoom; drag/swipe, wheel/pinch, and keyboard input
   drive one CSS 2.5D camera transform (`public/world/camera.js`). SVG shapes
   traced in each source image define interactive objects and placement
   surfaces, so glows and clicks remain locked to the painted item at every
   viewport and camera state. Navigation between scenes is still explicit
-  through a doorway, close-up, Floor Plan, Archive, or back action, never
-  free-roam movement.
+  through a doorway, Floor Plan, Archive, or back action, never free-roam
+  movement. Four empty close-up scene records remain only for compatibility;
+  no current object links to them.
 - Other visitors are named illustrated **ghosts**, derived from room-scoped
   SSE presence, a chosen `ghostType`, and a stable non-reversible public key
   (`identity.js`'s `publicKeyFor`). The current visitor is omitted from their
   own first-person scene. A gallery's main and close-up views share one
   logical room for presence and Séance delivery, while exact-scene
   `visitorAnchors` keep each ghost visually grounded in the current artwork.
+- The current story's canonical authored copy is
+  `server/src/narrative.js`: **The Hall of the Fifth Door**, **The Gallery of
+  Borrowed Faces**, **The Cabinet of the Stolen Hour**, **The Menagerie of
+  Unfinished Things**, and **The Nursery of the Unclaimed Child** all support
+  Lenora Vane's erased-curator/fifth-door case. Do not reintroduce the retired
+  room names in current UI, tests, or documentation. Historical ADRs and
+  reference prompts may preserve them when explicitly labelled historical.
 
 ## Conventions that matter here
 
@@ -117,6 +125,18 @@ something under `vendor-sam/` is actually requested.
   repeat vote is an `UPDATE`, never a second row. A tie renders as
   **Disputed**; an account with zero votes renders as **Unclassified** —
   never silently default either case to a specific verdict.
+  The original museum record stays first in the dossier; later accounts sort
+  by the Wilson 95% lower bound of their Believable share, then chronologically
+  on equal scores — see `docs/adr/0008-account-trust-ordering.md` for why
+  this beats raw vote count or a plain Believable ratio, and don't swap in
+  either of those without updating that ADR first. The exhibit classification
+  is a separate rule: use the verdict of the single account with the most
+  total votes, or **Disputed** when leading accounts tie. Keep the UI and
+  docs explicit about this distinction.
+- `seedCommunityAccounts()` is production startup data, not test-only data:
+  28 fictional prior-visitor accounts and 463 votes on seven story-critical
+  objects. Its stable ids and insert guards must remain idempotent. Document
+  these as demo records; never imply they are real visitors.
 - **A donated exhibit occupies a validated point on a real placement
   surface.** A donation names a gallery, compatible `surfaceId`, normalized
   `u`/`v` point, scale, subtype, and one curated `visualId`. The server must
@@ -125,6 +145,17 @@ something under `vendor-sam/` is actually requested.
   with another relic. The legacy `slot_id` remains an internal capacity and
   backwards-compatibility invariant; it is allocated transactionally but is
   never presented to a visitor as a list of boxes.
+- **A rotated relic never changes visible size.** The in-room placement
+  preview and the final placed exhibit grow their own invisible
+  `<foreignObject>` layout box to a rotated relic's bounding box
+  (`rotatedBoundingBox` in `public/world/geometry.js`,
+  `layoutFreeformRelicBox` in `public/app.js`) rather than shrinking the
+  relic to fit a fixed box — shrinking was tried, shipped, and reverted
+  because it visibly resized the relic while the rotation dial turned. The
+  two static card previews (`.receipt-preview`/`.dossier-preview`) are the
+  one place that still shrinks to fit, since there the rotation is never
+  watched live. See `docs/adr/0009-rotated-relic-sizing.md` before changing
+  either behaviour.
 - **Every essential interaction works with a mouse, touchscreen and
   keyboard.** Every SVG object, ghost, doorway, and control is focusable;
   click, tap, and Tab+Enter resolve the same action. Panning and zoom have

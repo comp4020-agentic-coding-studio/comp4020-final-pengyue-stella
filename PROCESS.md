@@ -47,8 +47,17 @@ This standard also explained what to remove. Free-roam movement did not help
 visitors interpret objects. Floating hotspot bubbles obscured the illustrations.
 A site-wide social feed would detach conversation from the room and collection.
 Arbitrary uploaded imagery would break visual coherence. The current limits —
-bounded views, room-scoped interaction, and four curated donation visuals —
-are deliberate scaffolding rather than missing ambition.
+bounded views, room-scoped interaction, sixteen curated donation visuals, and
+fixed tint/sticker vocabularies — are deliberate scaffolding rather than
+missing ambition.
+
+The final narrative pass made the same coherence rule apply to words. The Hall
+and four galleries now follow one erased-curator case: Lenora Vane, the Night
+of Five Bells, 1:13, and the absent fifth door. `server/src/narrative.js`
+overrides every built-in object with a formal name and short clue. A later
+archive pass added 28 fictional prior-visitor accounts and 463 votes across
+seven key objects, then ordered later accounts with a Wilson lower-bound trust
+score so a single positive vote cannot masquerade as strong consensus.
 
 ## Architecture that remained stable
 
@@ -115,9 +124,11 @@ reload, then refresh and confirm durable state remains. `pnpm check` and
 
 ## Honest limits
 
-The museum has four galleries, four curated donation illustrations, and three
-apparition forms. It has no login, arbitrary image upload, or moderation queue
-beyond validation and rate limits. Séance transcripts are intentionally
-ephemeral. The experience is a bounded illustrated 2.5D museum, not a full
-360° panorama or free-roam 3D world. Three.js remains vendored only as a
-defensive preview fallback for a legacy record without a curated visual.
+The museum has four galleries, sixteen curated donation illustrations, and
+three apparition forms. It has no login, arbitrary image upload, or moderation
+queue beyond validation and rate limits. Séance transcripts are intentionally
+ephemeral. Four empty close-up scene records remain for compatibility but are
+not opened by current objects. The experience is a bounded illustrated 2.5D
+museum, not a full 360° panorama or free-roam 3D world. Three.js remains
+vendored only as a defensive preview fallback for a legacy record without a
+curated visual.

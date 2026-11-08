@@ -5,16 +5,17 @@ presentation experiments remain documented in the ADRs and Git history.
 
 ## Illustrated rooms
 
-`public/assets/gallery-scenes/` contains the Entrance Hall, four main gallery
-views, dedicated reference close-ups, and earlier source/reference images.
+`public/assets/gallery-scenes/` contains **The Hall of the Fifth Door**, four
+main gallery views, and earlier source/reference images. Dedicated close-up
+reference files remain in the asset set for compatibility and provenance, but
+no current object opens the four empty close-up scene records.
 They are project-specific illustrated artwork rather than screenshots of a
 live Three.js room. Main scenes use a wide 1672px footing so the same bounded
 pan/zoom system can be applied consistently.
 
 The decision to replace a technically functional but visually generic 3D room
 with illustration is documented in `docs/adr/0004-illustrated-scenes.md`. The
-later single high-resolution foyer replacement is documented in
-`docs/adr/0006-foyer-repair-and-archive.md`.
+later single high-resolution foyer replacement is noted in `PROCESS.md`.
 
 Built-in object previews are not separate downloaded thumbnails. The client
 crops the relevant traced object directly from its own scene image, preserving

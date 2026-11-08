@@ -88,6 +88,13 @@ function updateWhoami() {
 async function loadWorld() {
   const res = await fetch("/api/world");
   world = await res.json();
+  // The server-authored narrative is the runtime source of truth. The HTML
+  // retains readable fallback copy for a failed/slow request, then this sync
+  // prevents the Guide from drifting when narrative.js changes.
+  if (world.mystery) {
+    el("guide-mystery-summary").textContent = world.mystery.summary;
+    el("guide-mystery-invitation").textContent = world.mystery.invitation;
+  }
 }
 
 async function loadRelicPresets() {
