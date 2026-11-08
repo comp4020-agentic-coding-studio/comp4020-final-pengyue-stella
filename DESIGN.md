@@ -134,12 +134,10 @@ scene.
 ### Donate and place a relic
 
 **Donate a Relic** is available from the main interface. The donor chooses one
-of sixteen curated appearances covering twelve of the thirteen subtypes (the
-specimen gallery's `curiosity` subtype has no matching preset, so it isn't
-currently reachable through a donation). Appearance fixes the relic's
-category, subtype, and compatible surface types, but not its room: any relic
-may be placed in any gallery's free-placement region. The donor may also
-apply one of four optional tints, arrange any of twelve sticker overlays,
+of sixteen curated appearances covering every subtype. Appearance fixes the
+relic's category, subtype, and compatible surface types, but not its room:
+any relic may be placed in any gallery's free-placement region. The donor may
+also apply one of four optional tints, arrange any of twelve sticker overlays,
 paint a capped freehand layer, and set scale and rotation. A rotated relic
 never changes visible size: the preview and placed exhibit grow their own
 invisible layout box to the rotated bounding box rather than shrinking the

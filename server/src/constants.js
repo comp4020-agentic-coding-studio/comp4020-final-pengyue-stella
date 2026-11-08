@@ -18,7 +18,7 @@ export const GALLERY_CATEGORY = {
 export const SUBTYPES_BY_CATEGORY = {
   portrait: ["painting", "sketch"],
   memento: ["spoon", "key", "clock", "mirror", "curiosity"],
-  specimen: ["botanical", "biological", "curiosity"],
+  specimen: ["botanical", "biological"],
   toy: ["doll", "toy", "book"],
 };
 export const SUBTYPE_SET = new Set(Object.values(SUBTYPES_BY_CATEGORY).flat());

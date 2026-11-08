@@ -33,12 +33,9 @@ otherwise.
 ## Donated-relic illustrations
 
 `public/assets/donated-relics/` contains sixteen transparent PNG presets
-created for the project. The original twelve cover twelve of the thirteen
-subtypes in `SUBTYPES_BY_CATEGORY` (`server/src/constants.js`) — `specimen`'s
-`curiosity` subtype has no matching preset, and since a donor's subtype is
-always derived from the preset they pick (never a separate control), that
-one subtype is not currently reachable through a donation; four additional
-presets add a second, visually distinct choice to most gallery families:
+created for the project. The original twelve cover every subtype in
+`SUBTYPES_BY_CATEGORY` (`server/src/constants.js`); four additional presets
+add a second, visually distinct choice to most gallery families:
 
 - `cursed-gilt-portrait.png`
 - `lunar-music-box.png`
