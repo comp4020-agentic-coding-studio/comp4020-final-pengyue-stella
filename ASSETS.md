@@ -15,7 +15,9 @@ pan/zoom system can be applied consistently.
 
 The decision to replace a technically functional but visually generic 3D room
 with illustration is documented in `docs/adr/0004-illustrated-scenes.md`. The
-later single high-resolution foyer replacement is noted in `PROCESS.md`.
+later single high-resolution foyer replacement (collapsing four stitched
+low-resolution facings into one `entrance-hall-v2.png`) is documented in
+`docs/adr/0010-foyer-repair-and-archive.md`.
 
 Built-in object previews are not separate downloaded thumbnails. The client
 crops the relevant traced object directly from its own scene image, preserving

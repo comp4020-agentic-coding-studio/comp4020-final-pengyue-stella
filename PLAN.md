@@ -2,7 +2,8 @@
 
 This is the current implementation state and remaining-scope boundary. The
 earlier free-roam 3D build and presentation pivots are recorded in
-`PROCESS.md`, `reflections/crit-10.md`, and `docs/adr/0003`–`0007`.
+`PROCESS.md`, `reflections/crit-10.md`, and `docs/adr/0003`–`0005`,
+`0010`–`0011`.
 
 ## Product standard
 

@@ -22,7 +22,7 @@
 // parallax) where another visitor's cameo may stand in this scene, distinct
 // from exhibit display slots so a cameo never overlaps a relic.
 //
-// What changed in the following foyer-repair pass (see docs/adr/0006-foyer-
+// What changed in the following foyer-repair pass (see docs/adr/0010-foyer-
 // repair-and-archive.md): the Entrance Hall used to be four stitched
 // "facings" turned between with left/right arrows, each cropped from one
 // small low-resolution reference image — a special interaction mode no
@@ -40,7 +40,7 @@ import { SUBTYPES_BY_CATEGORY, SUBTYPE_SET } from "./constants.js";
 import { GALLERY_NARRATIVE, HALL_NAME, MUSEUM_MYSTERY, storyForObject } from "./narrative.js";
 
 // Object-shaped hotspots and placement surfaces, replacing this file's
-// previous `anchor: {x, y, width, height}` box model (see docs/adr/0007-
+// previous `anchor: {x, y, width, height}` box model (see docs/adr/0011-
 // object-shaped-interaction.md). A `shape` is authored directly in the
 // scene's own source-image pixel coordinate system (`viewBox`), traced by
 // hand against the actual painted item — never a percentage box floated
@@ -2312,7 +2312,7 @@ const GALLERY_LAYOUT = [
 ];
 
 // Free-roam placement region (replacing the old "pick one of a handful of
-// glowing surfaces" model for every NEW donation — see docs/adr/0007's
+// glowing surfaces" model for every NEW donation — see docs/adr/0011's
 // successor decision, recorded in this comment rather than a new ADR file):
 // one inset rectangle covering nearly the whole of a gallery's main-scene
 // image, in that scene's own SCENE_VIEWBOX pixel space. The OLD named
