@@ -167,9 +167,10 @@ coordinate math alone:
 - `d6b59cd`'s retrace of all 34 placeholder-box shapes was verified against
   brightness-enhanced grid crops of each object, with a candidate-overlay
   zoom crop checked before applying each shape.
-- `695d116` re-verified every Entrance Hall and Forgotten Childhood hotspot
-  against the source art directly (not just re-run coordinate math), which
-  is specifically how the mislabeled ottoman/chest hotspot was caught.
+- `695d116` re-verified every hall and childhood-gallery (now **The Nursery
+  of the Unclaimed Child**) hotspot against the source art directly (not
+  just re-run coordinate math), which is specifically how the mislabeled
+  ottoman/chest hotspot was caught.
 - `207f3cf`'s art/object alignment fix was verified with
   `getScreenCTM()`-based pixel measurement (0.000px delta) across every
   gallery and the hall, at both normal and narrow viewports and through
