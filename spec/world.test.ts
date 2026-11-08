@@ -135,11 +135,15 @@ describe("the museum world", () => {
     // was retraced and renamed into an ordinary main-scene object,
     // deliberately leaving that gallery's close-up scene with no way in,
     // and its own content was removed along with the door rather than kept
-    // stranded behind one nobody can open. The scene itself still exists in
-    // every case — every gallery's `closeup` config generates one
-    // unconditionally — so this is "0 objects, no entrance", not "object
-    // count still enforced but someone forgot to populate it".
-    const CLOSEUP_OBJECT_COUNT_EXCEPTIONS = new Set(["specimen", "memento", "portraits"]);
+    // stranded behind one nobody can open. childhood joins them for the
+    // same reason: its sole trigger ("Look closer: The Shelf That Waits" /
+    // "The Third-Shelf Lacuna") was removed at the user's request, and its
+    // close-up's own 3 objects were removed with it rather than left
+    // unreachable. The scene itself still exists in every case — every
+    // gallery's `closeup` config generates one unconditionally — so this is
+    // "0 objects, no entrance", not "object count still enforced but
+    // someone forgot to populate it".
+    const CLOSEUP_OBJECT_COUNT_EXCEPTIONS = new Set(["specimen", "memento", "portraits", "childhood"]);
     for (const gallery of galleries) {
       const main = byId.get(`${gallery.id}-main`)!;
       const closeup = byId.get(`${gallery.id}-closeup`)!;

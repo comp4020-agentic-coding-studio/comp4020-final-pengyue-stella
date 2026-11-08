@@ -1684,13 +1684,6 @@ const GALLERY_LAYOUT = [
     objects: [
       {
         type: "lore",
-        label: "Look closer: The Shelf That Waits",
-        text: "The shelf is dusted every week, the gap on the third row included, around whatever used to sit there — and whatever it was, the inventory card for that slot still bears the first curator's own initials, never crossed out.",
-        closeupSceneId: "childhood-closeup",
-        shape: polygon([[478, 112], [700, 108], [702, 243], [480, 248]]),
-      },
-      {
-        type: "lore",
         label: "A doll on the left",
         text: "It blinks on its own schedule, roughly once an hour, always when the gallery is otherwise empty of visitors. Staff have stopped checking.",
         shape: polygon([[58, 256], [76, 257], [84, 266], [85, 278], [80, 285], [86, 294], [91, 306], [91, 316], [86, 320], [84, 335], [85, 345], [70, 349], [55, 348], [48, 335], [46, 320], [44, 308], [47, 292], [50, 280], [52, 266]]),
@@ -2277,44 +2270,16 @@ const GALLERY_LAYOUT = [
         ]),
       },
     ],
-    closeupObjects: [
-      {
-        type: "lore",
-        label: "The worn teddy bear",
-        text: "Mended the same way, by the same uneven stitch, every time the seam reopens — though no conservator currently on staff has ever been asked to do the mending.",
-        shape: polygon([
-          [548, 407], [543, 415], [548, 425], [540, 430], [535, 440], [530, 450], [525, 460],
-          [520, 470], [515, 480], [513, 490], [518, 495], [565, 497], [600, 496], [615, 492],
-          [619, 480], [617, 468], [620, 458], [617, 448], [620, 438], [615, 428], [608, 418],
-          [598, 409], [588, 405], [578, 408], [570, 404], [560, 406], [553, 402],
-        ], ZOOM_CLOSEUP_VIEWBOX),
-      },
-      {
-        type: "lore",
-        label: "The second rocking horse, further back",
-        text: "Identical to the one nearer the door, down to the same worn saddle patch, though the ledger lists only a single horse ever acquired — the first curator's own handwriting, re-entering the same acquisition twice, a year apart.",
-        shape: polygon([
-          [897, 455], [902, 448], [908, 452], [916, 446], [928, 450],
-          [945, 458], [958, 470], [966, 482], [978, 483], [995, 484],
-          [1012, 490], [1022, 500], [1024, 512], [1016, 525], [1010, 540],
-          [1006, 552], [998, 562], [985, 565], [960, 562], [940, 558],
-          [925, 555], [918, 548], [920, 530], [916, 510], [912, 495],
-          [905, 490], [897, 487], [893, 478], [895, 465],
-        ], ZOOM_CLOSEUP_VIEWBOX),
-      },
-      {
-        type: "lore",
-        label: "The crib's carved headboard",
-        text: "Carved with a lullaby in a script the museum's own linguists have never fully translated, past the first and last lines — the last line naming, as near as anyone can render it, a curator rather than a child.",
-        shape: polygon([
-          [1063, 448], [1070, 460], [1066, 468], [1075, 470], [1090, 465],
-          [1097, 453], [1104, 463], [1112, 468], [1119, 449], [1127, 463],
-          [1133, 468], [1140, 451], [1148, 465], [1155, 469], [1163, 457],
-          [1170, 466], [1178, 468], [1185, 466], [1193, 464], [1197, 470],
-          [1197, 543], [1063, 543],
-        ], ZOOM_CLOSEUP_VIEWBOX),
-      },
-    ],
+    // The gallery's sole "look closer" trigger into this close-up
+    // (childhood-object-0, "Look closer: The Shelf That Waits" / "The
+    // Third-Shelf Lacuna") was removed at the user's request, so this
+    // close-up's own content is removed along with the door rather than
+    // kept stranded behind one nobody can open — same documented pattern
+    // specimen/memento/portraits already follow (see spec/world.test.ts's
+    // CLOSEUP_OBJECT_COUNT_EXCEPTIONS, "childhood" added there too). The
+    // close-up scene itself still exists (every gallery's `closeup` config
+    // generates one unconditionally), just with no entrance and no objects.
+    closeupObjects: [],
   },
 ];
 
@@ -2386,33 +2351,33 @@ const GENERATED_BUILTIN_DETAIL_IMAGES = Object.freeze({
   "memento-object-21": "/assets/builtin-details/the-handbook-of-returning-doors.png",
   "memento-object-23": "/assets/builtin-details/tetraptera-vaneae.png",
   "memento-object-24": "/assets/builtin-details/solitary-wing-ampoule.png",
-  "childhood-object-3": "/assets/builtin-details/vanes-primer-quiet-doors.png",
-  "childhood-object-4": "/assets/builtin-details/the-simmons-cot.png",
-  "childhood-object-5": "/assets/builtin-details/five-bell-puppet-theatre.png",
-  "childhood-object-6": "/assets/builtin-details/the-ash-mane-rocking-horse.png",
-  "childhood-object-7": "/assets/builtin-details/the-waiting-pageboy.png",
-  "childhood-object-8": "/assets/builtin-details/the-pocket-cavalier.png",
-  "childhood-object-9": "/assets/builtin-details/the-duplicate-ash-mane.png",
-  "childhood-object-11": "/assets/builtin-details/the-moon-turn-ballerina.png",
-  "childhood-object-12": "/assets/builtin-details/the-nightfall-casket.png",
-  "childhood-object-15": "/assets/builtin-details/three-duelists.png",
-  "childhood-object-16": "/assets/builtin-details/the-half-curtain-world.png",
-  "childhood-object-17": "/assets/builtin-details/the-pending-trunk.png",
-  "childhood-object-18": "/assets/builtin-details/unfinished-journey-case.png",
-  "childhood-object-20": "/assets/builtin-details/barnaby-the-returning-bear.png",
-  "childhood-object-21": "/assets/builtin-details/the-uncovered-carousel.png",
-  "childhood-object-22": "/assets/builtin-details/the-mute-carousel.png",
-  "childhood-object-23": "/assets/builtin-details/the-cabinet-foundling.png",
-  "childhood-object-24": "/assets/builtin-details/the-echo-nursery-box.png",
-  "childhood-object-25": "/assets/builtin-details/the-unlisted-daybed.png",
-  "childhood-object-26": "/assets/builtin-details/the-broken-rhythm-cabinet.png",
-  "childhood-object-27": "/assets/builtin-details/landscape-beyond-the-fifth-door.png",
-  "childhood-object-28": "/assets/builtin-details/the-vesper-dagger.png",
-  "childhood-object-29": "/assets/builtin-details/duke-orison.png",
-  "childhood-object-30": "/assets/builtin-details/restless-mourning-silk.png",
-  "childhood-object-31": "/assets/builtin-details/one-hour-carousel.png",
-  "childhood-object-33": "/assets/builtin-details/the-midnight-ward.png",
-  "childhood-object-34": "/assets/builtin-details/the-incomplete-matryoshka.png",
+  "childhood-object-2": "/assets/builtin-details/vanes-primer-quiet-doors.png",
+  "childhood-object-3": "/assets/builtin-details/the-simmons-cot.png",
+  "childhood-object-4": "/assets/builtin-details/five-bell-puppet-theatre.png",
+  "childhood-object-5": "/assets/builtin-details/the-ash-mane-rocking-horse.png",
+  "childhood-object-6": "/assets/builtin-details/the-waiting-pageboy.png",
+  "childhood-object-7": "/assets/builtin-details/the-pocket-cavalier.png",
+  "childhood-object-8": "/assets/builtin-details/the-duplicate-ash-mane.png",
+  "childhood-object-10": "/assets/builtin-details/the-moon-turn-ballerina.png",
+  "childhood-object-11": "/assets/builtin-details/the-nightfall-casket.png",
+  "childhood-object-14": "/assets/builtin-details/three-duelists.png",
+  "childhood-object-15": "/assets/builtin-details/the-half-curtain-world.png",
+  "childhood-object-16": "/assets/builtin-details/the-pending-trunk.png",
+  "childhood-object-17": "/assets/builtin-details/unfinished-journey-case.png",
+  "childhood-object-19": "/assets/builtin-details/barnaby-the-returning-bear.png",
+  "childhood-object-20": "/assets/builtin-details/the-uncovered-carousel.png",
+  "childhood-object-21": "/assets/builtin-details/the-mute-carousel.png",
+  "childhood-object-22": "/assets/builtin-details/the-cabinet-foundling.png",
+  "childhood-object-23": "/assets/builtin-details/the-echo-nursery-box.png",
+  "childhood-object-24": "/assets/builtin-details/the-unlisted-daybed.png",
+  "childhood-object-25": "/assets/builtin-details/the-broken-rhythm-cabinet.png",
+  "childhood-object-26": "/assets/builtin-details/landscape-beyond-the-fifth-door.png",
+  "childhood-object-27": "/assets/builtin-details/the-vesper-dagger.png",
+  "childhood-object-28": "/assets/builtin-details/duke-orison.png",
+  "childhood-object-29": "/assets/builtin-details/restless-mourning-silk.png",
+  "childhood-object-30": "/assets/builtin-details/one-hour-carousel.png",
+  "childhood-object-32": "/assets/builtin-details/the-midnight-ward.png",
+  "childhood-object-33": "/assets/builtin-details/the-incomplete-matryoshka.png",
 });
 
 function generatedDetailImageForObject(objectId) {

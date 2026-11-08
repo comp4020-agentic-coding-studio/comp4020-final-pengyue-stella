@@ -119,33 +119,16 @@ describe("unified dossier model: built-in museum objects", () => {
     expect(founding.cropInfo).toBeNull();
   });
 
-  // Not every gallery still has a marquee "look closer" trigger: portraits,
-  // memento, and specimen each had theirs retraced into an ordinary object
-  // once hand-tracing confirmed what it really was, deliberately leaving
-  // that gallery's own close-up scene with no remaining door in (see each
-  // gallery's own comment in server/src/world.js, and spec/world.test.ts's
-  // matching CLOSEUP_OBJECT_COUNT_EXCEPTIONS). This test only needs to
-  // prove the mechanism itself still works end-to-end somewhere real, so
-  // it checks whichever gallery still has one, not a hardcoded galleries[0]
-  // — that index happened to be portraits, one of the retraced galleries,
-  // which is exactly the kind of coincidence a hardcoded index invites.
-  it("the per-gallery marquee closeup trigger (where a gallery still has one) is folded into the dossier model too, carrying its own closeupSceneId", async () => {
-    const { scenes, galleries } = await (await fetch(url("/api/world"))).json();
-    let gallery: { id: string } | undefined;
-    let marquee: { id: string; type: string } | undefined;
-    for (const g of galleries as Array<{ id: string }>) {
-      const main = scenes.find((s: { id: string }) => s.id === `${g.id}-main`);
-      const found = main.interactiveObjects.find((o: { closeupSceneId?: string }) => o.closeupSceneId);
-      if (found) {
-        gallery = g;
-        marquee = found;
-        break;
-      }
-    }
-    expect(gallery, "expected at least one gallery to still have a marquee closeup trigger").toBeTruthy();
-    expect(marquee!.type).toBe("lore");
-
-    const { exhibit } = await (await fetch(url(`/api/exhibits/exhibit_builtin_${marquee!.id}`))).json();
-    expect(exhibit.closeupSceneId).toBe(`${gallery!.id}-closeup`);
-  });
+  // The per-gallery marquee "look closer" trigger (a lore object carrying
+  // closeupSceneId, folded into the dossier model the same as any other
+  // builtin exhibit) no longer exists anywhere in the museum: portraits,
+  // memento, and specimen each had theirs retraced into an ordinary object,
+  // and childhood's own ("Look closer: The Shelf That Waits" / "The
+  // Third-Shelf Lacuna") was removed outright at the user's request — see
+  // each gallery's own comment in server/src/world.js, and
+  // spec/world.test.ts's CLOSEUP_OBJECT_COUNT_EXCEPTIONS, which now
+  // includes all four galleries. The mechanism itself (closeupSceneId on a
+  // lore object, surfaced through /api/exhibits) is unused content data,
+  // not dead code, so no test for it remains; re-add one alongside
+  // whichever gallery next authors a real marquee trigger.
 });
