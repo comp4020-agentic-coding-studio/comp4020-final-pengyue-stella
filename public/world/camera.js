@@ -52,11 +52,13 @@ export function createSceneCamera({ container, layers, onTransform }) {
   let enabled = true;
 
   // `onTransform` fires after every pan/zoom change (not just on scene
-  // change or an SSE presence event) — lets app.js re-clamp any visitor
-  // cameo into the viewport whenever the camera actually moves, closing the
-  // gap where a cameo positioned against one transform state was never
-  // revisited after the camera panned/zoomed further (see renderCameos'
-  // viewport-clamp safety net).
+  // change or an SSE presence event) — a generic hook for anything that
+  // needs to react live to the camera actually moving. app.js does NOT wire
+  // a visitor-cameo viewport clamp to this any more: a cameo deliberately
+  // pans/zooms off-frame with the room exactly like the art does (it shares
+  // the same `parallax: 1` plane), and re-clamping it on every tick fought
+  // that and made ghosts visibly chase the camera instead of standing still
+  // in the room (see app.js's clampCameosIntoViewport doc comment).
   function apply() {
     for (const { el, parallax } of layers) {
       el.style.transform = transformFor(pan, zoom, parallax, tilt);

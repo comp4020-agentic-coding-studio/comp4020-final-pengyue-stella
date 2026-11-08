@@ -1968,15 +1968,20 @@ function renderCameos() {
 }
 
 // A pragmatic safety net against a visitor cameo rendering outside the
-// visible viewport (observed live in a two-browser test — a `.cameo`'s own
-// `translate(-50%, -100%) scale()` compounds with the scene camera's own
-// pan/zoom transform on its ancestor, and a near-edge anchor at an extreme
-// zoom/pan combination can push the result past the visible frame). Runs
-// after every cameo (re)render AND after every camera pan/zoom change (see
-// `onCameraTransform` wiring in boot()) and window resize, nudging any
-// cameo whose own bounding rect falls outside the viewport back inward —
-// independent of fully isolating the underlying transform-composition
-// cause, this guarantees no ghost is ever rendered off-screen.
+// visible viewport at the MOMENT it's (re)built (observed live in a
+// two-browser test — a `.cameo`'s own `translate(-50%, -100%) scale()`
+// compounds with the scene camera's own pan/zoom transform on its ancestor,
+// and a near-edge anchor at an extreme zoom/pan combination that was active
+// right when the cameo was drawn can push the initial result past the
+// visible frame). Runs after every cameo (re)render and on window resize —
+// deliberately NOT on every camera pan/zoom change any more. A cameo lives
+// inside the same `parallax: 1` `.scene-room` plane as the art itself (see
+// illustration.js), so it's SUPPOSED to pan/zoom off-frame exactly like a
+// painting near the edge of the room does — re-running this clamp on every
+// transform tick fought that and visibly dragged every ghost back toward
+// the camera's centre as a visitor panned, making them look like they were
+// chasing the camera instead of standing still in the room. A ghost that's
+// off-screen because the room scrolled is correct, not a bug.
 function clampCameosIntoViewport() {
   if (!illustrator) return;
   const { cameoLayer } = illustrator.activeLayers();
@@ -3633,7 +3638,6 @@ async function boot() {
     layerB: el("scene-layer-b"),
     world,
     onSceneChange,
-    onCameraTransform: clampCameosIntoViewport,
   });
   currentSceneId = illustrator.currentScene().id;
 
