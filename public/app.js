@@ -1212,6 +1212,55 @@ const KIND_LABEL = {
   "counter-evidence": "Counter-Evidence",
 };
 
+// Weighted display order, not a stored field: the dossier reads more like a
+// living record when the testimony the room currently trusts most surfaces
+// first, without ever touching exhibit.accounts itself (renderDossier's
+// challenge-target default at the bottom of this file still needs that
+// array in the server's chronological order).
+//
+// "Trust" is a Wilson-score lower bound on the share of an account's own
+// votes that are Believable, not the raw ratio and not the raw vote count.
+// A plain ratio lets one lonely Believable vote (100%) outrank fifty
+// Believable votes sitting alongside two Suspicious ones (96%) — exactly
+// backwards from what the room actually believes. Wilson's bound answers a
+// different question: "how confident can we be that the true Believable
+// share is at least this high, given only this many votes?" A single vote
+// could easily have gone the other way, so its bound sits low; fifty votes
+// at 96% leaves little room for doubt, so its bound sits close to 96%. That
+// makes well-corroborated accounts naturally outrank thin ones without any
+// hand-picked minimum-vote threshold. z=1.96 is the standard 95%-confidence
+// constant (Reddit/Yelp-style "best rated" ranking uses the same formula).
+// An account with zero votes has no signal at all, so it ranks behind every
+// voted account rather than tying with a 0%-Believable one.
+function wilsonLowerBound(positive, total) {
+  if (total === 0) return -1;
+  const z = 1.96;
+  const phat = positive / total;
+  const z2 = z * z;
+  return (phat + z2 / (2 * total) - z * Math.sqrt((phat * (1 - phat) + z2 / (4 * total)) / total)) / (1 + z2 / total);
+}
+
+function trustScore(account) {
+  const total = Object.values(account.votes).reduce((sum, n) => sum + n, 0);
+  return wilsonLowerBound(account.votes.Believable ?? 0, total);
+}
+
+// The original account is the exhibit's anchor record (curator's note or the
+// first testimony) — it stays first regardless of how later accounts get
+// voted, so a heavily-corroborated rebuttal never buries the thing it's
+// rebutting. Everything else sorts by trust score, ties (most often several
+// unvoted accounts, all -1) broken oldest-first so equally-trusted accounts
+// still read in the order they arrived.
+function sortAccountsForDisplay(accounts) {
+  return [...accounts].sort((a, b) => {
+    if (a.kind === "original" && b.kind !== "original") return -1;
+    if (b.kind === "original" && a.kind !== "original") return 1;
+    const scoreDiff = trustScore(b) - trustScore(a);
+    if (scoreDiff !== 0) return scoreDiff;
+    return new Date(a.createdAt) - new Date(b.createdAt);
+  });
+}
+
 function renderAccountBlock(account, exhibit) {
   const block = document.createElement("div");
   block.className = "account-block";
@@ -1336,9 +1385,13 @@ function renderDossier(exhibit) {
 
   const container = el("dossier-accounts");
   container.innerHTML = "";
-  for (const account of exhibit.accounts) {
+  for (const account of sortAccountsForDisplay(exhibit.accounts)) {
     container.appendChild(renderAccountBlock(account, exhibit));
   }
+  // Deliberately reads exhibit.accounts itself, not the weighted display
+  // order above — "most recently published" must stay independent of how
+  // trusted an account currently is, or a new account could default-target
+  // a different account than the one a visitor actually just read last.
   el("account-challenged").value = exhibit.accounts[exhibit.accounts.length - 1]?.id ?? "";
 
   // Owner-only controls: `isOwnedByRequester` is computed server-side, per
