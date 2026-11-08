@@ -2625,29 +2625,19 @@ a {
   pointer-events: auto;
 }
 
-/* Symmetric corner flourishes — a plain text glyph, never an image asset —
-   kept inset from the card's own padding box so they never sit over the
-   text or the Next/Skip buttons. */
-.onboarding-card::before,
-.onboarding-card::after {
+/* A single corner flourish — a plain text glyph, never an image asset —
+   kept inset from the card's own padding box so it never sits over the
+   text or the Next/Skip buttons. (The bottom-right counterpart was removed:
+   its 180deg-rotated glyph read as a stray triangle rather than ornament.) */
+.onboarding-card::before {
   position: absolute;
   font-size: 0.95rem;
   line-height: 1;
   color: rgba(198, 161, 107, 0.75);
   pointer-events: none;
-}
-
-.onboarding-card::before {
   content: "\2766";
   top: 0.32rem;
   left: 0.4rem;
-}
-
-.onboarding-card::after {
-  content: "\2766";
-  bottom: 0.32rem;
-  right: 0.4rem;
-  transform: rotate(180deg);
 }
 
 /* No anchor control for this step (e.g. "drag to look around") — the card
