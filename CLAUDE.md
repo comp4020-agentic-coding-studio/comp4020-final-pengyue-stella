@@ -151,6 +151,10 @@ something under `vendor-sam/` is actually requested.
   with another relic. The legacy `slot_id` remains an internal capacity and
   backwards-compatibility invariant; it is allocated transactionally but is
   never presented to a visitor as a list of boxes.
+- **Donation appearance stays curated.** The public UI must not offer a file
+  picker or remote-image URL. Every donation chooses a server-published
+  `visualId`; tint, fixed local stickers, and the size-capped PNG paint layer
+  personalise that asset without creating an arbitrary-upload feature.
 - **A rotated relic never changes visible size.** The in-room placement
   preview and the final placed exhibit grow their own invisible
   `<foreignObject>` layout box to a rotated relic's bounding box

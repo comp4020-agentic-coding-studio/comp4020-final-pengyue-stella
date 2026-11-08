@@ -11,6 +11,7 @@ const contractDocs = ["DESIGN.md", "PLAN.md", "CLAUDE.md"].map((path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8"),
 );
 const normalizedContractDocs = contractDocs.map((document) => document.replace(/\s+/g, " "));
+const publicHtml = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 
 describe("current product contract", () => {
   it("keeps current documentation on the canonical room names", () => {
@@ -58,5 +59,11 @@ describe("current product contract", () => {
     expect(voteCount).toBe(463);
     expect(contractDocs[0]).toContain(`${SEEDED_ACCOUNT_COUNT} fictional`);
     expect(contractDocs[0]).toContain(`${voteCount} votes`);
+  });
+
+  it("keeps donation appearance curated instead of exposing arbitrary image uploads", () => {
+    expect(publicHtml).toContain('id="donate-visual-grid"');
+    expect(publicHtml).not.toMatch(/<input[^>]+type=["']file["']/i);
+    expect(publicHtml).not.toMatch(/<input[^>]+(?:id|name)=["'][^"']*(?:image-?url|remote-?url)[^"']*["']/i);
   });
 });
