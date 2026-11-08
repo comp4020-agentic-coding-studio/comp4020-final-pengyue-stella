@@ -830,6 +830,10 @@ for (const tab of document.querySelectorAll(".customiser-mode-tab")) {
 function openDonateGate() {
   populateDonateForm();
   el("donate-error").textContent = "";
+  // Clear any text left over from a previous donation session (submitted,
+  // cancelled, or abandoned mid-placement) before showing the form again.
+  el("donate-title").value = "";
+  el("donate-claim").value = "";
   // Pre-filled from the visitor's current display name, editable — the
   // brief's "keep the author-name field, pre-filled but editable" contract.
   el("donate-donor").value = myIdentity?.name ?? "";
