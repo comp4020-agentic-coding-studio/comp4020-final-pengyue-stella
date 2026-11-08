@@ -1,5 +1,5 @@
 {
-  "name": "traces-of-anu-server",
+  "name": "cursed-museum-server",
   "private": true,
   "type": "module",
   "description": "Zero runtime dependencies on purpose — see /CLAUDE.md."
