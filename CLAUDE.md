@@ -217,6 +217,10 @@ directly here: ghost-presence dedup (by `publicKey`, in `sse.js`'s
   moving and acting at once, and an actual reload or redeploy — a single
   fetch assertion exercises neither the multiplayer claim nor the
   persistence claim.
+- Run the judged walkthrough at both marking viewports, **1920×1080** and
+  **390×844**, including keyboard-only use, a resize during interaction, and
+  a slow/reconnecting SSE path. Record failures as fixes to this harness or
+  `spec/`, not as one-off retries.
 
 ## This repo across crits 8–10 and the Final Project
 
@@ -253,7 +257,9 @@ split between what the course's own `invariants.test.ts` covers and what's
 ours to add. In CI, `check` runs against the same Docker image `deploy`
 ships, built fresh with a throwaway `/data` standing in for the Fly volume;
 `deploy` only runs once `check` is green and the repo is public.
-`spec/accessibility.test.ts` protects the semantic floor.
+`spec/persistence-restart.test.ts` separately starts the server twice against
+one temporary SQLite file and proves a visitor contribution survives the
+process boundary; `spec/accessibility.test.ts` protects the semantic floor.
 
 **Secrets.** `.githooks/pre-commit` (installed by `pnpm install`) blocks any
 staged content shaped like the course API key before it's committed — that's
