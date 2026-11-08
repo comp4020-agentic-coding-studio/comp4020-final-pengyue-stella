@@ -1381,6 +1381,24 @@ function closeDossier() {
 el("dossier-close").addEventListener("click", closeDossier);
 el("account-cancel").addEventListener("click", closeDossier);
 
+// "This account is a…" — a themed radiogroup standing in for a native
+// <select> (see index.html's comment on #account-kind for why: a native
+// select's popup renders visibly offset inside this drawer). Clicking an
+// option just flips aria-checked and writes the hidden field the submit
+// handler already reads via form.kind.value.
+function selectAccountKind(kind) {
+  el("account-kind-value").value = kind;
+  for (const opt of el("account-kind").querySelectorAll(".account-kind-option")) {
+    opt.setAttribute("aria-checked", opt.dataset.kind === kind ? "true" : "false");
+  }
+}
+for (const opt of el("account-kind").querySelectorAll(".account-kind-option")) {
+  opt.addEventListener("click", () => selectAccountKind(opt.dataset.kind));
+}
+// form.reset() (after a successful publish) restores the hidden field's
+// value attribute but not the buttons' visual aria-checked state.
+el("account-form").addEventListener("reset", () => selectAccountKind("testimony"));
+
 el("account-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!openDossierExhibitId) return;

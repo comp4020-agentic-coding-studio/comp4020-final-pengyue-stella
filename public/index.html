@@ -503,13 +503,22 @@
         <form id="account-form" class="account-form">
           <h3 id="account-form-title">Add Counter-Evidence</h3>
           <input type="hidden" id="account-challenged" value="" />
-          <label for="account-kind">This account is a&hellip;</label>
-          <select id="account-kind" name="kind">
-            <option value="testimony">New Testimony</option>
-            <option value="contradiction">Contradiction</option>
-            <option value="revision">Proposed Revision</option>
-            <option value="counter-evidence">Counter-Evidence</option>
-          </select>
+          <span class="account-field-label" id="account-kind-label">This account is a&hellip;</span>
+          <!-- A themed pill-button radiogroup, not a native <select> — same
+               "replace a select" convention as .visual-preset-grid/
+               .draw-tool-grid elsewhere in this form family, and it sidesteps
+               a real bug: a native select's option popup renders visibly
+               offset here because this drawer sits inside #viewport, which
+               has `perspective: 1800px` (a 3D transform context an ancestor
+               of #dossier) — browsers mis-position native select popups under
+               a 3D-transformed ancestor. A custom control has no such popup. -->
+          <div id="account-kind" class="account-kind-grid" role="radiogroup" aria-labelledby="account-kind-label">
+            <button type="button" class="account-kind-option" role="radio" aria-checked="true" data-kind="testimony">New Testimony</button>
+            <button type="button" class="account-kind-option" role="radio" aria-checked="false" data-kind="contradiction">Contradiction</button>
+            <button type="button" class="account-kind-option" role="radio" aria-checked="false" data-kind="revision">Proposed Revision</button>
+            <button type="button" class="account-kind-option" role="radio" aria-checked="false" data-kind="counter-evidence">Counter-Evidence</button>
+          </div>
+          <input type="hidden" id="account-kind-value" name="kind" value="testimony" />
           <label for="account-body">Your account</label>
           <textarea id="account-body" name="body" maxlength="600" rows="3" required
             placeholder="Manufacturing records identify a later origin&hellip;"></textarea>

@@ -3219,11 +3219,51 @@ a {
 .dossier-drawer .account-form h3 {
   color: var(--gold);
 }
-.dossier-drawer .account-form label {
+.dossier-drawer .account-form label,
+.account-field-label {
   color: rgba(233, 221, 197, 0.85);
   font-size: 0.82rem;
   font-weight: 600;
   margin-top: 0.3rem;
+}
+
+/* "This account is a…" — a pill-button radiogroup standing in for a native
+   <select> (see index.html's #account-kind comment for why: this drawer
+   sits under #viewport's `perspective`, which mis-positions a native
+   select's popup). Same resting/hover/selected/focus vocabulary as
+   .draw-tool-grid/.visual-preset-tile elsewhere, recoloured for this
+   drawer's dark obsidian/gold palette instead of .gate-card's cream one. */
+.account-kind-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.1rem 0 0.3rem;
+}
+
+.account-kind-option {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(198, 161, 107, 0.5);
+  background: rgba(17, 13, 10, 0.5);
+  color: var(--parchment);
+  cursor: pointer;
+}
+
+.account-kind-option:hover {
+  border-color: var(--gold);
+}
+
+.account-kind-option[aria-checked="true"] {
+  border-color: var(--gold);
+  background: var(--mahogany);
+  color: var(--gold);
+}
+
+.account-kind-option:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 .dossier-drawer .account-form select,
 .dossier-drawer .account-form textarea,
